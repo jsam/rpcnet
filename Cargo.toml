@@ -1,0 +1,30 @@
+[package]
+name = "rpcnet"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+tracing = ["rmpv"]
+
+[dependencies]
+async-stream = "0.3.5"
+byteorder = "1.4.3"
+bytes = "1.4.0"
+console-subscriber = "0.1.10"
+log = "0.4.19"
+rmp-serde = "1.1.1"
+rmpv = {version="1.0.0", optional=true}
+serde = "1.0.165"
+tokio = { version = "1.29.1", features = ["full", "tracing"] }
+tokio-stream = "0.1.14"
+
+[build]
+rustflags = ["--cfg", "tokio_unstable"]
+
+[[bin]]
+name = "rpcnet"
+path = "src/lib.rs"
+
+[dev-dependencies]
+serde_derive = "1.0"
