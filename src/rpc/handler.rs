@@ -1,8 +1,7 @@
-#[derive(Clone, Debug)]
-pub struct RPCHandler {}
+use tokio::io;
 
-impl RPCHandler {
-    pub fn new() -> Self {
-        RPCHandler {}
-    }
+use super::{api::Name, incoming::Incoming, outgoing::Outgoing};
+
+pub trait ConnectionHandler<N: Name> {
+    fn handle_connection(&self, connection: io::Result<(Outgoing, Incoming<N>)>);
 }

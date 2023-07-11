@@ -9,17 +9,15 @@ use crate::file::FileHandler;
 use crate::network::NetworkHandler;
 use crate::rpc::api::Name;
 use crate::rpc::incoming::Incoming;
+use crate::rpc::multiplex;
 use crate::rpc::outgoing::Outgoing;
 use crate::rpc::server::Server;
-use crate::rpc::{multiplex, RPCHandler};
 
 #[derive(Clone, Debug)]
 pub struct RpcNet {
     pub hostname: Arc<String>,
     // NOTE:
     pub file: FileHandler, // File upload and download
-                           //pub channel: ChannelHandler, // Connection handler to other processes
-                           //pub rpc: RPCHandler, // RPC handler
 }
 
 impl RpcNet {
@@ -46,8 +44,6 @@ impl RpcNet {
         Ok(RpcNet {
             hostname: Arc::new(hostname),
             file: FileHandler::new(),
-            //channel: ChannelHandler::new(),
-            //rpc: RPCHandler::new(),
         })
     }
 
