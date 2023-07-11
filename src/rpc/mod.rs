@@ -7,4 +7,4 @@ pub mod multiplex;
 pub mod outgoing;
 mod request;
 mod response;
-mod server;
+pub mod server;

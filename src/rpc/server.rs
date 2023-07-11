@@ -30,14 +30,14 @@ where
     pub external: Arc<String>,
     pub port: u16,
 
-    _PhantomData: PhantomData<N>,
+    phantom_data: PhantomData<N>,
 }
 
 impl<N> Server<N>
 where
     N: Name,
 {
-    pub async fn start(hostname: String, port: u16) -> io::Result<Self> {
+    pub async fn start(hostname: Arc<String>, port: u16) -> io::Result<Self> {
         let listener =
             Listener::<RequestBuf<N>, RpcConnection>::start("localhost".to_string(), 0).await?;
         let addr = listener.external_addr();
@@ -67,9 +67,9 @@ where
 
         Ok(Server {
             listener: listener_task,
-            external: Arc::new(hostname),
+            external: hostname,
             port: port,
-            _PhantomData: PhantomData,
+            phantom_data: PhantomData,
         })
     }
 

@@ -10,6 +10,7 @@ use crate::network::NetworkHandler;
 use crate::rpc::api::Name;
 use crate::rpc::incoming::Incoming;
 use crate::rpc::outgoing::Outgoing;
+use crate::rpc::server::Server;
 use crate::rpc::{multiplex, RPCHandler};
 
 #[derive(Clone, Debug)]
@@ -17,8 +18,8 @@ pub struct RpcNet {
     pub hostname: Arc<String>,
     // NOTE:
     pub file: FileHandler, // File upload and download
-    //pub channel: ChannelHandler, // Connection handler to other processes
-    pub rpc: RPCHandler, // RPC handler
+                           //pub channel: ChannelHandler, // Connection handler to other processes
+                           //pub rpc: RPCHandler, // RPC handler
 }
 
 impl RpcNet {
@@ -46,7 +47,7 @@ impl RpcNet {
             hostname: Arc::new(hostname),
             file: FileHandler::new(),
             //channel: ChannelHandler::new(),
-            rpc: RPCHandler::new(),
+            //rpc: RPCHandler::new(),
         })
     }
 
@@ -64,7 +65,7 @@ impl RpcNet {
         Ok((outgoing, incoming))
     }
 
-    // pub fn server(N: Name, P: Into<Option<u16>>)(&self, port: P) -> io::Result<Server<N>> {
-
-    // }
+    pub async fn server<N: Name, P: Into<Option<u16>>>(&self, port: P) -> io::Result<Server<N>> {
+        Server::start(self.hostname.clone(), port.into().unwrap_or(0)).await
+    }
 }
