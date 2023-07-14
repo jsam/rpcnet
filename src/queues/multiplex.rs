@@ -1,16 +1,16 @@
-use std::{future::Future, net::SocketAddr};
+use std::net::SocketAddr;
 
-use crate::transport::message::{FramedMessage, MessageBuf};
+use crate::transport::message::FramedMessage;
 
+use super::receiver::Receiver;
 use super::sender::Sender;
-use super::{listener::ConnectionSetup, receiver::Receiver};
 use tokio::{
     io::{self, Interest},
     net::{TcpListener, TcpStream},
-    sync::mpsc::{self, unbounded_channel, UnboundedReceiver},
+    sync::mpsc::{unbounded_channel, UnboundedReceiver},
 };
 
-pub fn make_channel<R: FramedMessage<R> + Send + 'static>(
+pub fn make_connection<R: FramedMessage<R> + Send + 'static>(
     stream: TcpStream,
 ) -> io::Result<(Sender, Receiver<R>)> {
     let local = stream.local_addr()?;
@@ -19,9 +19,11 @@ pub fn make_channel<R: FramedMessage<R> + Send + 'static>(
     let (instream, outstream) = stream.into_split();
 
     let sender = Sender::start(outstream, local, remote);
-    let receiver: Receiver<R> = Receiver::start(instream, remote, local, sender.clone(), |msg| {
-        R::from_message(msg)
-    });
+    let moved_sender = sender.clone();
+    let receiver: Receiver<R> =
+        Receiver::start(instream, remote, local, sender.clone(), move |msg| {
+            R::from_message(moved_sender.clone(), msg)
+        });
 
     Ok((sender, receiver))
 }
@@ -39,24 +41,22 @@ where
     let (tx, rx) = unbounded_channel::<T>();
 
     tokio::spawn(async move {
-        println!("[Receiver::accept] accepting connections");
         let mut is_ok = true;
         while is_ok {
-            let stream: Result<(TcpStream, SocketAddr), io::Error> = listener.accept().await;
+            let stream: Result<(TcpStream, SocketAddr), io::Error> =
+                listener.accept().await;
             is_ok = stream.is_ok();
 
             match stream {
                 Ok((stream, addr)) => {
-                    println!("[Receiver::accept] accepted connection from {}", addr);
-                    let ready = stream.ready(Interest::READABLE | Interest::WRITABLE).await;
-                    println!("[Receiver::accept] ready object available");
+                    let ready = stream
+                        .ready(Interest::READABLE | Interest::WRITABLE)
+                        .await;
                     if !ready.is_ok() {
-                        println!("[Receiver::accept] STREAM IS NOT READABLE NOR WRITABLE");
                         break;
                     }
 
                     let ready = ready.unwrap();
-                    println!("[Receiver::accept] STREAM IS READABLE");
                     let started = f(stream);
                     if let Err(_) = tx.send(started) {
                         break;
@@ -65,7 +65,6 @@ where
                 Err(_) => break,
             }
         }
-        println!("[Receiver::accept] accepting connections - ENDED");
     });
 
     rx

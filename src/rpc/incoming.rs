@@ -3,20 +3,22 @@ use std::io;
 use tokio::sync::mpsc;
 use tokio_stream::Stream;
 
-use super::{api::Name, request::RequestBuf};
+use super::{api::RequestEnum, request::RequestBuf};
 
 #[must_use = "futures do nothing unless polled"]
-pub struct Incoming<N: Name> {
+pub struct Incoming<N: RequestEnum> {
     rx: mpsc::UnboundedReceiver<Result<RequestBuf<N>, io::Error>>,
 }
 
-impl<N: Name> Incoming<N> {
-    pub fn new(rx: mpsc::UnboundedReceiver<Result<RequestBuf<N>, io::Error>>) -> Self {
+impl<N: RequestEnum> Incoming<N> {
+    pub fn new(
+        rx: mpsc::UnboundedReceiver<Result<RequestBuf<N>, io::Error>>,
+    ) -> Self {
         Self { rx }
     }
 }
 
-impl<N: Name> Stream for Incoming<N> {
+impl<N: RequestEnum> Stream for Incoming<N> {
     type Item = Result<RequestBuf<N>, io::Error>;
 
     fn poll_next(

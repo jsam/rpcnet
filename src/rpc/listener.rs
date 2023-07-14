@@ -7,27 +7,32 @@ use tokio::{
 };
 use tokio_stream::Stream;
 
-use crate::transport::message::MessageBuf;
+use crate::queues::multiplex::accept_connections;
 
 use super::{
-    multiplex::{accept_connections, make_connection},
-    receiver::Receiver,
-    sender::Sender,
+    api::RequestEnum, incoming::Incoming, multiplex::make_rpc_connection,
+    outgoing::Outgoing,
 };
 
-pub struct Listener {
+pub struct Listener<N>
+where
+    N: RequestEnum,
+{
     external: Arc<String>,
     port: u16,
-    rx: UnboundedReceiver<io::Result<(Sender, Receiver<MessageBuf>)>>,
+    rx: UnboundedReceiver<io::Result<(Outgoing, Incoming<N>)>>,
 }
 
-impl Listener {
+impl<N> Listener<N>
+where
+    N: RequestEnum,
+{
     pub async fn start(hostname: String, port: u16) -> io::Result<Self> {
         let sockaddr = ("0.0.0.0", port);
         let listener = TcpListener::bind(&sockaddr).await?;
         let external = Arc::new(hostname);
         let port = listener.local_addr()?.port();
-        let rx = accept_connections(listener, make_connection).await;
+        let rx = accept_connections(listener, make_rpc_connection).await;
 
         Ok(Listener {
             external: external,
@@ -41,8 +46,11 @@ impl Listener {
     }
 }
 
-impl Stream for Listener {
-    type Item = io::Result<(Sender, Receiver<MessageBuf>)>;
+impl<N> Stream for Listener<N>
+where
+    N: RequestEnum,
+{
+    type Item = io::Result<(Outgoing, Incoming<N>)>;
 
     fn poll_next(
         self: std::pin::Pin<&mut Self>,

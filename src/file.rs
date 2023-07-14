@@ -1,8 +1,8 @@
 use std::fs::File;
-use std::io::{self, copy, Error, ErrorKind, Result};
+use std::io::{copy, Error, ErrorKind, Result};
 use std::net::{TcpListener, TcpStream};
-use std::{env, thread};
-use std::{path::Path, sync::Arc};
+use std::path::Path;
+use std::thread;
 
 use crate::transport::tcp::TcpHandler;
 
@@ -18,8 +18,11 @@ impl FileHandler {
         Self {}
     }
 
-    /// Serves the specified file on a ephemerial network port.
-    pub fn upload<P: AsRef<Path>>(&self, hostname: String, path: P) -> Result<TcpHandler> {
+    pub fn upload<P: AsRef<Path>>(
+        &self,
+        hostname: String,
+        path: P,
+    ) -> Result<TcpHandler> {
         let path = path.as_ref().to_owned();
         if !path.is_file() {
             return Err(Error::new(ErrorKind::NotFound, "file not found"));
@@ -46,9 +49,8 @@ impl FileHandler {
         ))
     }
 
-    /// Downloads the file served at `url` and downloads it into `path`.
     pub fn download<P: AsRef<Path>>(&self, url: &str, path: P) -> Result<()> {
-        // url should have the format: "tcp://host:port"
+        // NOTE: tcp://host:port
         if !url.starts_with("tcp://") {
             return Err(Error::new(
                 ErrorKind::InvalidInput,

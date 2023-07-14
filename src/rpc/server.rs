@@ -1,66 +1,46 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::sync::Arc;
 
-use tokio::{io, net::TcpStream, task::JoinHandle};
-
-use crate::queues::listener::{ConnectionSetup, Listener};
-
-use super::{
-    api::Name, incoming::Incoming, multiplex::split, outgoing::Outgoing, request::RequestBuf,
-};
+use tokio::{io, task::JoinHandle};
 use tokio_stream::StreamExt;
 
-pub struct RpcConnection;
+use super::{api::RequestEnum, dispatcher::Dispatcher, listener::Listener};
 
-impl<N> ConnectionSetup<RequestBuf<N>> for RpcConnection
-where
-    N: Name,
-{
-    type Item = io::Result<(Outgoing, Incoming<N>)>;
-
-    fn setup(stream: TcpStream) -> Self::Item {
-        split(stream)
-    }
-}
-
-pub struct Server<N>
-where
-    N: Name,
-{
+pub struct Server {
     listener: JoinHandle<()>,
     pub external: Arc<String>,
     pub port: u16,
-
-    phantom_data: PhantomData<N>,
 }
 
-impl<N> Server<N>
-where
-    N: Name,
-{
-    pub async fn start(hostname: Arc<String>, port: u16) -> io::Result<Self> {
+impl Server {
+    pub async fn start<N, D>(
+        hostname: Arc<String>,
+        port: u16,
+        dispatcher: D,
+    ) -> io::Result<Self>
+    where
+        N: RequestEnum + Send + 'static,
+        D: Dispatcher<N> + Copy + Send + 'static,
+        for<'a> D::Check<'a>: Send,
+    {
         let listener =
-            Listener::<RequestBuf<N>, RpcConnection>::start("localhost".to_string(), 0).await?;
+            Listener::<N>::start(hostname.clone().to_string(), port).await?;
+
         let addr = listener.external_addr();
+        let mut dispatcher_impl = dispatcher;
 
         let listener_task = tokio::spawn(async move {
             tokio::pin!(listener);
 
-            while let Some(msg) = listener.next().await {
-                match msg {
-                    Ok((respond, mut request)) => loop {
-                        println!("[Listener::next] !!! received connection");
-
-                        let mut ping = request.next().await;
-                        let mut ping_message: RequestBuf<N> = ping.unwrap().unwrap();
-                        // assert_eq!(ping_message.pop::<String>().unwrap(), "ping");
-                        // println!("[Listener::next] !!! PING message received connection");
-
-                        // let mut pong = MessageBuf::empty();
-                        // pong.push(&String::from("pong")).unwrap();
-                        // respond.send(pong).await;
-                        // println!("[Listener::next] !!! PONG message sent");
-                    },
-                    Err(err) => panic!("Error: {}", err),
+            while let Some(connection) = listener.next().await {
+                match connection {
+                    Ok((outgoing, incoming)) => {
+                        tokio::spawn(async move {
+                            dispatcher_impl
+                                .dispatch_connection(outgoing, incoming)
+                                .await;
+                        });
+                    }
+                    Err(err) => panic!("Error: {}", err), // TODO: Handle error
                 }
             }
         });
@@ -69,11 +49,63 @@ where
             listener: listener_task,
             external: hostname,
             port: port,
-            phantom_data: PhantomData,
         })
     }
 
     pub fn external_addr(&self) -> (&str, u16) {
         (&*self.external, self.port)
+    }
+
+    pub fn addr(&self) -> String {
+        format!("{}:{}", self.external, self.port)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::net::TcpStream;
+
+    use crate::rpc::{
+        multiplex,
+        status::{PingRequest, StatusDispatcher, StatusRPC},
+    };
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_server() {
+        let server = Server::start::<StatusRPC, StatusDispatcher>(
+            Arc::new("localhost".to_string()),
+            0,
+            StatusDispatcher {},
+        )
+        .await;
+        assert!(server.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_server_client() {
+        let server = Server::start::<StatusRPC, StatusDispatcher>(
+            Arc::new("localhost".to_string()),
+            6789,
+            StatusDispatcher {},
+        )
+        .await
+        .unwrap();
+        let socket = TcpStream::connect(server.addr()).await.unwrap();
+        let (outgoing, incoming) =
+            multiplex::make_rpc_connection::<StatusRPC>(socket).unwrap();
+
+        let response = outgoing.request(&PingRequest {});
+        assert!(response.id == 0);
+
+        let response = outgoing.request(&PingRequest {});
+        assert!(response.id == 1);
+
+        let response = outgoing.request(&PingRequest {});
+        assert!(response.id == 2);
+
+        let response = response.await.unwrap();
+        assert!(response.is_ok());
     }
 }

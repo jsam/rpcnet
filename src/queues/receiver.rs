@@ -1,13 +1,10 @@
-use std::borrow::BorrowMut;
-use std::marker::PhantomData;
-use std::{future::Future, net::SocketAddr, pin::Pin, time::Duration};
+use std::{net::SocketAddr, time::Duration};
 
-use tokio::io::AsyncWriteExt;
 use tokio::{
     io::{self, BufReader, Interest},
-    net::{tcp::OwnedReadHalf, TcpListener, TcpStream},
-    sync::mpsc::{self, unbounded_channel, UnboundedReceiver},
-    time::{sleep, Sleep},
+    net::tcp::OwnedReadHalf,
+    sync::mpsc::{self, unbounded_channel},
+    time::sleep,
 };
 use tokio_stream::Stream;
 
@@ -22,7 +19,8 @@ where
     rx: mpsc::UnboundedReceiver<io::Result<R>>,
     from: SocketAddr,
     to: SocketAddr,
-    responder: Sender,
+    // TODO: short-circuit responder
+    pub responder: Sender,
 }
 
 impl<R> Receiver<R>
@@ -43,7 +41,6 @@ where
             loop {
                 let result = instream.ready(Interest::READABLE).await.unwrap();
                 if !result.is_readable() {
-                    println!("[Receiver::start] STREAM IS NOT READABLE");
                     sleep(Duration::from_millis(1)).await;
                     continue;
                 }
@@ -54,19 +51,14 @@ where
             let mut stop = false;
 
             while !stop {
-                println!("[Receiver::start] tick");
-
-                let message = match MessageBuf::read_async(&mut instream).await {
+                let message = match MessageBuf::read_async(&mut instream).await
+                {
                     Ok(Some(msg)) => handle(msg),
                     Ok(None) => {
                         sleep(Duration::from_millis(1)).await;
                         break;
                     }
                     Err(err) => {
-                        println!(
-                            "[Receiver::start] unexpected error while reading bytes {} -> {}: {:?}",
-                            from, to, err
-                        );
                         stop = true;
                         Err(err)
                     }
@@ -75,16 +67,10 @@ where
                 match tx.send(message) {
                     Ok(tx) => tx,
                     Err(err) => {
-                        println!(
-                            "[Receiver::start] unexpected error while sending message {} -> {}: {:?}",
-                            from, to, err
-                        );
                         break;
                     }
                 };
             }
-
-            println!("[Receiver::start] shutting down {} -> {}", from, to);
             //drop(instream.get_mut().poll_shutdown());
         });
 
@@ -116,9 +102,5 @@ where
     R: Send + 'static,
 {
     fn drop(&mut self) {
-        println!(
-            "[Receiver::drop] dropping receiver {} -> {}",
-            self.from, self.to
-        );
     }
 }

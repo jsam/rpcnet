@@ -1,4 +1,8 @@
-use std::io::{self, ErrorKind};
+use core::fmt;
+use std::{
+    fmt::Formatter,
+    io::{self, ErrorKind},
+};
 
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::sync::oneshot;
@@ -7,18 +11,14 @@ use crate::transport::message::MessageBuf;
 
 pub type Pending = oneshot::Sender<MessageBuf>;
 
-pub trait Name: Send + Sized + Unpin + 'static {
-    /// The discriminant type representing `Self`.
-    type Discriminant: Serialize + DeserializeOwned + 'static;
-
-    /// Convert `Self` into a discriminant.
-    fn discriminant(&self) -> Self::Discriminant;
-
-    /// Restore `Self` from a discriminant. Returns `None` if `Self` cannot be restored.
-    fn from_discriminant(_: &Self::Discriminant) -> Option<Self>;
+pub trait RequestEnum: Send + Sized + Unpin + 'static {
+    fn to_byte(&self) -> u8;
+    fn from_byte(byte: &u8) -> Option<Self>;
 }
 
-pub trait Request<N: Name>: Serialize + DeserializeOwned + Unpin {
+pub trait Request<N: RequestEnum>:
+    Serialize + DeserializeOwned + Unpin
+{
     /// The type of a successful response.
     type Success: Serialize + DeserializeOwned;
 
@@ -36,6 +36,15 @@ pub type RequestId = u32;
 pub enum Type {
     Request = 0,
     Response = 1,
+}
+
+impl fmt::Debug for Type {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Type::Request => write!(f, "Request"),
+            Type::Response => write!(f, "Response"),
+        }
+    }
 }
 
 impl Type {
