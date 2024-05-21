@@ -1,6 +1,7 @@
 use serde_derive::{Deserialize, Serialize};
 use std::future::Future;
-
+use std::pin::Pin;
+use tokio::task::JoinHandle;
 use crate::rpc::{api::Request, incoming::Incoming, outgoing::Outgoing};
 
 use super::{api::RequestEnum, dispatcher::Dispatcher};
@@ -108,41 +109,38 @@ where
     Self: Send;
 
 impl Dispatcher<StatusRPC> for StatusDispatcher {
-    type Check<'t> = impl Future<Output = ()> + 't;
 
-    fn dispatch_connection<'s>(
-        &'s mut self,
+    fn dispatch_connection(
+        &mut self,
         outgoing: Outgoing,
         mut incoming: Incoming<StatusRPC>,
-    ) -> Self::Check<'s> {
-        async move {
-            tokio::spawn(async move {
-                while let Some(request) = incoming.next().await {
-                    let _ = match request {
-                        Ok(request) => match request.name() {
-                            StatusRPC::Ping(PingRPC::Ping) => {
-                                let (req, res) =
-                                    request.decode::<PingRequest>().unwrap();
-                                tokio::spawn(async move {
-                                    res.respond(Ok(PongResponse {}))
-                                });
-                            }
-                            StatusRPC::Echo(EchoRPC::Echo) => {
-                                let (req, res) =
-                                    request.decode::<EchoRequest>().unwrap();
-                                tokio::spawn(async move {
-                                    let value = req.0 + 1;
-                                    res.respond(Ok(EchoResponse(value)))
-                                });
-                            }
-                            _ => {}
-                        },
-                        Err(err) => {
-                            panic!("Error: {}", err);
+    ) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            while let Some(request) = incoming.next().await {
+                let _ = match request {
+                    Ok(request) => match request.name() {
+                        StatusRPC::Ping(PingRPC::Ping) => {
+                            let (req, res) =
+                                request.decode::<PingRequest>().unwrap();
+                            tokio::spawn(async move {
+                                res.respond(Ok(PongResponse {}))
+                            });
                         }
-                    };
-                }
-            });
-        }
+                        StatusRPC::Echo(EchoRPC::Echo) => {
+                            let (req, res) =
+                                request.decode::<EchoRequest>().unwrap();
+                            tokio::spawn(async move {
+                                let value = req.0 + 1;
+                                res.respond(Ok(EchoResponse(value)))
+                            });
+                        }
+                        _ => {}
+                    },
+                    Err(err) => {
+                        panic!("Error: {}", err);
+                    }
+                };
+            }
+        })
     }
 }

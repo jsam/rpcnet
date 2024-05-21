@@ -1,4 +1,4 @@
-use crate::file::FileHandler;
+//use crate::file::FileHandler;
 use crate::rpc::api::RequestEnum;
 use crate::rpc::dispatcher::Dispatcher;
 use crate::rpc::incoming::Incoming;
@@ -13,7 +13,7 @@ use tokio::net::{TcpStream, ToSocketAddrs};
 #[derive(Clone, Debug)]
 pub struct RpcNet {
     pub hostname: Arc<String>,
-    pub file: FileHandler, // File upload and download
+    //pub file: FileHandler, // File upload and download
 }
 
 impl RpcNet {
@@ -31,7 +31,7 @@ impl RpcNet {
 
         Ok(RpcNet {
             hostname: Arc::new(hostname),
-            file: FileHandler::new(),
+            //file: FileHandler::new(),
         })
     }
 
@@ -59,8 +59,7 @@ impl RpcNet {
     ) -> io::Result<Server>
     where
         N: RequestEnum + Send + 'static,
-        D: Dispatcher<N> + Copy + Send + 'static,
-        for<'a> D::Check<'a>: Send,
+        D: Dispatcher<N> + Copy + Send + 'static
     {
         Server::start::<N, D>(
             self.hostname.clone(),

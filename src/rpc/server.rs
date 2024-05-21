@@ -20,7 +20,6 @@ impl Server {
     where
         N: RequestEnum + Send + 'static,
         D: Dispatcher<N> + Copy + Send + 'static,
-        for<'a> D::Check<'a>: Send,
     {
         let listener =
             Listener::<N>::start(hostname.clone().to_string(), port).await?;
@@ -34,11 +33,13 @@ impl Server {
             while let Some(connection) = listener.next().await {
                 match connection {
                     Ok((outgoing, incoming)) => {
-                        tokio::spawn(async move {
-                            dispatcher_impl
-                                .dispatch_connection(outgoing, incoming)
-                                .await;
-                        });
+                        dispatcher_impl.dispatch_connection(outgoing, incoming);
+
+                        // tokio::spawn(async move {
+                        //     dispatcher_impl
+                        //         .dispatch_connection(outgoing, incoming)?
+                        //         .await;
+                        // });
                     }
                     Err(err) => panic!("Error: {}", err), // TODO: Handle error
                 }

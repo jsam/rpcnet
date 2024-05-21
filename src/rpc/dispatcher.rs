@@ -1,4 +1,5 @@
 use std::future::Future;
+use tokio::task::JoinHandle;
 
 use super::{api::RequestEnum, incoming::Incoming, outgoing::Outgoing};
 
@@ -7,11 +8,9 @@ where
     E: RequestEnum + Send + 'static,
     Self: Send + 'static,
 {
-    type Check<'t>: Future<Output = ()> + 't;
-
-    fn dispatch_connection<'s>(
-        &'s mut self,
+    fn dispatch_connection(
+        &mut self,
         outgoing: Outgoing,
         incoming: Incoming<E>,
-    ) -> Self::Check<'s>;
+    ) -> JoinHandle<()>;
 }
