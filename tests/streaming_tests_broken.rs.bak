@@ -1,0 +1,420 @@
+use futures::{stream, StreamExt};
+use rpcnet::{RpcClient, RpcConfig, RpcServer};
+use std::time::Duration;
+use tokio::time::timeout;
+
+/// Helper function to create test configuration
+fn test_config() -> RpcConfig {
+    RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0")
+        .with_key_path("certs/test_key.pem")
+        .with_server_name("localhost")
+}
+
+/// Helper function to start a test server with streaming handlers
+async fn start_streaming_test_server() -> Result<std::net::SocketAddr, Box<dyn std::error::Error>> {
+    let mut server = RpcServer::new(test_config());
+    
+    // Register an echo streaming handler
+    server.register_streaming("echo_stream", |request_stream| async move {
+        Box::pin(async_stream::stream! {
+            let mut request_stream = Box::pin(request_stream);
+            while let Some(data) = request_stream.next().await {
+                yield Ok(data);
+            }
+        }) as std::pin::Pin<Box<dyn futures::Stream<Item = Result<Vec<u8>, rpcnet::RpcError>> + Send>>
+    }).await;
+    
+    // Register a multiplier streaming handler (multiplies each number by 2)
+    server.register_streaming("multiply_stream", |request_stream| async move {
+        Box::pin(async_stream::stream! {
+            let mut request_stream = Box::pin(request_stream);
+            while let Some(data) = request_stream.next().await {
+                if let Ok(number) = bincode::deserialize::<i32>(&data) {
+                    let result = number * 2;
+                    if let Ok(response_data) = bincode::serialize(&result) {
+                        yield Ok(response_data);
+                    } else {
+                        yield Err(rpcnet::RpcError::SerializationError(
+                            bincode::Error::new(bincode::ErrorKind::Custom("Serialization failed".to_string()))
+                        ));
+                    }
+                } else {
+                    yield Err(rpcnet::RpcError::SerializationError(
+                        bincode::Error::new(bincode::ErrorKind::Custom("Deserialization failed".to_string()))
+                    ));
+                }
+            }
+        }) as std::pin::Pin<Box<dyn futures::Stream<Item = Result<Vec<u8>, rpcnet::RpcError>> + Send>>
+    }).await;
+    
+    // Register a counter streaming handler (returns sequence of numbers)
+    server.register_streaming("counter_stream", |_request_stream| async move {
+        Box::pin(async_stream::stream! {
+            for i in 1..=5 {
+                if let Ok(data) = bincode::serialize(&i) {
+                    yield Ok(data);
+                } else {
+                    yield Err(rpcnet::RpcError::SerializationError(
+                        bincode::Error::new(bincode::ErrorKind::Custom("Serialization failed".to_string()))
+                    ));
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        }) as std::pin::Pin<Box<dyn futures::Stream<Item = Result<Vec<u8>, rpcnet::RpcError>> + Send>>
+    }).await;
+    
+    // Start server
+    let quic_server = server.bind()?;
+    let addr = quic_server.local_addr()?;
+    
+    let mut server_clone = server.clone();
+    tokio::spawn(async move {
+        server_clone.start(quic_server).await.expect("Server should start");
+    });
+    
+    // Give server time to start
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    
+    Ok(addr)
+}
+
+#[tokio::test]
+async fn test_bidirectional_streaming_echo() {
+    let server_addr = start_streaming_test_server().await.expect("Server should start");
+    
+    // Connect client
+    let client = RpcClient::connect(server_addr, test_config())
+        .await
+        .expect("Client should connect");
+    
+    // Create request stream
+    let request_data = vec![
+        b"hello".to_vec(),
+        b"world".to_vec(),
+        b"streaming".to_vec(),
+    ];
+    let request_stream = stream::iter(request_data.clone());
+    
+    // Call streaming RPC
+    let response_stream = client
+        .call_streaming("echo_stream", request_stream)
+        .await
+        .expect("Streaming call should succeed");
+    
+    // Collect responses
+    let responses: Vec<_> = Box::pin(response_stream)
+        .collect()
+        .await;
+    
+    // Verify responses
+    assert_eq!(responses.len(), 3);
+    for (i, response) in responses.iter().enumerate() {
+        match response {
+            Ok(data) => assert_eq!(data, &request_data[i]),
+            Err(e) => panic!("Unexpected error: {:?}", e),
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_bidirectional_streaming_with_computation() {
+    let server_addr = start_streaming_test_server().await.expect("Server should start");
+    
+    let client = RpcClient::connect(server_addr, test_config())
+        .await
+        .expect("Client should connect");
+    
+    // Create request stream with numbers
+    let numbers = vec![1, 2, 3, 4, 5];
+    let request_data: Vec<_> = numbers.iter().map(|&n| {
+        bincode::serialize(&n).expect("Serialization should work")
+    }).collect();
+    let request_stream = stream::iter(request_data);
+    
+    // Call multiplier streaming RPC
+    let response_stream = client
+        .call_streaming("multiply_stream", request_stream)
+        .await
+        .expect("Streaming call should succeed");
+    
+    // Collect and verify responses
+    let responses: Vec<_> = Box::pin(response_stream)
+        .collect()
+        .await;
+    
+    assert_eq!(responses.len(), 5);
+    for (i, response) in responses.iter().enumerate() {
+        match response {
+            Ok(data) => {
+                let result: i32 = bincode::deserialize(data).expect("Deserialization should work");
+                assert_eq!(result, numbers[i] * 2);
+            }
+            Err(e) => panic!("Unexpected error: {:?}", e),
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_server_streaming_counter() {
+    let server_addr = start_streaming_test_server().await.expect("Server should start");
+    
+    let client = RpcClient::connect(server_addr, test_config())
+        .await
+        .expect("Client should connect");
+    
+    // Create single request
+    let request_stream = stream::iter(vec![b"start_counter".to_vec()]);
+    
+    // Call counter streaming RPC
+    let response_stream = timeout(
+        Duration::from_secs(5),
+        client.call_streaming("counter_stream", request_stream)
+    )
+    .await
+    .expect("Should not timeout")
+    .expect("Streaming call should succeed");
+    
+    // Collect responses with timeout
+    let responses: Vec<_> = timeout(
+        Duration::from_secs(5),
+        Box::pin(response_stream).collect::<Vec<_>>()
+    )
+    .await
+    .expect("Should not timeout");
+    
+    // Verify we get sequence 1, 2, 3, 4, 5
+    assert_eq!(responses.len(), 5);
+    for (i, response) in responses.iter().enumerate() {
+        match response {
+            Ok(data) => {
+                let number: i32 = bincode::deserialize(data).expect("Deserialization should work");
+                assert_eq!(number, (i + 1) as i32);
+            }
+            Err(e) => panic!("Unexpected error: {:?}", e),
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_client_streaming_single_response() {
+    let server_addr = start_streaming_test_server().await.expect("Server should start");
+    
+    let client = RpcClient::connect(server_addr, test_config())
+        .await
+        .expect("Client should connect");
+    
+    // Send multiple requests, expect single response
+    let numbers = vec![10, 20, 30];
+    let request_data: Vec<_> = numbers.iter().map(|&n| {
+        bincode::serialize(&n).expect("Serialization should work")
+    }).collect();
+    let request_stream = stream::iter(request_data);
+    
+    // Use client streaming method
+    let response = client
+        .call_client_streaming("multiply_stream", request_stream)
+        .await
+        .expect("Client streaming call should succeed");
+    
+    // Verify we get the first multiplied response
+    let result: i32 = bincode::deserialize(&response).expect("Deserialization should work");
+    assert_eq!(result, 20); // First number (10) * 2
+}
+
+#[tokio::test]
+async fn test_server_streaming_single_request() {
+    let server_addr = start_streaming_test_server().await.expect("Server should start");
+    
+    let client = RpcClient::connect(server_addr, test_config())
+        .await
+        .expect("Client should connect");
+    
+    // Send single request, expect multiple responses
+    let request = b"trigger_counter".to_vec();
+    
+    let response_stream = client
+        .call_server_streaming("counter_stream", request)
+        .await
+        .expect("Server streaming call should succeed");
+    
+    // Collect responses
+    let responses: Vec<_> = Box::pin(response_stream)
+        .collect()
+        .await;
+    
+    // Verify we get sequence of numbers
+    assert_eq!(responses.len(), 5);
+    for (i, response) in responses.iter().enumerate() {
+        match response {
+            Ok(data) => {
+                let number: i32 = bincode::deserialize(data).expect("Deserialization should work");
+                assert_eq!(number, (i + 1) as i32);
+            }
+            Err(e) => panic!("Unexpected error: {:?}", e),
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_streaming_empty_request_stream() {
+    let server_addr = start_streaming_test_server().await.expect("Server should start");
+    
+    let client = RpcClient::connect(server_addr, test_config())
+        .await
+        .expect("Client should connect");
+    
+    // Create empty request stream
+    let request_stream = stream::empty();
+    
+    let response_stream = client
+        .call_streaming("echo_stream", request_stream)
+        .await
+        .expect("Streaming call should succeed");
+    
+    // Should get no responses
+    let responses: Vec<_> = Box::pin(response_stream)
+        .collect()
+        .await;
+    
+    assert_eq!(responses.len(), 0);
+}
+
+#[tokio::test]
+async fn test_streaming_large_data() {
+    let server_addr = start_streaming_test_server().await.expect("Server should start");
+    
+    let client = RpcClient::connect(server_addr, test_config())
+        .await
+        .expect("Client should connect");
+    
+    // Create large data chunks
+    let large_data = vec![0u8; 64 * 1024]; // 64KB chunk
+    let request_stream = stream::iter(vec![
+        large_data.clone(),
+        large_data.clone(),
+        large_data.clone(),
+    ]);
+    
+    let response_stream = client
+        .call_streaming("echo_stream", request_stream)
+        .await
+        .expect("Streaming call should succeed");
+    
+    // Collect responses
+    let responses: Vec<_> = Box::pin(response_stream)
+        .collect()
+        .await;
+    
+    assert_eq!(responses.len(), 3);
+    for response in &responses {
+        match response {
+            Ok(data) => assert_eq!(data.len(), 64 * 1024),
+            Err(e) => panic!("Unexpected error: {:?}", e),
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_concurrent_streaming_clients() {
+    let server_addr = start_streaming_test_server().await.expect("Server should start");
+    
+    // Create multiple concurrent clients
+    let mut tasks = Vec::new();
+    
+    for client_id in 0..5 {
+        let server_addr = server_addr;
+        let task = tokio::spawn(async move {
+            let client = RpcClient::connect(server_addr, test_config())
+                .await
+                .expect("Client should connect");
+            
+            let request_data = format!("client_{}", client_id).into_bytes();
+            let request_stream = stream::iter(vec![request_data.clone()]);
+            
+            let response_stream = client
+                .call_streaming("echo_stream", request_stream)
+                .await
+                .expect("Streaming call should succeed");
+            
+            let responses: Vec<_> = Box::pin(response_stream)
+                .collect()
+                .await;
+            
+            assert_eq!(responses.len(), 1);
+            match &responses[0] {
+                Ok(data) => assert_eq!(data, &request_data),
+                Err(e) => panic!("Unexpected error: {:?}", e),
+            }
+            
+            client_id
+        });
+        
+        tasks.push(task);
+    }
+    
+    // Wait for all clients to complete
+    let results: Vec<_> = futures::future::join_all(tasks).await;
+    
+    // Verify all clients succeeded
+    for (i, result) in results.iter().enumerate() {
+        match result {
+            Ok(client_id) => assert_eq!(*client_id, i),
+            Err(e) => panic!("Client {} failed: {:?}", i, e),
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_streaming_error_handling() {
+    let server_addr = start_streaming_test_server().await.expect("Server should start");
+    
+    let client = RpcClient::connect(server_addr, test_config())
+        .await
+        .expect("Client should connect");
+    
+    // Send invalid data to multiply_stream (non-serialized number)
+    let invalid_data = vec![b"not_a_number".to_vec()];
+    let request_stream = stream::iter(invalid_data);
+    
+    let response_stream = client
+        .call_streaming("multiply_stream", request_stream)
+        .await
+        .expect("Streaming call should succeed");
+    
+    // Should get error response
+    let responses: Vec<_> = Box::pin(response_stream)
+        .collect()
+        .await;
+    
+    assert_eq!(responses.len(), 1);
+    match &responses[0] {
+        Err(rpcnet::RpcError::SerializationError(_)) => {
+            // Expected error type
+        }
+        other => panic!("Expected SerializationError, got: {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn test_streaming_method_not_found() {
+    let server_addr = start_streaming_test_server().await.expect("Server should start");
+    
+    let client = RpcClient::connect(server_addr, test_config())
+        .await
+        .expect("Client should connect");
+    
+    let request_stream = stream::iter(vec![b"test".to_vec()]);
+    
+    // Try to call non-existent streaming method
+    let response_stream = client
+        .call_streaming("nonexistent_method", request_stream)
+        .await
+        .expect("Call should succeed but return empty stream");
+    
+    // Should get no responses (method not found results in empty stream)
+    let responses: Vec<_> = Box::pin(response_stream)
+        .collect()
+        .await;
+    
+    assert_eq!(responses.len(), 0);
+}
