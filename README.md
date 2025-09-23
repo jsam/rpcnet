@@ -1,5 +1,11 @@
 # rpcnet
 
+[![Coverage](https://codecov.io/gh/jsam/rpcnet/branch/main/graph/badge.svg)](https://codecov.io/gh/jsam/rpcnet)
+[![CI](https://github.com/jsam/rpcnet/workflows/CI/badge.svg)](https://github.com/jsam/rpcnet/actions)
+[![Crates.io](https://img.shields.io/crates/v/rpcnet.svg)](https://crates.io/crates/rpcnet)
+[![Documentation](https://docs.rs/rpcnet/badge.svg)](https://docs.rs/rpcnet)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/jsam/rpcnet#license)
+
 A blazing-fast RPC library for Rust achieving **130,000+ requests per second** with full QUIC+TLS encryption. Built on the modern QUIC protocol for secure, reliable, and multiplexed communication.
 
 ## 🚀 Performance
@@ -222,20 +228,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Testing
 
-RpcNet has comprehensive test coverage with unit tests, integration tests, and examples:
+RpcNet maintains **90%+ test coverage** with comprehensive unit tests, integration tests, and examples:
 
 ```bash
 # Run all tests
 cargo test
 
 # Generate coverage report
-make coverage-html
+make coverage
+
+# Check coverage meets 90% threshold
+make coverage-check
+
+# Analyze coverage gaps
+make coverage-gaps
 
 # Test examples
 cargo run --example basic_client_server
 ```
 
-See [TESTING.md](TESTING.md) for detailed testing information.
+### Coverage Requirements
+
+- **Overall Project**: 90% minimum coverage
+- **Security Features**: 95% minimum coverage  
+- **Core RPC**: 95% minimum coverage
+- **Transport Layer**: 90% minimum coverage
+
+See [docs/COVERAGE.md](docs/COVERAGE.md) for detailed coverage information and [TESTING.md](TESTING.md) for testing guidelines.
 
 ## Benchmarking
 

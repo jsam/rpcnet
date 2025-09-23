@@ -49,6 +49,35 @@
 //! Create a service definition file `greeting.rpc.rs`:
 //!
 //! ```rust,no_run
+//! use rpcnet::service;
+//! use serde::{Serialize, Deserialize};
+//!
+//! #[derive(Serialize, Deserialize, Debug)]
+//! pub struct GreetingRequest {
+//!     pub name: String,
+//!     pub language: String,
+//! }
+//!
+//! #[derive(Serialize, Deserialize, Debug)]
+//! pub struct GreetingResponse {
+//!     pub message: String,
+//!     pub timestamp: u64,
+//! }
+//!
+//! #[derive(Debug)]
+//! pub enum GreetingError {
+//!     InvalidLanguage,
+//!     EmptyName,
+//! }
+//!
+//! #[service]
+//! pub trait GreetingService {
+//!     async fn greet(&self, request: GreetingRequest) -> Result<GreetingResponse, GreetingError>;
+//!     async fn farewell(&self, name: String) -> Result<String, GreetingError>;
+//! }
+//! ```
+//!
+//! ```rust,no_run
 //! use serde::{Serialize, Deserialize};
 //!
 //! #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -1374,7 +1403,7 @@ impl RpcServer {
                     let streaming_handlers = streaming_handlers.clone();
                     
                     tokio::spawn(async move {
-                        let mut request_data = Vec::new();
+                        let mut request_data = Vec::with_capacity(8192);
                         
                         while let Ok(Some(data)) = stream.receive().await {
                             request_data.extend_from_slice(&data);
@@ -1415,7 +1444,7 @@ impl RpcServer {
                                             drop(streaming_handlers_ref); // Release the read lock
                                             
                                             // Create stream with remaining data after method name
-                                            let remaining_data = request_data[4 + method_len..].to_vec();
+                                            let remaining_data = request_data[4 + method_len..].to_owned();
                                             let stream_arc = std::sync::Arc::new(tokio::sync::Mutex::new(stream));
                                             let request_stream = Self::create_request_stream_with_initial_data(stream_arc.clone(), remaining_data);
                                             
@@ -1445,7 +1474,8 @@ impl RpcServer {
     ) -> Pin<Box<dyn Stream<Item = Vec<u8>> + Send>> {
         Box::pin(
         async_stream::stream! {
-            let mut buffer = BytesMut::from(initial_data.as_slice());
+            let mut buffer = BytesMut::with_capacity(8192 + initial_data.len());
+            buffer.extend_from_slice(&initial_data);
             
             loop {
                 // First try to parse any complete messages from existing buffer
@@ -1460,7 +1490,7 @@ impl RpcServer {
                     if buffer.len() >= 4 + len {
                         // We have a complete message
                         let message_data = buffer.split_to(4 + len);
-                        let request_data = message_data[4..].to_vec();
+                        let request_data = message_data[4..].to_owned();
                         yield request_data;
                     } else {
                         // Need more data
@@ -1489,7 +1519,7 @@ impl RpcServer {
     fn create_request_stream(stream: std::sync::Arc<tokio::sync::Mutex<s2n_quic::stream::BidirectionalStream>>) -> Pin<Box<dyn Stream<Item = Vec<u8>> + Send>> {
         Box::pin(
         async_stream::stream! {
-            let mut buffer = BytesMut::new();
+            let mut buffer = BytesMut::with_capacity(8192);
             
             loop {
                 let chunk = {
@@ -1512,7 +1542,7 @@ impl RpcServer {
                     if buffer.len() >= 4 + len {
                         // We have a complete message
                         let message_data = buffer.split_to(4 + len);
-                        let request_data = message_data[4..].to_vec();
+                        let request_data = message_data[4..].to_owned();
                         yield request_data;
                     } else {
                         // Need more data
@@ -2085,8 +2115,7 @@ impl RpcClient {
             .await
             .map_err(|e| RpcError::StreamError(e.to_string()))?;
         
-        // Small delay to allow server to process method name
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        // Removed artificial delay for better performance
 
         // Use Arc<tokio::sync::Mutex> to share the stream
         let stream = std::sync::Arc::new(tokio::sync::Mutex::new(stream));
@@ -2095,17 +2124,15 @@ impl RpcClient {
         // Spawn a task to send requests
         let mut request_stream = Box::pin(request_stream);
         tokio::spawn(async move {
-            let mut count = 0;
+            let mut _count = 0;
             while let Some(request_data) = request_stream.next().await {
-                count += 1;
+                _count += 1;
                 let data_len = (request_data.len() as u32).to_le_bytes();
                 let mut stream_guard = send_stream.lock().await;
-                if let Err(e) = stream_guard.send([&data_len[..], &request_data].concat().into()).await {
+                if let Err(_e) = stream_guard.send([&data_len[..], &request_data].concat().into()).await {
                     break;
                 }
                 drop(stream_guard); // Release lock
-                // Small delay between sends
-                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
             }
             // Send empty frame to signal end of requests
             let mut stream_guard = send_stream.lock().await;
@@ -2115,7 +2142,7 @@ impl RpcClient {
         let receive_stream = stream.clone();
         // Return a stream of responses
         Ok(async_stream::stream! {
-            let mut buffer = BytesMut::new();
+            let mut buffer = BytesMut::with_capacity(8192);
             
             loop {
                 let chunk = {
@@ -2328,7 +2355,7 @@ mod tests {
                     {
                         let handlers = handlers.clone();
                         tokio::spawn(async move {
-                            let mut request_data = Vec::new();
+                            let mut request_data = Vec::with_capacity(8192);
                             while let Ok(Some(data)) = stream.receive().await {
                                 request_data.extend_from_slice(&data);
                                 if let Ok(request) =
@@ -2760,5 +2787,142 @@ mod tests {
         // Test with PathBuf
         let config3 = RpcConfig::new(PathBuf::from("cert.pem"), "127.0.0.1:0");
         assert_eq!(config3.cert_path, PathBuf::from("cert.pem"));
+    }
+
+    /// Test that the RpcConfig builder pattern works correctly.
+    ///
+    /// ```rust
+    /// use rpcnet::RpcConfig;
+    /// use std::time::Duration;
+    /// use std::path::PathBuf;
+    ///
+    /// let config = RpcConfig::new("cert.pem", "127.0.0.1:8080")
+    ///     .with_key_path("key.pem")
+    ///     .with_server_name("example.com")
+    ///     .with_keep_alive_interval(Duration::from_secs(60));
+    ///
+    /// assert_eq!(config.cert_path, PathBuf::from("cert.pem"));
+    /// assert_eq!(config.bind_address, "127.0.0.1:8080");
+    /// assert_eq!(config.server_name, "example.com");
+    /// ```
+    #[test]
+    fn test_config_builder_doctest() {
+        use std::time::Duration;
+        use std::path::PathBuf;
+        
+        let config = RpcConfig::new("cert.pem", "127.0.0.1:8080")
+            .with_key_path("key.pem")
+            .with_server_name("example.com")
+            .with_keep_alive_interval(Duration::from_secs(60));
+
+        assert_eq!(config.cert_path, PathBuf::from("cert.pem"));
+        assert_eq!(config.bind_address, "127.0.0.1:8080");
+        assert_eq!(config.server_name, "example.com");
+    }
+
+    /// Test that RpcRequest can be created and accessed correctly.
+    ///
+    /// ```rust
+    /// use rpcnet::RpcRequest;
+    ///
+    /// let request = RpcRequest::new(123, "test_method".to_string(), vec![1, 2, 3]);
+    ///
+    /// assert_eq!(request.id(), 123);
+    /// assert_eq!(request.method(), "test_method");
+    /// assert_eq!(request.params(), &[1, 2, 3]);
+    /// ```
+    #[test]
+    fn test_request_creation_doctest() {
+        let request = RpcRequest::new(123, "test_method".to_string(), vec![1, 2, 3]);
+
+        assert_eq!(request.id(), 123);
+        assert_eq!(request.method(), "test_method");
+        assert_eq!(request.params(), &[1, 2, 3]);
+    }
+
+    /// Test that RpcResponse can be created from both success and error cases.
+    ///
+    /// ```rust
+    /// use rpcnet::{RpcResponse, RpcError};
+    ///
+    /// // Success response
+    /// let success = RpcResponse::new(1, Some(vec![42]), None);
+    /// assert_eq!(success.id(), 1);
+    /// assert_eq!(success.result(), Some(&vec![42]));
+    /// assert!(success.error().is_none());
+    ///
+    /// // Error response
+    /// let error = RpcResponse::new(2, None, Some("Error occurred".to_string()));
+    /// assert_eq!(error.id(), 2);
+    /// assert!(error.result().is_none());
+    /// assert_eq!(error.error(), Some(&"Error occurred".to_string()));
+    /// ```
+    #[test]
+    fn test_response_creation_doctest() {
+        // Success response
+        let success = RpcResponse::new(1, Some(vec![42]), None);
+        assert_eq!(success.id(), 1);
+        assert_eq!(success.result(), Some(&vec![42]));
+        assert!(success.error().is_none());
+
+        // Error response
+        let error_resp = RpcResponse::new(2, None, Some("Error occurred".to_string()));
+        assert_eq!(error_resp.id(), 2);
+        assert!(error_resp.result().is_none());
+        assert_eq!(error_resp.error(), Some(&"Error occurred".to_string()));
+    }
+
+    /// Test RpcError display formatting.
+    ///
+    /// ```rust
+    /// use rpcnet::RpcError;
+    ///
+    /// let errors = vec![
+    ///     RpcError::ConnectionError("failed".to_string()),
+    ///     RpcError::StreamError("closed".to_string()),
+    ///     RpcError::Timeout,
+    /// ];
+    ///
+    /// for error in errors {
+    ///     let display = error.to_string();
+    ///     assert!(!display.is_empty());
+    /// }
+    /// ```
+    #[test]
+    fn test_error_display_doctest() {
+        let errors = vec![
+            RpcError::ConnectionError("failed".to_string()),
+            RpcError::StreamError("closed".to_string()),
+            RpcError::Timeout,
+        ];
+
+        for error in errors {
+            let display = error.to_string();
+            assert!(!display.is_empty());
+        }
+    }
+
+    /// Test serialization of RPC types.
+    ///
+    /// ```rust
+    /// use rpcnet::{RpcRequest, RpcResponse};
+    ///
+    /// let request = RpcRequest::new(1, "test".to_string(), vec![1, 2, 3]);
+    /// let serialized = bincode::serialize(&request).unwrap();
+    /// let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
+    ///
+    /// assert_eq!(request.id(), deserialized.id());
+    /// assert_eq!(request.method(), deserialized.method());
+    /// assert_eq!(request.params(), deserialized.params());
+    /// ```
+    #[test]
+    fn test_serialization_doctest() {
+        let request = RpcRequest::new(1, "test".to_string(), vec![1, 2, 3]);
+        let serialized = bincode::serialize(&request).unwrap();
+        let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
+
+        assert_eq!(request.id(), deserialized.id());
+        assert_eq!(request.method(), deserialized.method());
+        assert_eq!(request.params(), deserialized.params());
     }
 }

@@ -1,2 +1,9 @@
 /target
 .DS_Store
+CLAUDE.md
+COVERAGE_BASELINE.md
+.specify
+specs/
+.claude
+docs/COVERAGE.md
+*profraw

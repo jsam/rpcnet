@@ -45,7 +45,7 @@ prettyplease = { version = "0.2", optional = true }
 clap = { version = "4.0", features = ["derive"], optional = true }
 
 [features]
-default = []
+default = ["perf"]
 codegen = ["syn", "quote", "proc-macro2", "clap", "prettyplease"]
 
 # High-performance features for benchmarking
@@ -139,3 +139,20 @@ required-features = ["codegen"]
 name = "concurrent_demo_client"
 path = "examples/concurrent_demo/client.rs"
 required-features = ["codegen"]
+
+# Tarpaulin configuration for coverage analysis
+[tool.tarpaulin.config]
+exclude-files = [
+    "examples/*",
+    "benches/*", 
+    "tests/*",
+    "specs/*",
+    "target/*",
+    "src/bin/*"
+]
+timeout = "300"
+fail-under = 90
+out = ["Html", "Json", "Xml"]
+output-dir = "target/coverage"
+all-features = true
+ignored = true

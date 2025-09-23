@@ -1,0 +1,107 @@
+name: Coverage
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: llvm-tools-preview
+    
+    - name: Install cargo-tarpaulin
+      run: cargo install cargo-tarpaulin
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq bc
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache target directory
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Run coverage analysis
+      run: make coverage-check
+    
+    - name: Generate coverage report
+      run: |
+        make coverage
+        echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        ./scripts/analyze-coverage.sh >> $GITHUB_STEP_SUMMARY || true
+    
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: target/coverage/tarpaulin-report.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+    
+    - name: Archive coverage results
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: |
+          target/coverage/tarpaulin-report.html
+          target/coverage/tarpaulin-report.json
+    
+    - name: Comment coverage report on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          try {
+            const coverage = JSON.parse(fs.readFileSync('target/coverage/tarpaulin-report.json', 'utf8'));
+            const coveragePercent = coverage.coverage.toFixed(1);
+            const threshold = 90.0;
+            const status = coveragePercent >= threshold ? '✅' : '❌';
+            
+            const body = `## ${status} Coverage Report
+            
+            **Overall Coverage: ${coveragePercent}%** (Threshold: ${threshold}%)
+            
+            ${coveragePercent >= threshold ? 'Coverage meets requirements!' : 'Coverage is below threshold and needs improvement.'}
+            
+            📄 [View detailed coverage report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+          } catch (error) {
+            console.log('Could not post coverage comment:', error.message);
+          }

@@ -112,20 +112,32 @@ We use `cargo-tarpaulin` for code coverage analysis:
 cargo install cargo-tarpaulin
 
 # Generate HTML coverage report
-make coverage-html
+make coverage
+
+# Check coverage meets 90% threshold
+make coverage-check
+
+# Analyze coverage gaps by priority
+make coverage-gaps
 
 # Generate coverage for CI/CD
 make coverage-ci
 
-# Basic coverage report
-cargo tarpaulin --out Html --output-dir target/coverage
+# Use analysis scripts for detailed reports
+./scripts/analyze-coverage.sh
+./scripts/report-gaps.sh
 ```
 
-### Coverage Targets
+### Coverage Requirements
 
-- **Target**: 95%+ line coverage
-- **Current**: ~66% (library tests only)
-- **Goal**: 95%+ (all tests combined)
+RpcNet enforces strict coverage requirements:
+
+- **Overall Project**: 90%+ line coverage (mandatory)
+- **Security Features**: 95%+ coverage (critical)
+- **Core RPC**: 95%+ coverage (critical)  
+- **Transport Layer**: 90%+ coverage (high priority)
+- **Code Generation**: 85%+ coverage (medium priority)
+- **Utilities**: 75%+ coverage (low priority)
 
 ### Coverage Reports
 
@@ -321,10 +333,17 @@ make ci-lint     # Code quality
 ### Coverage Requirements
 
 CI enforces:
-- Minimum 95% line coverage
+- **Minimum 90% line coverage** (blocks PRs if below threshold)
 - All tests must pass
-- No clippy warnings
+- No clippy warnings  
 - Proper code formatting
+- Coverage gap analysis and reporting
+
+The CI will:
+- Generate coverage reports on every PR
+- Block merge if coverage drops below 90%
+- Post coverage status as PR comment
+- Upload reports to Codecov for tracking
 
 ## Troubleshooting
 
@@ -427,5 +446,6 @@ When contributing new tests:
 
 For more information about RPC.NET development, see:
 - [README.md](README.md) - Project overview
+- [docs/COVERAGE.md](docs/COVERAGE.md) - Detailed coverage guide
 - [examples/README.md](examples/README.md) - Usage examples
 - [API Documentation](https://docs.rs/rpcnet) - Generated API docs

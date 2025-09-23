@@ -18,6 +18,9 @@ help:
 	@echo "  coverage        - Generate test coverage report"
 	@echo "  coverage-html   - Generate HTML coverage report and open"
 	@echo "  coverage-ci     - Generate coverage for CI (with fail-under threshold)"
+	@echo "  coverage-check  - Check if coverage meets 90% threshold"
+	@echo "  coverage-gaps   - Show uncovered lines"
+	@echo "  install-coverage-tools - Install coverage dependencies"
 	@echo ""
 	@echo "Development:"
 	@echo "  lint            - Run clippy linter"
@@ -57,7 +60,7 @@ test-examples:
 # Coverage commands
 coverage:
 	@echo "Generating test coverage report..."
-	cargo tarpaulin --config tarpaulin.toml
+	cargo tarpaulin --out Html --out Json --output-dir target/coverage --exclude-files "examples/*" --exclude-files "benches/*" --timeout 300 --all-features
 
 coverage-html:
 	@echo "Generating HTML coverage report..."
@@ -77,6 +80,26 @@ coverage-html:
 coverage-ci:
 	@echo "Running coverage analysis for CI..."
 	cargo tarpaulin --config tarpaulin.toml --fail-under 95 --out Xml
+
+coverage-check:
+	@echo "Checking coverage threshold (90%)..."
+	@cargo tarpaulin --out Json --output-dir target/coverage --exclude-files "examples/*" --exclude-files "benches/*" --timeout 300 --all-features
+	@coverage=$$(cat target/coverage/tarpaulin-report.json | jq -r '.coverage'); \
+	if (( $$(echo "$$coverage < 90" | bc -l) )); then \
+		echo "❌ Coverage $$coverage% is below 90% threshold"; \
+		exit 1; \
+	else \
+		echo "✅ Coverage $$coverage% meets threshold"; \
+	fi
+
+coverage-gaps:
+	@echo "Analyzing coverage gaps..."
+	@cargo tarpaulin --print-uncovered-lines --exclude-files "examples/*" --exclude-files "benches/*" --all-features
+
+install-coverage-tools:
+	@echo "Installing coverage tools..."
+	cargo install cargo-tarpaulin
+	@echo "Coverage tools installed"
 
 # Development commands
 lint:

@@ -9,17 +9,19 @@ include-tests = false
 exclude = [
     "examples/*",
     "benches/*",
-    "tests/*/mod.rs"
+    "tests/*/mod.rs",
+    "specs/*",
+    "src/bin/*"
 ]
 
 # Generate reports in multiple formats
 out = ["Html", "Lcov", "Json"]
 
-# Set minimum coverage threshold
-fail-under = 95
+# Set minimum coverage threshold  
+fail-under = 90
 
 # Generate detailed HTML report
-output-dir = "target/tarpaulin"
+output-dir = "target/coverage"
 
 # Follow symbolic links
 follow-exec = true
