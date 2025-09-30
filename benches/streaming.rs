@@ -1,4 +1,4 @@
-use criterion::{Criterion, criterion_group, criterion_main, Throughput};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use futures::StreamExt;
 use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
@@ -21,22 +21,30 @@ fn bench_streaming_responses(c: &mut Criterion) {
         let mut server = RpcServer::new(test_config());
 
         // Register streaming handler for benchmarks
-        server.register_streaming("benchmark_stream", |_request_stream| async move {
-            Box::pin(async_stream::stream! {
-                // Stream a fixed number of responses
-                for i in 0..10 {
-                    let data = format!("response_{}", i).into_bytes();
-                    yield Ok(data);
-                }
-            }) as std::pin::Pin<Box<dyn futures::Stream<Item = Result<Vec<u8>, RpcError>> + Send>>
-        }).await;
+        server
+            .register_streaming("benchmark_stream", |_request_stream| async move {
+                Box::pin(async_stream::stream! {
+                    // Stream a fixed number of responses
+                    for i in 0..10 {
+                        let data = format!("response_{}", i).into_bytes();
+                        yield Ok(data);
+                    }
+                })
+                    as std::pin::Pin<
+                        Box<dyn futures::Stream<Item = Result<Vec<u8>, RpcError>> + Send>,
+                    >
+            })
+            .await;
 
         let ser = server.bind().expect("Failed to bind server");
         let addr = ser.local_addr().expect("Failed to get server address");
 
         let mut server_clone = server.clone();
         tokio::spawn(async move {
-            server_clone.start(ser).await.expect("Server failed to start");
+            server_clone
+                .start(ser)
+                .await
+                .expect("Server failed to start");
         });
 
         // Give server time to start
@@ -52,16 +60,16 @@ fn bench_streaming_responses(c: &mut Criterion) {
     });
 
     let mut group = c.benchmark_group("streaming_responses");
-    
+
     // Simple benchmark - just measure streaming calls
     group.throughput(Throughput::Elements(10)); // 10 responses per call
     group.measurement_time(Duration::from_secs(5));
     group.warm_up_time(Duration::from_secs(2));
-    
+
     group.bench_function("stream_10_responses", |b| {
         b.iter_custom(|iterations| {
             let start = Instant::now();
-            
+
             rt.block_on(async {
                 for _ in 0..iterations {
                     // Call server streaming
@@ -72,12 +80,12 @@ fn bench_streaming_responses(c: &mut Criterion) {
 
                     // Collect all responses
                     let responses: Vec<_> = Box::pin(response_stream).collect().await;
-                    
+
                     // Quick validation
                     assert_eq!(responses.len(), 10);
                 }
             });
-            
+
             start.elapsed()
         });
     });

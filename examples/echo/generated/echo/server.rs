@@ -1,6 +1,6 @@
 use super::types::*;
-use rpcnet::{RpcServer, RpcConfig, RpcError};
 use async_trait::async_trait;
+use rpcnet::{RpcConfig, RpcError, RpcServer};
 use std::sync::Arc;
 /// Handler trait that users implement for the service.
 #[async_trait]
@@ -29,47 +29,37 @@ impl<H: EchoHandler> EchoServer<H> {
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "Echo.echo",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: EchoRequest = bincode::deserialize(&params)
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.echo(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("Echo.echo", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: EchoRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.echo(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "Echo.binary_echo",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: BinaryEchoRequest = bincode::deserialize(
-                                    &params,
-                                )
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.binary_echo(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("Echo.binary_echo", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: BinaryEchoRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.binary_echo(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
     }

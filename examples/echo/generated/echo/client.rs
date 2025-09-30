@@ -14,8 +14,7 @@ impl EchoClient {
     pub async fn echo(&self, request: EchoRequest) -> Result<EchoResponse, RpcError> {
         let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
         let response_data = self.inner.call("Echo.echo", params).await?;
-        bincode::deserialize::<EchoResponse>(&response_data)
-            .map_err(RpcError::SerializationError)
+        bincode::deserialize::<EchoResponse>(&response_data).map_err(RpcError::SerializationError)
     }
     pub async fn binary_echo(
         &self,

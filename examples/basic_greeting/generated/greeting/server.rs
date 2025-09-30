@@ -1,6 +1,6 @@
 use super::types::*;
-use rpcnet::{RpcServer, RpcConfig, RpcError};
 use async_trait::async_trait;
+use rpcnet::{RpcConfig, RpcError, RpcServer};
 use std::sync::Arc;
 /// Handler trait that users implement for the service.
 #[async_trait]
@@ -25,23 +25,19 @@ impl<H: GreetingHandler> GreetingServer<H> {
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "Greeting.greet",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: GreetRequest = bincode::deserialize(&params)
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.greet(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("Greeting.greet", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: GreetRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.greet(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
     }

@@ -175,14 +175,14 @@
 //! - No runtime reflection or dynamic dispatch
 
 #[cfg(feature = "codegen")]
-mod parser;
-#[cfg(feature = "codegen")]
 mod generator;
+#[cfg(feature = "codegen")]
+mod parser;
 
 #[cfg(feature = "codegen")]
-pub use parser::ServiceDefinition;
-#[cfg(feature = "codegen")]
 pub use generator::CodeGenerator;
+#[cfg(feature = "codegen")]
+pub use parser::{ServiceDefinition, ServiceType};
 
 use std::path::{Path, PathBuf};
 
@@ -216,49 +216,50 @@ impl Builder {
             output: PathBuf::from("src/generated"),
         }
     }
-    
+
     /// Adds an input .rpc.rs file to process.
     pub fn input<P: AsRef<Path>>(mut self, path: P) -> Self {
         self.inputs.push(path.as_ref().to_path_buf());
         self
     }
-    
+
     /// Sets the output directory for generated code.
     pub fn output<P: AsRef<Path>>(mut self, path: P) -> Self {
         self.output = path.as_ref().to_path_buf();
         self
     }
-    
+
     /// Generates code for all input files.
     pub fn build(self) -> Result<(), Box<dyn std::error::Error>> {
         use std::fs;
-        
+
         // Create output directory
         fs::create_dir_all(&self.output)?;
-        
+
         for input in &self.inputs {
             // Read input file
             let content = fs::read_to_string(input)?;
-            
+
             // Parse service definition
             let definition = ServiceDefinition::parse(&content)?;
-            
+
             // Generate code
             let generator = CodeGenerator::new(definition);
-            
+
             // Generate server and client code
             let server_code = generator.generate_server();
             let client_code = generator.generate_client();
             let types_code = generator.generate_types();
-            
+
             // Format code
             let server_formatted = format_code(server_code)?;
             let client_formatted = format_code(client_code)?;
             let types_formatted = format_code(types_code)?;
-            
+
             // Determine output subdirectory based on input filename
             // For files like "calculator.rpc.rs", extract "calculator"
-            let service_name = input.file_stem()
+            let service_name = input
+                .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("generated");
             let service_name = if service_name.ends_with(".rpc") {
@@ -268,12 +269,12 @@ impl Builder {
             };
             let service_dir = self.output.join(service_name);
             fs::create_dir_all(&service_dir)?;
-            
+
             // Write files
             fs::write(service_dir.join("server.rs"), server_formatted)?;
             fs::write(service_dir.join("client.rs"), client_formatted)?;
             fs::write(service_dir.join("types.rs"), types_formatted)?;
-            
+
             // Generate mod.rs
             let mod_content = format!(
                 r#"//! Generated code for {} service.
@@ -288,7 +289,7 @@ pub use types::*;
             );
             fs::write(service_dir.join("mod.rs"), mod_content)?;
         }
-        
+
         Ok(())
     }
 }
@@ -297,4 +298,73 @@ pub use types::*;
 fn format_code(tokens: proc_macro2::TokenStream) -> Result<String, Box<dyn std::error::Error>> {
     let file = syn::parse2::<syn::File>(tokens)?;
     Ok(prettyplease::unparse(&file))
+}
+
+#[cfg(all(test, feature = "codegen"))]
+mod tests {
+    use super::*;
+    use quote::quote;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn sample_service() -> &'static str {
+        r#"
+            #[rpcnet::service]
+            pub trait Example {
+                async fn run(&self, request: ExampleRequest) -> Result<ExampleResponse, ExampleError>;
+            }
+
+            pub struct ExampleRequest;
+            pub struct ExampleResponse;
+            pub enum ExampleError { Boom }
+        "#
+    }
+
+    #[test]
+    fn builder_accumulates_inputs_and_output() {
+        let builder = Builder::new()
+            .input("first.rpc.rs")
+            .input("second.rpc.rs")
+            .output("custom/out");
+
+        assert_eq!(builder.inputs.len(), 2);
+        assert!(builder.inputs[0].ends_with("first.rpc.rs"));
+        assert!(builder.inputs[1].ends_with("second.rpc.rs"));
+        assert!(builder.output.ends_with("custom/out"));
+    }
+
+    #[test]
+    fn builder_generates_directory_for_plain_filenames() {
+        let temp = TempDir::new().expect("temp dir");
+        let input = temp.path().join("analytics.rs");
+        let output = temp.path().join("generated");
+
+        fs::write(&input, sample_service()).expect("write service");
+
+        Builder::new()
+            .input(&input)
+            .output(&output)
+            .build()
+            .expect("build should succeed");
+
+        let service_dir = output.join("analytics");
+        assert!(service_dir.join("server.rs").exists());
+        assert!(service_dir.join("client.rs").exists());
+        assert!(service_dir.join("types.rs").exists());
+    }
+
+    #[test]
+    fn format_code_produces_pretty_source() {
+        let tokens = quote! {
+            fn main() {
+                println!("hello");
+            }
+        };
+
+        let formatted = format_code(tokens).expect("formatting");
+        assert!(formatted.contains("fn main()"));
+        assert!(formatted.contains("println!"));
+        // prettyplease adds newline at end of file
+        assert!(formatted.ends_with("\n"));
+    }
 }

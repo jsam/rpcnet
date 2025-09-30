@@ -1,14 +1,11 @@
 use super::types::*;
-use rpcnet::{RpcServer, RpcConfig, RpcError};
 use async_trait::async_trait;
+use rpcnet::{RpcConfig, RpcError, RpcServer};
 use std::sync::Arc;
 /// Handler trait that users implement for the service.
 #[async_trait]
 pub trait ConcurrentDemoHandler: Send + Sync + 'static {
-    async fn compute(
-        &self,
-        request: ComputeRequest,
-    ) -> Result<ComputeResponse, ConcurrentError>;
+    async fn compute(&self, request: ComputeRequest) -> Result<ComputeResponse, ConcurrentError>;
     async fn async_task(
         &self,
         request: AsyncTaskRequest,
@@ -40,91 +37,73 @@ impl<H: ConcurrentDemoHandler> ConcurrentDemoServer<H> {
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "ConcurrentDemo.compute",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: ComputeRequest = bincode::deserialize(&params)
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.compute(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("ConcurrentDemo.compute", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: ComputeRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.compute(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "ConcurrentDemo.async_task",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: AsyncTaskRequest = bincode::deserialize(&params)
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.async_task(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("ConcurrentDemo.async_task", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: AsyncTaskRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.async_task(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "ConcurrentDemo.increment",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: IncrementRequest = bincode::deserialize(&params)
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.increment(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("ConcurrentDemo.increment", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: IncrementRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.increment(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "ConcurrentDemo.get_counter",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: GetCounterRequest = bincode::deserialize(
-                                    &params,
-                                )
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.get_counter(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("ConcurrentDemo.get_counter", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: GetCounterRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.get_counter(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
     }

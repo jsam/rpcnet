@@ -11,10 +11,7 @@ impl ConcurrentDemoClient {
         let inner = RpcClient::connect(addr, config).await?;
         Ok(Self { inner })
     }
-    pub async fn compute(
-        &self,
-        request: ComputeRequest,
-    ) -> Result<ComputeResponse, RpcError> {
+    pub async fn compute(&self, request: ComputeRequest) -> Result<ComputeResponse, RpcError> {
         let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
         let response_data = self.inner.call("ConcurrentDemo.compute", params).await?;
         bincode::deserialize::<ComputeResponse>(&response_data)
@@ -43,7 +40,10 @@ impl ConcurrentDemoClient {
         request: GetCounterRequest,
     ) -> Result<GetCounterResponse, RpcError> {
         let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
-        let response_data = self.inner.call("ConcurrentDemo.get_counter", params).await?;
+        let response_data = self
+            .inner
+            .call("ConcurrentDemo.get_counter", params)
+            .await?;
         bincode::deserialize::<GetCounterResponse>(&response_data)
             .map_err(RpcError::SerializationError)
     }

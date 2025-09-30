@@ -24,7 +24,7 @@ mod unit_tests {
 
         assert_eq!(request.id(), 0);
         assert_eq!(request.method(), "empty");
-        assert_eq!(request.params(), &[]);
+        assert_eq!(request.params(), &Vec::<u8>::new());
         assert!(request.params().is_empty());
     }
 

@@ -1,7 +1,7 @@
 # RPC.NET Makefile
 # Provides convenient commands for testing, coverage, and development
 
-.PHONY: help test test-unit test-integration coverage coverage-html clean doc bench lint examples
+.PHONY: help test test-unit test-integration coverage coverage-html clean doc bench lint examples publish publish-dry-run
 
 # Default target
 help:
@@ -15,12 +15,17 @@ help:
 	@echo "  test-examples   - Test all examples compile and run"
 	@echo ""
 	@echo "Coverage:"
-	@echo "  coverage        - Generate test coverage report"
-	@echo "  coverage-html   - Generate HTML coverage report and open"
-	@echo "  coverage-ci     - Generate coverage for CI (with fail-under threshold)"
-	@echo "  coverage-check  - Check if coverage meets 90% threshold"
-	@echo "  coverage-gaps   - Show uncovered lines"
-	@echo "  install-coverage-tools - Install coverage dependencies"
+	@echo "  coverage [tool]        - Generate test coverage report (tool: tarpaulin|llvm-cov)"
+	@echo "  coverage-html [tool]   - Generate HTML coverage report and open"
+	@echo "  coverage-ci [tool]     - Generate coverage for CI (with fail-under threshold)"
+	@echo "  coverage-check [tool]  - Check if coverage meets 90% threshold"
+	@echo "  coverage-gaps [tool]   - Show uncovered lines"
+	@echo "  install-coverage-tools - Install coverage dependencies (both tools)"
+	@echo ""
+	@echo "  Examples:"
+	@echo "    make coverage-html tarpaulin  # Use tarpaulin for HTML report"
+	@echo "    make coverage-html llvm-cov   # Use llvm-cov for HTML report"
+	@echo "    make coverage-html            # Use tarpaulin (default)"
 	@echo ""
 	@echo "Development:"
 	@echo "  lint            - Run clippy linter"
@@ -28,9 +33,15 @@ help:
 	@echo "  check           - Check code compiles without building"
 	@echo "  clean           - Clean build artifacts and coverage reports"
 	@echo ""
+	@echo "Release:"
+	@echo "  publish-dry-run - Verify crate contents and build before publishing"
+	@echo "  publish         - Publish the rpcnet crate (library + rpcnet-gen CLI)"
+	@echo ""
 	@echo "Documentation:"
 	@echo "  doc             - Generate and open documentation"
 	@echo "  doc-private     - Generate documentation including private items"
+	@echo "  doc-book        - Build mdBook for the user guide"
+	@echo "  doc-book-serve  - Serve mdBook locally with live reload"
 	@echo ""
 	@echo "Benchmarks:"
 	@echo "  bench           - Run performance benchmarks"
@@ -58,48 +69,107 @@ test-examples:
 	timeout 10s cargo run --example basic_client_server || true
 
 # Coverage commands
+# Usage: make coverage [tool] - tool can be tarpaulin (default) or llvm-cov
 coverage:
-	@echo "Generating test coverage report..."
-	cargo tarpaulin --out Html --out Json --output-dir target/coverage --exclude-files "examples/*" --exclude-files "benches/*" --timeout 300 --all-features
+	@$(MAKE) coverage-tool TOOL=$(if $(filter tarpaulin llvm-cov,$(MAKECMDGOALS)),$(MAKECMDGOALS),tarpaulin)
 
+coverage-tool:
+	@if [ "$(TOOL)" = "llvm-cov" ]; then \
+		echo "Generating test coverage report with LLVM..."; \
+		cargo llvm-cov --html --lcov --output-dir target/llvm-cov; \
+	else \
+		echo "Generating test coverage report with Tarpaulin..."; \
+		cargo tarpaulin --out Html --out Json --output-dir target/coverage --exclude-files "examples/*" --exclude-files "benches/*" --timeout 300 --all-features; \
+	fi
+
+# Usage: make coverage-html [tool] - tool can be tarpaulin (default) or llvm-cov  
 coverage-html:
-	@echo "Generating HTML coverage report..."
-	cargo tarpaulin --config tarpaulin.toml --out Html
-	@echo "Opening coverage report..."
-	@if [ -f target/tarpaulin/tarpaulin-report.html ]; then \
-		echo "Coverage report generated at: target/tarpaulin/tarpaulin-report.html"; \
-		if command -v open >/dev/null; then \
-			open target/tarpaulin/tarpaulin-report.html; \
-		elif command -v xdg-open >/dev/null; then \
-			xdg-open target/tarpaulin/tarpaulin-report.html; \
-		else \
-			echo "Please open target/tarpaulin/tarpaulin-report.html in your browser"; \
+	@$(MAKE) coverage-html-tool TOOL=$(if $(filter tarpaulin llvm-cov,$(MAKECMDGOALS)),$(MAKECMDGOALS),tarpaulin)
+
+coverage-html-tool:
+	@if [ "$(TOOL)" = "llvm-cov" ]; then \
+		echo "Generating HTML coverage report with LLVM..."; \
+		cargo llvm-cov --html --open; \
+		echo "Coverage report generated at: target/llvm-cov/html/index.html"; \
+	else \
+		echo "Generating HTML coverage report with Tarpaulin..."; \
+		cargo tarpaulin --config tarpaulin.toml --out Html; \
+		echo "Opening coverage report..."; \
+		if [ -f target/tarpaulin/tarpaulin-report.html ]; then \
+			echo "Coverage report generated at: target/tarpaulin/tarpaulin-report.html"; \
+			if command -v open >/dev/null; then \
+				open target/tarpaulin/tarpaulin-report.html; \
+			elif command -v xdg-open >/dev/null; then \
+				xdg-open target/tarpaulin/tarpaulin-report.html; \
+			else \
+				echo "Please open target/tarpaulin/tarpaulin-report.html in your browser"; \
+			fi \
 		fi \
 	fi
 
+# Usage: make coverage-ci [tool] - tool can be tarpaulin (default) or llvm-cov
 coverage-ci:
-	@echo "Running coverage analysis for CI..."
-	cargo tarpaulin --config tarpaulin.toml --fail-under 95 --out Xml
+	@$(MAKE) coverage-ci-tool TOOL=$(if $(filter tarpaulin llvm-cov,$(MAKECMDGOALS)),$(MAKECMDGOALS),tarpaulin)
 
-coverage-check:
-	@echo "Checking coverage threshold (90%)..."
-	@cargo tarpaulin --out Json --output-dir target/coverage --exclude-files "examples/*" --exclude-files "benches/*" --timeout 300 --all-features
-	@coverage=$$(cat target/coverage/tarpaulin-report.json | jq -r '.coverage'); \
-	if (( $$(echo "$$coverage < 90" | bc -l) )); then \
-		echo "❌ Coverage $$coverage% is below 90% threshold"; \
-		exit 1; \
+coverage-ci-tool:
+	@if [ "$(TOOL)" = "llvm-cov" ]; then \
+		echo "Running coverage analysis for CI with LLVM..."; \
+		cargo llvm-cov --lcov --output-dir target/llvm-cov; \
+		echo "LLVM coverage report generated for CI"; \
 	else \
-		echo "✅ Coverage $$coverage% meets threshold"; \
+		echo "Running coverage analysis for CI with Tarpaulin..."; \
+		cargo tarpaulin --config tarpaulin.toml --fail-under 95 --out Xml; \
 	fi
 
+# Usage: make coverage-check [tool] - tool can be tarpaulin (default) or llvm-cov
+coverage-check:
+	@$(MAKE) coverage-check-tool TOOL=$(if $(filter tarpaulin llvm-cov,$(MAKECMDGOALS)),$(MAKECMDGOALS),tarpaulin)
+
+coverage-check-tool:
+	@if [ "$(TOOL)" = "llvm-cov" ]; then \
+		echo "Checking coverage threshold (90%) with LLVM..."; \
+		cargo llvm-cov --json --output-dir target/llvm-cov; \
+		coverage=$$(cat target/llvm-cov/llvm-cov.json | jq -r '.data[0].totals.lines.percent'); \
+		if (( $$(echo "$$coverage < 90" | bc -l) )); then \
+			echo "❌ Coverage $$coverage% is below 90% threshold"; \
+			exit 1; \
+		else \
+			echo "✅ Coverage $$coverage% meets threshold"; \
+		fi \
+	else \
+		echo "Checking coverage threshold (90%) with Tarpaulin..."; \
+		cargo tarpaulin --out Json --output-dir target/coverage --exclude-files "examples/*" --exclude-files "benches/*" --timeout 300 --all-features; \
+		coverage=$$(cat target/coverage/tarpaulin-report.json | jq -r '.coverage'); \
+		if (( $$(echo "$$coverage < 90" | bc -l) )); then \
+			echo "❌ Coverage $$coverage% is below 90% threshold"; \
+			exit 1; \
+		else \
+			echo "✅ Coverage $$coverage% meets threshold"; \
+		fi \
+	fi
+
+# Usage: make coverage-gaps [tool] - tool can be tarpaulin (default) or llvm-cov
 coverage-gaps:
-	@echo "Analyzing coverage gaps..."
-	@cargo tarpaulin --print-uncovered-lines --exclude-files "examples/*" --exclude-files "benches/*" --all-features
+	@$(MAKE) coverage-gaps-tool TOOL=$(if $(filter tarpaulin llvm-cov,$(MAKECMDGOALS)),$(MAKECMDGOALS),tarpaulin)
+
+coverage-gaps-tool:
+	@if [ "$(TOOL)" = "llvm-cov" ]; then \
+		echo "Analyzing coverage gaps with LLVM..."; \
+		cargo llvm-cov --html --open; \
+		echo "Open the HTML report to see uncovered lines"; \
+	else \
+		echo "Analyzing coverage gaps with Tarpaulin..."; \
+		cargo tarpaulin --print-uncovered-lines --exclude-files "examples/*" --exclude-files "benches/*" --all-features; \
+	fi
 
 install-coverage-tools:
 	@echo "Installing coverage tools..."
-	cargo install cargo-tarpaulin
-	@echo "Coverage tools installed"
+	cargo install cargo-tarpaulin cargo-llvm-cov
+	@echo "Coverage tools installed (both tarpaulin and llvm-cov)"
+
+# Allow tool names to be passed as targets (for backwards compatibility)
+tarpaulin llvm-cov:
+	@# This is a dummy target to consume the tool name arguments
 
 # Development commands
 lint:
@@ -122,7 +192,17 @@ clean:
 	@echo "Cleaning build artifacts..."
 	cargo clean
 	@echo "Cleaning coverage reports..."
-	rm -rf target/tarpaulin coverage
+	rm -rf target/tarpaulin target/llvm-cov coverage llvm-coverage.lcov
+
+publish-dry-run:
+	@echo "Packaging rpcnet (library + CLI) for verification..."
+	cargo package --allow-dirty
+	@echo "Running publish dry run with codegen feature enabled..."
+	cargo publish --dry-run --allow-dirty --features codegen
+
+publish: publish-dry-run
+	@echo "Publishing rpcnet crate (library + rpcnet-gen CLI)..."
+	cargo publish --features codegen
 
 # Documentation commands
 doc:
@@ -132,6 +212,15 @@ doc:
 doc-private:
 	@echo "Generating documentation (including private items)..."
 	cargo doc --open --no-deps --document-private-items
+
+doc-book:
+	@echo "Building mdBook..."
+	mdbook build docs/mdbook
+	@echo "Book output: docs/mdbook/book/index.html"
+
+doc-book-serve:
+	@echo "Serving mdBook on http://localhost:3000 ..."
+	mdbook serve docs/mdbook --open
 
 # Benchmark commands
 bench:

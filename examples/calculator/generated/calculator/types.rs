@@ -1,5 +1,5 @@
 //! Type definitions for the service.
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 /// Response from multiplication operation.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MultiplyResponse {

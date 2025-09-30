@@ -1,5 +1,5 @@
 //! Type definitions for the service.
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 /// Errors that can occur in echo operations.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum EchoError {

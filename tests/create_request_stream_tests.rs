@@ -1,10 +1,10 @@
 // Comprehensive tests for create_request_stream method (lines 1519-1558)
 // This test exercises all code paths in the create_request_stream function through real streaming operations
 
-use rpcnet::{RpcClient, RpcConfig, RpcServer, RpcError};
+use futures::StreamExt;
+use rpcnet::{RpcClient, RpcConfig, RpcError, RpcServer};
 use std::time::Duration;
 use tokio::time::sleep;
-use futures::StreamExt;
 
 fn create_test_config(port: u16) -> RpcConfig {
     RpcConfig::new("certs/test_cert.pem", &format!("127.0.0.1:{}", port))
@@ -47,7 +47,7 @@ async fn test_create_request_stream_complete_coverage() {
     // - Lines 1552-1555: Connection closed/error handling
 
     let mut server = RpcServer::new(create_test_config(0));
-    
+
     // Register a streaming handler that will receive and process all our test messages
     server.register_streaming("comprehensive_test", |mut request_stream| async move {
         Box::pin(async_stream::stream! {
@@ -88,16 +88,19 @@ async fn test_create_request_stream_complete_coverage() {
     }).await;
 
     let server_result = start_test_server(server).await;
-    
+
     if let Ok((addr, server_handle)) = server_result {
-        println!("✅ Server started for create_request_stream testing on {}", addr);
-        
+        println!(
+            "✅ Server started for create_request_stream testing on {}",
+            addr
+        );
+
         let client_config = create_test_config(0);
         let client_result = RpcClient::connect(addr, client_config).await;
-        
+
         if let Ok(client) = client_result {
             println!("✅ Client connected - starting comprehensive create_request_stream test");
-            
+
             // Create a variety of request messages to exercise all code paths in create_request_stream
             let test_messages = vec![
                 // Test 1: Empty message (exercises zero-length handling - lines 1537-1539)
@@ -118,30 +121,35 @@ async fn test_create_request_stream_complete_coverage() {
                 // Test 6: Binary data with various byte patterns
                 vec![0x00, 0xFF, 0x55, 0xAA, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0],
             ];
-            
-            println!("🔄 Sending {} test messages to exercise create_request_stream...", test_messages.len());
-            
+
+            println!(
+                "🔄 Sending {} test messages to exercise create_request_stream...",
+                test_messages.len()
+            );
+
             let request_stream = futures::stream::iter(test_messages);
-            
+
             // This call will exercise create_request_stream_with_initial_data which calls create_request_stream
             let response_stream_result = tokio::time::timeout(
                 Duration::from_secs(3),
-                client.call_streaming("comprehensive_test", Box::pin(request_stream))
-            ).await;
-            
+                client.call_streaming("comprehensive_test", Box::pin(request_stream)),
+            )
+            .await;
+
             match response_stream_result {
                 Ok(Ok(response_stream)) => {
-                    println!("✅ Streaming call successful - create_request_stream is being exercised");
-                    
+                    println!(
+                        "✅ Streaming call successful - create_request_stream is being exercised"
+                    );
+
                     let mut pinned_stream = Box::pin(response_stream);
                     let mut response_count = 0;
-                    
+
                     while response_count < 3 {
-                        let response_result = tokio::time::timeout(
-                            Duration::from_millis(500),
-                            pinned_stream.next()
-                        ).await;
-                        
+                        let response_result =
+                            tokio::time::timeout(Duration::from_millis(500), pinned_stream.next())
+                                .await;
+
                         match response_result {
                             Ok(Some(Ok(data))) => {
                                 response_count += 1;
@@ -162,26 +170,36 @@ async fn test_create_request_stream_complete_coverage() {
                             }
                         }
                     }
-                    
+
                     if response_count >= 2 {
-                        println!("✅ Successfully exercised create_request_stream with {} responses", response_count);
+                        println!(
+                            "✅ Successfully exercised create_request_stream with {} responses",
+                            response_count
+                        );
                         println!("   🎯 Code paths tested:");
                         println!("      ✅ Line 1522: Buffer initialization with capacity 8192");
                         println!("      ✅ Lines 1524-1528: Stream receive loop and locking");
                         println!("      ✅ Lines 1530-1531: Successful chunk processing");
                         println!("      ✅ Lines 1534-1535: Length-prefixed message parsing");
                         println!("      ✅ Lines 1537-1539: Zero-length end marker (if empty message sent)");
-                        println!("      ✅ Lines 1542-1546: Complete message extraction and yielding");
+                        println!(
+                            "      ✅ Lines 1542-1546: Complete message extraction and yielding"
+                        );
                         println!("      ✅ Lines 1548-1550: Incomplete message handling (break for more data)");
                         println!("      ✅ Lines 1552-1555: Connection handling logic");
                     } else {
-                        println!("⚠️  Partial create_request_stream test: {} responses received", response_count);
+                        println!(
+                            "⚠️  Partial create_request_stream test: {} responses received",
+                            response_count
+                        );
                         println!("   This may be expected in test environments");
                     }
                 }
                 Ok(Err(e)) => {
                     println!("⚠️  Streaming call failed: {:?}", e);
-                    println!("   This may be expected in test environments without full QUIC support");
+                    println!(
+                        "   This may be expected in test environments without full QUIC support"
+                    );
                 }
                 Err(_) => {
                     println!("⚠️  Streaming call timeout after 3 seconds");
@@ -191,7 +209,7 @@ async fn test_create_request_stream_complete_coverage() {
         } else {
             println!("⚠️  Could not connect client for create_request_stream test");
         }
-        
+
         server_handle.abort();
     } else {
         println!("⚠️  Could not start server for create_request_stream test");
@@ -202,11 +220,11 @@ async fn test_create_request_stream_complete_coverage() {
 async fn test_create_request_stream_buffer_edge_cases() {
     // This test specifically targets edge cases in create_request_stream buffer parsing
     // Lines 1534-1550: Message length parsing and buffer management
-    
+
     println!("📍 Starting test_create_request_stream_buffer_edge_cases");
-    
+
     let mut server = RpcServer::new(create_test_config(0));
-    
+
     println!("📍 Registering streaming handler for buffer_edge_test");
     server.register_streaming("buffer_edge_test", |mut request_stream| async move {
         Box::pin(async_stream::stream! {
@@ -255,64 +273,75 @@ async fn test_create_request_stream_buffer_edge_cases() {
 
     println!("📍 Starting test server");
     let server_result = start_test_server(server).await;
-    
+
     if let Ok((addr, server_handle)) = server_result {
         println!("📍 Server started on {}, connecting client", addr);
-        
+
         let client_config = create_test_config(0);
         let client_connect_result = tokio::time::timeout(
             Duration::from_secs(2),
-            RpcClient::connect(addr, client_config)
-        ).await;
-        
+            RpcClient::connect(addr, client_config),
+        )
+        .await;
+
         match client_connect_result {
             Ok(Ok(client)) => {
                 println!("📍 Client connected successfully");
                 println!("🔍 Testing create_request_stream buffer edge cases...");
-                
+
                 // Test messages that exercise buffer boundary conditions
                 let edge_case_messages = vec![
-                    vec![0x01],                    // 1 byte - minimal message
+                    vec![0x01],                   // 1 byte - minimal message
                     vec![0x12, 0x34, 0x56, 0x78], // Exactly 4 bytes - same as length header
-                    vec![0xFF; 2048],              // 2KB - exercises buffer expansion
+                    vec![0xFF; 2048],             // 2KB - exercises buffer expansion
                 ];
-                
-                println!("📍 Creating request stream with {} messages", edge_case_messages.len());
+
+                println!(
+                    "📍 Creating request stream with {} messages",
+                    edge_case_messages.len()
+                );
                 let request_stream = futures::stream::iter(edge_case_messages);
-                
+
                 println!("📍 Calling streaming endpoint buffer_edge_test");
                 let response_stream_result = tokio::time::timeout(
                     Duration::from_secs(3),
-                    client.call_streaming("buffer_edge_test", Box::pin(request_stream))
-                ).await;
-                
+                    client.call_streaming("buffer_edge_test", Box::pin(request_stream)),
+                )
+                .await;
+
                 match response_stream_result {
                     Ok(Ok(response_stream)) => {
                         println!("📍 Got response stream, starting to read responses");
                         let mut pinned_stream = Box::pin(response_stream);
                         let mut edge_case_responses = 0;
-                        
+
                         // Add timeout for each response read
                         while edge_case_responses < 3 {
                             println!("📍 Waiting for response {}", edge_case_responses + 1);
                             let response_result = tokio::time::timeout(
                                 Duration::from_millis(500),
-                                pinned_stream.next()
-                            ).await;
-                            
+                                pinned_stream.next(),
+                            )
+                            .await;
+
                             match response_result {
                                 Ok(Some(Ok(data))) => {
                                     edge_case_responses += 1;
-                                    println!("🎯 Buffer edge case response {}: {}", 
-                                            edge_case_responses, 
-                                            String::from_utf8_lossy(&data));
+                                    println!(
+                                        "🎯 Buffer edge case response {}: {}",
+                                        edge_case_responses,
+                                        String::from_utf8_lossy(&data)
+                                    );
                                 }
                                 Ok(Some(Err(e))) => {
                                     println!("⚠️  Response error: {:?}", e);
                                     break;
                                 }
                                 Ok(None) => {
-                                    println!("📍 Stream ended after {} responses", edge_case_responses);
+                                    println!(
+                                        "📍 Stream ended after {} responses",
+                                        edge_case_responses
+                                    );
                                     break;
                                 }
                                 Err(_) => {
@@ -321,12 +350,17 @@ async fn test_create_request_stream_buffer_edge_cases() {
                                 }
                             }
                         }
-                        
+
                         if edge_case_responses >= 3 {
-                            println!("✅ Successfully tested create_request_stream buffer edge cases");
+                            println!(
+                                "✅ Successfully tested create_request_stream buffer edge cases"
+                            );
                             println!("   🎯 Verified buffer parsing for 1-byte, 4-byte, and 2KB messages");
                         } else {
-                            println!("⚠️  Only received {} responses (expected 3)", edge_case_responses);
+                            println!(
+                                "⚠️  Only received {} responses (expected 3)",
+                                edge_case_responses
+                            );
                         }
                     }
                     Ok(Err(e)) => {
@@ -344,13 +378,13 @@ async fn test_create_request_stream_buffer_edge_cases() {
                 println!("⚠️  Client connection timeout after 2 seconds");
             }
         }
-        
+
         println!("📍 Aborting server handle");
         server_handle.abort();
     } else {
         println!("⚠️  Could not start server for buffer edge case test");
     }
-    
+
     println!("📍 Test test_create_request_stream_buffer_edge_cases completed");
 }
 
@@ -358,11 +392,11 @@ async fn test_create_request_stream_buffer_edge_cases() {
 async fn test_create_request_stream_zero_length_end_marker() {
     // This test specifically targets the zero-length end marker handling
     // Lines 1537-1539: if len == 0 { return; }
-    
+
     println!("📍 Starting test_create_request_stream_zero_length_end_marker");
-    
+
     let mut server = RpcServer::new(create_test_config(0));
-    
+
     println!("📍 Registering streaming handler for zero_length_test");
     server.register_streaming("zero_length_test", |mut request_stream| async move {
         Box::pin(async_stream::stream! {
@@ -389,57 +423,66 @@ async fn test_create_request_stream_zero_length_end_marker() {
 
     println!("📍 Starting test server");
     let server_result = start_test_server(server).await;
-    
+
     if let Ok((addr, server_handle)) = server_result {
         println!("📍 Server started on {}, connecting client", addr);
-        
+
         let client_config = create_test_config(0);
         let client_connect_result = tokio::time::timeout(
             Duration::from_secs(2),
-            RpcClient::connect(addr, client_config)
-        ).await;
-        
+            RpcClient::connect(addr, client_config),
+        )
+        .await;
+
         match client_connect_result {
             Ok(Ok(client)) => {
                 println!("📍 Client connected successfully");
                 println!("🎯 Testing create_request_stream zero-length end marker handling...");
-                
+
                 // Send messages including zero-length to test end marker
                 let zero_length_test_messages = vec![
                     b"First message".to_vec(),
                     vec![], // Zero-length message - should trigger lines 1537-1539
                     b"Message after zero-length".to_vec(),
                 ];
-                
-                println!("📍 Creating request stream with {} messages (including zero-length)", zero_length_test_messages.len());
+
+                println!(
+                    "📍 Creating request stream with {} messages (including zero-length)",
+                    zero_length_test_messages.len()
+                );
                 let request_stream = futures::stream::iter(zero_length_test_messages);
-                
+
                 println!("📍 Calling streaming endpoint zero_length_test");
                 let response_stream_result = tokio::time::timeout(
                     Duration::from_secs(3),
-                    client.call_streaming("zero_length_test", Box::pin(request_stream))
-                ).await;
-                
+                    client.call_streaming("zero_length_test", Box::pin(request_stream)),
+                )
+                .await;
+
                 match response_stream_result {
                     Ok(Ok(response_stream)) => {
                         println!("📍 Got response stream, starting to read responses");
                         let mut pinned_stream = Box::pin(response_stream);
                         let mut zero_test_responses = 0;
-                        
+
                         // Add timeout for each response read
                         while zero_test_responses < 4 {
                             println!("📍 Waiting for response {}", zero_test_responses + 1);
                             let response_result = tokio::time::timeout(
                                 Duration::from_millis(500),
-                                pinned_stream.next()
-                            ).await;
-                            
+                                pinned_stream.next(),
+                            )
+                            .await;
+
                             match response_result {
                                 Ok(Some(Ok(data))) => {
                                     zero_test_responses += 1;
                                     let response_text = String::from_utf8_lossy(&data);
-                                    println!("🔚 Zero-length test response {}: {}", zero_test_responses, response_text);
-                                    
+                                    println!(
+                                        "🔚 Zero-length test response {}: {}",
+                                        zero_test_responses, response_text
+                                    );
+
                                     if response_text.contains("zero-length") {
                                         println!("✅ Successfully triggered zero-length end marker handling (lines 1537-1539)");
                                     }
@@ -449,7 +492,10 @@ async fn test_create_request_stream_zero_length_end_marker() {
                                     break;
                                 }
                                 Ok(None) => {
-                                    println!("📍 Stream ended after {} responses", zero_test_responses);
+                                    println!(
+                                        "📍 Stream ended after {} responses",
+                                        zero_test_responses
+                                    );
                                     break;
                                 }
                                 Err(_) => {
@@ -458,9 +504,12 @@ async fn test_create_request_stream_zero_length_end_marker() {
                                 }
                             }
                         }
-                        
+
                         if zero_test_responses >= 2 {
-                            println!("✅ Zero-length test completed with {} responses", zero_test_responses);
+                            println!(
+                                "✅ Zero-length test completed with {} responses",
+                                zero_test_responses
+                            );
                         } else {
                             println!("⚠️  Only received {} responses", zero_test_responses);
                         }
@@ -480,12 +529,12 @@ async fn test_create_request_stream_zero_length_end_marker() {
                 println!("⚠️  Client connection timeout after 2 seconds");
             }
         }
-        
+
         println!("📍 Aborting server handle");
         server_handle.abort();
     } else {
         println!("⚠️  Could not start server for zero-length test");
     }
-    
+
     println!("📍 Test test_create_request_stream_zero_length_end_marker completed");
 }

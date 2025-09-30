@@ -1,23 +1,16 @@
 use super::types::*;
-use rpcnet::{RpcServer, RpcConfig, RpcError};
 use async_trait::async_trait;
+use rpcnet::{RpcConfig, RpcError, RpcServer};
 use std::sync::Arc;
 /// Handler trait that users implement for the service.
 #[async_trait]
 pub trait CalculatorHandler: Send + Sync + 'static {
     async fn add(&self, request: AddRequest) -> Result<AddResponse, CalculatorError>;
-    async fn subtract(
-        &self,
-        request: SubtractRequest,
-    ) -> Result<SubtractResponse, CalculatorError>;
-    async fn multiply(
-        &self,
-        request: MultiplyRequest,
-    ) -> Result<MultiplyResponse, CalculatorError>;
-    async fn divide(
-        &self,
-        request: DivideRequest,
-    ) -> Result<DivideResponse, CalculatorError>;
+    async fn subtract(&self, request: SubtractRequest)
+        -> Result<SubtractResponse, CalculatorError>;
+    async fn multiply(&self, request: MultiplyRequest)
+        -> Result<MultiplyResponse, CalculatorError>;
+    async fn divide(&self, request: DivideRequest) -> Result<DivideResponse, CalculatorError>;
 }
 /// Generated server that manages RPC registration and routing.
 pub struct CalculatorServer<H: CalculatorHandler> {
@@ -37,89 +30,73 @@ impl<H: CalculatorHandler> CalculatorServer<H> {
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "Calculator.add",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: AddRequest = bincode::deserialize(&params)
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.add(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("Calculator.add", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: AddRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.add(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "Calculator.subtract",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: SubtractRequest = bincode::deserialize(&params)
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.subtract(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("Calculator.subtract", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: SubtractRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.subtract(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "Calculator.multiply",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: MultiplyRequest = bincode::deserialize(&params)
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.multiply(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("Calculator.multiply", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: MultiplyRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.multiply(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "Calculator.divide",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: DivideRequest = bincode::deserialize(&params)
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.divide(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("Calculator.divide", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: DivideRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.divide(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
     }

@@ -2,7 +2,7 @@
 
 #![cfg(feature = "codegen")]
 
-use rpcnet::codegen::{ServiceDefinition, CodeGenerator};
+use rpcnet::codegen::{CodeGenerator, ServiceDefinition};
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -34,10 +34,10 @@ fn test_parse_simple_service() {
             async fn add(&self, request: AddRequest) -> Result<AddResponse, MathError>;
         }
     "#;
-    
+
     let definition = ServiceDefinition::parse(input).expect("Failed to parse");
     assert_eq!(definition.service_name().to_string(), "Calculator");
-    
+
     let methods = definition.methods();
     assert_eq!(methods.len(), 1);
     assert_eq!(methods[0].sig.ident.to_string(), "add");
@@ -52,7 +52,7 @@ fn test_reject_non_async_methods() {
             fn sync_method(&self) -> String;
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(input);
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -68,7 +68,7 @@ fn test_reject_non_result_return() {
             async fn bad_method(&self) -> String;
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(input);
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -96,13 +96,13 @@ fn test_generate_server_code() {
             async fn echo(&self, request: EchoRequest) -> Result<EchoResponse, String>;
         }
     "#;
-    
+
     let definition = ServiceDefinition::parse(input).expect("Failed to parse");
     let generator = CodeGenerator::new(definition);
-    
+
     let server_code = generator.generate_server();
     let server_str = server_code.to_string();
-    
+
     // Check that generated code contains expected elements
     assert!(server_str.contains("EchoServiceHandler"));
     assert!(server_str.contains("EchoServiceServer"));
@@ -133,20 +133,22 @@ fn test_generate_client_code() {
             async fn ping(&self, request: PingRequest) -> Result<PingResponse, String>;
         }
     "#;
-    
+
     let definition = ServiceDefinition::parse(input).expect("Failed to parse");
     let generator = CodeGenerator::new(definition);
-    
+
     let client_code = generator.generate_client();
     let client_str = client_code.to_string();
-    
+
     // Check that generated code contains expected elements
     assert!(client_str.contains("PingServiceClient"));
     assert!(client_str.contains("async fn connect"));
     assert!(client_str.contains("async fn ping"));
     // Check for RPC call - should be self.inner.call
-    assert!(client_str.contains("self . inner . call") || client_str.contains("self.inner.call"), 
-            "Generated code should contain a call to the inner RPC client");
+    assert!(
+        client_str.contains("self . inner . call") || client_str.contains("self.inner.call"),
+        "Generated code should contain a call to the inner RPC client"
+    );
 }
 
 /// Test end-to-end code generation with Builder API.
@@ -155,7 +157,7 @@ fn test_builder_api() {
     let temp_dir = TempDir::new().unwrap();
     let input_file = temp_dir.path().join("test_service.rpc.rs");
     let output_dir = temp_dir.path().join("generated");
-    
+
     // Write test service definition
     let service_def = r#"
         use serde::{Serialize, Deserialize};
@@ -175,16 +177,16 @@ fn test_builder_api() {
             async fn test_method(&self, request: TestRequest) -> Result<TestResponse, String>;
         }
     "#;
-    
+
     fs::write(&input_file, service_def).unwrap();
-    
+
     // Use builder to generate code
     rpcnet::codegen::Builder::new()
         .input(&input_file)
         .output(&output_dir)
         .build()
         .expect("Failed to generate code");
-    
+
     // Check that files were created
     let service_dir = output_dir.join("test_service");
     assert!(service_dir.exists());
@@ -192,13 +194,13 @@ fn test_builder_api() {
     assert!(service_dir.join("types.rs").exists());
     assert!(service_dir.join("server.rs").exists());
     assert!(service_dir.join("client.rs").exists());
-    
+
     // Read and verify generated mod.rs
     let mod_content = fs::read_to_string(service_dir.join("mod.rs")).unwrap();
     assert!(mod_content.contains("pub mod types"));
     assert!(mod_content.contains("pub mod server"));
     assert!(mod_content.contains("pub mod client"));
-    
+
     // Read and verify types.rs contains our types
     let types_content = fs::read_to_string(service_dir.join("types.rs")).unwrap();
     assert!(types_content.contains("struct TestRequest"));
@@ -211,16 +213,15 @@ fn test_parse_calculator_example() {
     let calculator_path = PathBuf::from("examples/calculator/calculator.rpc.rs");
     if calculator_path.exists() {
         let content = fs::read_to_string(calculator_path).unwrap();
-        let definition = ServiceDefinition::parse(&content).expect("Failed to parse calculator.rpc.rs");
-        
+        let definition =
+            ServiceDefinition::parse(&content).expect("Failed to parse calculator.rpc.rs");
+
         assert_eq!(definition.service_name().to_string(), "Calculator");
-        
+
         let methods = definition.methods();
         assert_eq!(methods.len(), 4);
-        
-        let method_names: Vec<String> = methods.iter()
-            .map(|m| m.sig.ident.to_string())
-            .collect();
+
+        let method_names: Vec<String> = methods.iter().map(|m| m.sig.ident.to_string()).collect();
         assert!(method_names.contains(&"add".to_string()));
         assert!(method_names.contains(&"subtract".to_string()));
         assert!(method_names.contains(&"multiply".to_string()));
@@ -249,15 +250,15 @@ fn test_generated_code_is_valid_rust() {
             async fn process(&self, request: Request) -> Result<Response, String>;
         }
     "#;
-    
+
     let definition = ServiceDefinition::parse(input).expect("Failed to parse");
     let generator = CodeGenerator::new(definition);
-    
+
     // Generate all code
     let server_code = generator.generate_server();
     let client_code = generator.generate_client();
     let types_code = generator.generate_types();
-    
+
     // Try to parse generated code as valid Rust
     syn::parse2::<syn::File>(server_code).expect("Generated server code is not valid Rust");
     syn::parse2::<syn::File>(client_code).expect("Generated client code is not valid Rust");
@@ -295,14 +296,14 @@ fn test_multiple_methods() {
             async fn delete(&self, request: DeleteRequest) -> Result<DeleteResponse, String>;
         }
     "#;
-    
+
     let definition = ServiceDefinition::parse(input).expect("Failed to parse");
     assert_eq!(definition.methods().len(), 3);
-    
+
     let generator = CodeGenerator::new(definition);
     let server_code = generator.generate_server();
     let server_str = server_code.to_string();
-    
+
     // Check all methods are present
     assert!(server_str.contains("async fn get"));
     assert!(server_str.contains("async fn set"));

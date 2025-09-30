@@ -1,0 +1,380 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Connection Swapping - RpcNet Guide</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">RpcNet Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="connection-swapping-for-low-latency-serving"><a class="header" href="#connection-swapping-for-low-latency-serving">Connection Swapping for Low-Latency Serving</a></h1>
+<p>QUIC lets you move an active connection between endpoints without forcing the
+client to reconnect. That property is ideal for latency-sensitive inference
+services where you want developers to talk directly to GPU workers instead of a
+broker, yet still migrate sessions during rollouts or drain events. RpcNet rides
+on QUIC, so once a TLS session is established the client’s streaming RPCs keep
+flowing even if the worker behind the scenes changes.</p>
+<p>To make the idea concrete the repository ships a working reference under
+<code>examples/connection_swap/</code>. It shows how a single process can accept an RpcNet
+connection, hand it from one worker task to another, and keep a streaming client
+online throughout the swap. The same pattern can be extended to multi-process or
+multi-host deployments by exporting the QUIC connection state and sharing it with
+another instance.</p>
+<h2 id="architecture-overview"><a class="header" href="#architecture-overview">Architecture Overview</a></h2>
+<pre><code>                     +------------------------------+
+                     |  Connection Director &amp;       |
+                     |  Manager (RpcNet server)     |
+                     +------+-----------------------+
+                            |
+                            | RpcServer::drive_connection
+                            |
+             +--------------+---------------+
+             |                              |
+        +----v-----+                   +----v-----+
+        | Worker A |                   | Worker B |
+        +----+-----+                   +----+-----+
+             |                              |
+             |            rotates           |
+             +------------------------------+
+
+        (every 15s the manager hands the live connection
+         to the other worker without dropping the client)
+
+Streaming Client ⇄ Connection Director
+</code></pre>
+<ul>
+<li>The <strong>Streaming Client</strong> uses <code>RpcClient::call_server_streaming</code> to fetch
+tokens. It stays connected while the workers change.</li>
+<li>The <strong>Connection Director</strong> listens for incoming connections, drives them via
+<code>RpcServer::drive_connection</code>, and keeps the current owner in a
+<code>ConnectionManager</code> that periodically rotates the session.</li>
+<li><strong>Worker A/B</strong> register normal RpcNet streaming handlers and maintain a shared
+session counter to prove continuity after migration.</li>
+</ul>
+<h2 id="example-layout"><a class="header" href="#example-layout">Example Layout</a></h2>
+<pre><code>examples/connection_swap/
+├── Cargo.toml
+├── src
+│   ├── bin
+│   │   ├── director.rs          # runs the director/manager/worker stack
+│   │   ├── client.rs            # streaming client binary
+│   │   └── demo.rs              # convenience launcher wiring everything up
+│   ├── client_app.rs            # reusable client logic
+│   ├── director.rs              # director + connection manager
+│   ├── manager.rs               # connection manager &amp; automatic rotation
+│   ├── worker.rs                # worker streaming handlers + session state
+│   └── lib.rs                   # constants and helper functions
+</code></pre>
+<h2 id="implementation-highlights"><a class="header" href="#implementation-highlights">Implementation Highlights</a></h2>
+<ul>
+<li><strong><code>RpcServer::drive_connection</code></strong> – the library exposes this helper so you can
+feed an accepted <code>s2n_quic::connection::Connection</code> into a worker and keep
+polling it until either the client disconnects or the manager asks for a
+handoff.</li>
+<li><strong>Connection manager</strong> – once workers register themselves over the
+<code>director.register_worker</code> RPC, the director keeps a rotating list and
+advances every 15 s (or immediately when a worker fails).</li>
+<li><strong>Worker registration</strong> – each worker uses a small RpcNet client to send a
+<code>RegisterWorker</code> message to the director and retries every two seconds until
+the broker is available.</li>
+<li><strong>Session continuity</strong> – workers share a small <code>SessionState</code> counter to prove
+the same context is reused after the handoff. Real deployments would ship KV
+caches or conversation history instead.</li>
+<li><strong>Automatic rotation</strong> – the director repeatedly simulates worker loss without
+the client reopening its QUIC connection.</li>
+</ul>
+<h2 id="running-the-example"><a class="header" href="#running-the-example">Running the Example</a></h2>
+<p>Use four terminals so each component runs as an independent process:</p>
+<pre><code class="language-bash"># Terminal 1 – worker A
+CONNECTION_SWAP_WORKER_ADDR=127.0.0.1:62001 \
+CONNECTION_SWAP_WORKER_LABEL=worker-a \
+cargo run --manifest-path examples/connection_swap/Cargo.toml --bin worker
+
+# Terminal 2 – worker B
+CONNECTION_SWAP_WORKER_ADDR=127.0.0.1:62002 \
+CONNECTION_SWAP_WORKER_LABEL=worker-b \
+cargo run --manifest-path examples/connection_swap/Cargo.toml --bin worker
+
+# Terminal 3 – director (the broker)
+CONNECTION_SWAP_DIRECTOR_ADDR=127.0.0.1:61000 \
+CONNECTION_SWAP_WORKERS=127.0.0.1:62001,127.0.0.1:62002 \
+cargo run --manifest-path examples/connection_swap/Cargo.toml --bin director
+
+# Terminal 4 – streaming client (stays connected to the director)
+CONNECTION_SWAP_DIRECTOR_TARGET=127.0.0.1:61000 \
+cargo run --manifest-path examples/connection_swap/Cargo.toml --bin client
+</code></pre>
+<p>The client prints tokens tagged with the active worker. Every ~15 seconds the
+director rotates to the other worker; the worker that was serving the stream
+simulates a fault by returning an error, and the client immediately restarts the
+same RPC over the existing connection to the director.</p>
+<p>Each worker attempts to register with the director on start-up and keeps
+retrying every few seconds until it succeeds, so you can launch the workers
+before or after the director.</p>
+<h3 id="environment-variables"><a class="header" href="#environment-variables">Environment Variables</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>CONNECTION_SWAP_DIRECTOR_ADDR</code></td><td><code>127.0.0.1:61000</code></td><td>Address the director binds to</td></tr>
+<tr><td><code>CONNECTION_SWAP_DIRECTOR_TARGET</code></td><td>same as bind</td><td>Address the client connects to (for NAT setups)</td></tr>
+<tr><td><code>CONNECTION_SWAP_WORKER_ADDR</code></td><td>—</td><td>Override per worker process (see commands above)</td></tr>
+<tr><td><code>CONNECTION_SWAP_WORKER_LABEL</code></td><td><code>worker</code></td><td>Optional label used in log output</td></tr>
+</tbody></table>
+</div>
+<h3 id="certificates"><a class="header" href="#certificates">Certificates</a></h3>
+<p>All binaries use the shared PEM files under <code>certs/</code>. The paths are canonicalised
+at runtime, so you can launch the example from any working directory as long as
+the repository’s <code>certs/test_cert.pem</code> and <code>certs/test_key.pem</code> are present.</p>
+<h2 id="extending-the-pattern"><a class="header" href="#extending-the-pattern">Extending the Pattern</a></h2>
+<p>The demo keeps everything in one process for simplicity, but the same
+coordination works across processes or hosts:</p>
+<ol>
+<li>Replace the in-process manager with a connection-aware UDP proxy (Envoy,
+<code>s2n-quic-transport</code>, etc.) that forwards packets based on connection IDs.</li>
+<li>Export a connection’s state using the lower level <code>s2n-quic</code> APIs and import
+it on another instance before updating the proxy’s routing table.</li>
+<li>Store session metadata (batch state, KV caches, auth tokens) in an external
+store so the new worker can resume immediately.</li>
+</ol>
+<p>Those additions are orthogonal to the RpcNet changes—the example already shows
+how to pause a worker, hand the <code>Connection</code> to another task, and prove that the
+client never notices.</p>
+<p>With the connection-swapping foundations in place you can now combine the demo
+with the streaming patterns described earlier in the book, or extend the
+rotation logic to plug into your own deployment tooling for true zero-downtime,
+low-latency rollouts.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="getting-started.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="streaming-overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="getting-started.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="streaming-overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

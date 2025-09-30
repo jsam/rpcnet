@@ -14,7 +14,6 @@ impl GreetingClient {
     pub async fn greet(&self, request: GreetRequest) -> Result<GreetResponse, RpcError> {
         let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
         let response_data = self.inner.call("Greeting.greet", params).await?;
-        bincode::deserialize::<GreetResponse>(&response_data)
-            .map_err(RpcError::SerializationError)
+        bincode::deserialize::<GreetResponse>(&response_data).map_err(RpcError::SerializationError)
     }
 }

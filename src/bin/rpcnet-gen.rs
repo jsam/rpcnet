@@ -12,19 +12,19 @@ struct Cli {
     /// Input .rpc.rs file (Rust source with service trait)
     #[arg(short, long)]
     input: PathBuf,
-    
+
     /// Output directory for generated code
     #[arg(short, long, default_value = "src/generated")]
     output: PathBuf,
-    
+
     /// Generate only server code
     #[arg(long)]
     server_only: bool,
-    
+
     /// Generate only client code
     #[arg(long)]
     client_only: bool,
-    
+
     /// Generate only type definitions
     #[arg(long)]
     types_only: bool,
@@ -32,31 +32,31 @@ struct Cli {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
-    
+
     // Check that input file exists
     if !cli.input.exists() {
         eprintln!("Error: Input file '{}' does not exist", cli.input.display());
         std::process::exit(1);
     }
-    
+
     // Read the input file
     let content = fs::read_to_string(&cli.input)?;
-    
+
     // Parse using syn
     let definition = rpcnet::codegen::ServiceDefinition::parse(&content)?;
-    
+
     // Get service name from the parsed definition
     let service_name = definition.service_name().to_string();
-    
+
     // Generate code
     let generator = rpcnet::codegen::CodeGenerator::new(definition);
-    
+
     // Create output directory
     let service_dir = cli.output.join(&service_name.to_lowercase());
     fs::create_dir_all(&service_dir)?;
-    
+
     println!("📦 Generating code for service: {}", service_name);
-    
+
     // Generate and write files based on flags
     if !cli.client_only && !cli.types_only {
         let server_code = generator.generate_server();
@@ -64,36 +64,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         write_formatted_code(&server_path, server_code)?;
         println!("  ✅ Generated server: {}", server_path.display());
     }
-    
+
     if !cli.server_only && !cli.types_only {
         let client_code = generator.generate_client();
         let client_path = service_dir.join("client.rs");
         write_formatted_code(&client_path, client_code)?;
         println!("  ✅ Generated client: {}", client_path.display());
     }
-    
+
     if !cli.server_only && !cli.client_only {
         let types_code = generator.generate_types();
         let types_path = service_dir.join("types.rs");
         write_formatted_code(&types_path, types_code)?;
         println!("  ✅ Generated types: {}", types_path.display());
     }
-    
+
     // Generate mod.rs
     generate_mod_file(&service_dir, &service_name, &cli)?;
-    
+
     println!("\n✨ Code generation complete!");
     println!("\n📝 Add the following to your code to use the generated service:");
     println!("    mod {};", service_name.to_lowercase());
     println!("    use {}::*;", service_name.to_lowercase());
-    
+
     Ok(())
 }
 
 fn write_formatted_code(path: &Path, tokens: proc_macro2::TokenStream) -> std::io::Result<()> {
-    let file = syn::parse2::<syn::File>(tokens)
-        .expect("Generated invalid Rust code");
-    
+    let file = syn::parse2::<syn::File>(tokens).expect("Generated invalid Rust code");
+
     // Format using prettyplease for nice output
     let formatted = prettyplease::unparse(&file);
     fs::write(path, formatted)
@@ -109,7 +108,7 @@ fn generate_mod_file(output_dir: &Path, service_name: &str, cli: &Cli) -> std::i
 "#,
         service_name
     );
-    
+
     // Add module declarations based on what was generated
     if !cli.server_only && !cli.client_only {
         mod_content.push_str("pub mod types;\n");
@@ -120,13 +119,205 @@ fn generate_mod_file(output_dir: &Path, service_name: &str, cli: &Cli) -> std::i
     if !cli.server_only && !cli.types_only {
         mod_content.push_str("pub mod client;\n");
     }
-    
+
     mod_content.push_str("\n");
-    
+
     // Re-export types for convenience
     if !cli.server_only && !cli.client_only {
         mod_content.push_str("pub use types::*;\n");
     }
-    
+
     fs::write(output_dir.join("mod.rs"), mod_content)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use assert_cmd::Command;
+    use predicates::prelude::*;
+    use tempfile::TempDir;
+
+    fn write_service(dir: &TempDir, name: &str, body: &str) -> PathBuf {
+        let file = dir.path().join(name);
+        fs::write(&file, body).expect("write service file");
+        file
+    }
+
+    #[test]
+    fn errors_when_input_missing() {
+        Command::cargo_bin("rpcnet-gen")
+            .expect("binary present")
+            .arg("--input")
+            .arg("does-not-exist.rpc.rs")
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("does not exist"));
+    }
+
+    #[test]
+    fn generates_all_outputs_by_default() {
+        let temp = TempDir::new().unwrap();
+        let input = write_service(
+            &temp,
+            "service.rpc.rs",
+            r#"
+                #[rpcnet::service]
+                pub trait Demo {
+                    async fn go(&self, req: Request) -> Result<Response, Error>;
+                }
+
+                pub struct Request;
+                pub struct Response;
+                pub enum Error { Fail }
+            "#,
+        );
+
+        let output = temp.path().join("out");
+
+        Command::cargo_bin("rpcnet-gen")
+            .unwrap()
+            .args([
+                "--input",
+                input.to_str().unwrap(),
+                "--output",
+                output.to_str().unwrap(),
+            ])
+            .assert()
+            .success();
+
+        let service_dir = output.join("demo");
+        assert!(service_dir.join("server.rs").exists());
+        assert!(service_dir.join("client.rs").exists());
+        assert!(service_dir.join("types.rs").exists());
+        assert!(service_dir.join("mod.rs").exists());
+    }
+
+    #[test]
+    fn honours_server_only_flag() {
+        let temp = TempDir::new().unwrap();
+        let input = write_service(
+            &temp,
+            "calc.rpc.rs",
+            r#"
+                #[rpcnet::service]
+                pub trait Calc {
+                    async fn add(&self, req: Request) -> Result<Response, Error>;
+                }
+
+                pub struct Request;
+                pub struct Response;
+                pub enum Error { Fail }
+            "#,
+        );
+
+        let output = temp.path().join("generated");
+
+        Command::cargo_bin("rpcnet-gen")
+            .unwrap()
+            .args([
+                "--input",
+                input.to_str().unwrap(),
+                "--output",
+                output.to_str().unwrap(),
+                "--server-only",
+            ])
+            .assert()
+            .success();
+
+        let service_dir = output.join("calc");
+        assert!(service_dir.join("server.rs").exists());
+        assert!(!service_dir.join("client.rs").exists());
+        assert!(!service_dir.join("types.rs").exists());
+
+        let mod_contents = fs::read_to_string(service_dir.join("mod.rs")).unwrap();
+        assert!(mod_contents.contains("pub mod server"));
+        assert!(!mod_contents.contains("pub mod types"));
+        assert!(!mod_contents.contains("pub mod client"));
+    }
+
+    #[test]
+    fn honours_client_only_flag() {
+        let temp = TempDir::new().unwrap();
+        let input = write_service(
+            &temp,
+            "chat.rpc.rs",
+            r#"
+                #[rpcnet::service]
+                pub trait Chat {
+                    async fn talk(&self, req: Request) -> Result<Response, Error>;
+                }
+
+                pub struct Request;
+                pub struct Response;
+                pub enum Error { Fail }
+            "#,
+        );
+
+        let output = temp.path().join("generated");
+
+        Command::cargo_bin("rpcnet-gen")
+            .unwrap()
+            .args([
+                "--input",
+                input.to_str().unwrap(),
+                "--output",
+                output.to_str().unwrap(),
+                "--client-only",
+            ])
+            .assert()
+            .success();
+
+        let service_dir = output.join("chat");
+        assert!(service_dir.join("client.rs").exists());
+        assert!(!service_dir.join("server.rs").exists());
+        assert!(!service_dir.join("types.rs").exists());
+
+        let mod_contents = fs::read_to_string(service_dir.join("mod.rs")).unwrap();
+        assert!(mod_contents.contains("pub mod client"));
+        assert!(!mod_contents.contains("pub mod types"));
+        assert!(!mod_contents.contains("pub mod server"));
+    }
+
+    #[test]
+    fn honours_types_only_flag() {
+        let temp = TempDir::new().unwrap();
+        let input = write_service(
+            &temp,
+            "media.rpc.rs",
+            r#"
+                #[rpcnet::service]
+                pub trait Media {
+                    async fn stream(&self, req: Request) -> Result<Response, Error>;
+                }
+
+                pub struct Request;
+                pub struct Response;
+                pub enum Error { Fail }
+            "#,
+        );
+
+        let output = temp.path().join("generated");
+
+        Command::cargo_bin("rpcnet-gen")
+            .unwrap()
+            .args([
+                "--input",
+                input.to_str().unwrap(),
+                "--output",
+                output.to_str().unwrap(),
+                "--types-only",
+            ])
+            .assert()
+            .success();
+
+        let service_dir = output.join("media");
+        assert!(service_dir.join("types.rs").exists());
+        assert!(!service_dir.join("client.rs").exists());
+        assert!(!service_dir.join("server.rs").exists());
+
+        let mod_contents = fs::read_to_string(service_dir.join("mod.rs")).unwrap();
+        assert!(mod_contents.contains("pub mod types"));
+        assert!(!mod_contents.contains("pub mod client"));
+        assert!(!mod_contents.contains("pub mod server"));
+    }
 }

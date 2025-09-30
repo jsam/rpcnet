@@ -1,6 +1,6 @@
 use rpcnet::{RpcClient, RpcConfig, RpcError, RpcServer};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
@@ -129,7 +129,7 @@ mod integration_tests {
 
         // Test empty response
         let response = client.call("empty", vec![]).await.unwrap();
-        assert_eq!(response, vec![]);
+        assert_eq!(response, Vec::<u8>::new());
     }
 
     // ==========================

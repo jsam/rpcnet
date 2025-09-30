@@ -1,0 +1,8 @@
+[book]
+title = "RpcNet Guide"
+author = "RpcNet Team"
+multilingual = false
+src = "src"
+
+[output.html]
+additional-css = []

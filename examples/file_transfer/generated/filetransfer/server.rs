@@ -1,6 +1,6 @@
 use super::types::*;
-use rpcnet::{RpcServer, RpcConfig, RpcError};
 use async_trait::async_trait;
+use rpcnet::{RpcConfig, RpcError, RpcServer};
 use std::sync::Arc;
 /// Handler trait that users implement for the service.
 #[async_trait]
@@ -36,71 +36,55 @@ impl<H: FileTransferHandler> FileTransferServer<H> {
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "FileTransfer.upload_chunk",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: UploadChunkRequest = bincode::deserialize(
-                                    &params,
-                                )
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.upload_chunk(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("FileTransfer.upload_chunk", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: UploadChunkRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.upload_chunk(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "FileTransfer.download_chunk",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: DownloadChunkRequest = bincode::deserialize(
-                                    &params,
-                                )
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.download_chunk(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("FileTransfer.download_chunk", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: DownloadChunkRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.download_chunk(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
         {
             let handler = self.handler.clone();
             self.rpc_server
-                .register(
-                    "FileTransfer.get_file_info",
-                    move |params| {
-                        let handler = handler.clone();
-                        async move {
-                            let request: FileInfoRequest = bincode::deserialize(&params)
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.get_file_info(request).await {
-                                Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
-                                }
-                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                .register("FileTransfer.get_file_info", move |params| {
+                    let handler = handler.clone();
+                    async move {
+                        let request: FileInfoRequest =
+                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        match handler.get_file_info(request).await {
+                            Ok(response) => {
+                                bincode::serialize(&response).map_err(RpcError::SerializationError)
                             }
+                            Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
-                    },
-                )
+                    }
+                })
                 .await;
         }
     }

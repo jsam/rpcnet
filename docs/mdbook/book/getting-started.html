@@ -1,0 +1,453 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Getting Started - RpcNet Guide</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">RpcNet Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h1>
+<p>This tutorial mirrors the <code>examples/basic_greeting</code> sample and shows, step by
+step, how to install RpcNet, run the <code>rpcnet-gen</code> CLI, and integrate the
+generated code into your own project.</p>
+<h2 id="step-0-prerequisites"><a class="header" href="#step-0-prerequisites">Step 0: Prerequisites</a></h2>
+<ul>
+<li>Rust 1.75+ (<code>rustup show</code> to confirm)</li>
+<li><code>cargo</code> on your <code>PATH</code></li>
+<li>macOS or Linux (QUIC/TLS support is bundled through <code>s2n-quic</code>)</li>
+</ul>
+<h2 id="step-1-create-a-new-crate"><a class="header" href="#step-1-create-a-new-crate">Step 1: Create a new crate</a></h2>
+<pre><code class="language-bash">cargo new hello-rpc
+cd hello-rpc
+</code></pre>
+<h2 id="step-2-add-the-rpcnet-runtime-crate"><a class="header" href="#step-2-add-the-rpcnet-runtime-crate">Step 2: Add the RpcNet runtime crate</a></h2>
+<pre><code class="language-bash">cargo add rpcnet
+</code></pre>
+<p>RpcNet enables the high-performance <code>perf</code> feature by default. If you need to
+opt out (e.g. another allocator is already selected), edit <code>Cargo.toml</code>:</p>
+<pre><code class="language-toml">[dependencies]
+rpcnet = { version = "0.2", default-features = false }
+</code></pre>
+<p>You will also want <code>serde</code> for request/response types, just like the example:</p>
+<pre><code class="language-toml">serde = { version = "1", features = ["derive"] }
+</code></pre>
+<h2 id="step-3-install-the-rpcnet-gen-cli"><a class="header" href="#step-3-install-the-rpcnet-gen-cli">Step 3: Install the rpcnet-gen CLI</a></h2>
+<p>Install the generator globally so every project can call it:</p>
+<pre><code class="language-bash">cargo install rpcnet --features codegen --bin rpcnet-gen
+</code></pre>
+<p>Verify the install:</p>
+<pre><code class="language-bash">rpcnet-gen --help
+</code></pre>
+<p>You should see the full usage banner:</p>
+<pre><code>Generate RPC client and server code from service definitions
+
+Usage: rpcnet-gen [OPTIONS] --input &lt;INPUT&gt;
+
+Options:
+  -i, --input &lt;INPUT&gt;    Input .rpc file (Rust source with service trait)
+  -o, --output &lt;OUTPUT&gt;  Output directory for generated code [default: src/generated]
+      --server-only      Generate only server code
+      --client-only      Generate only client code
+      --types-only       Generate only type definitions
+  -h, --help             Print help
+  -V, --version          Print version
+</code></pre>
+<h2 id="step-4-author-a-service-definition"><a class="header" href="#step-4-author-a-service-definition">Step 4: Author a service definition</a></h2>
+<p>Create <code>src/greeting.rpc.rs</code> describing your protocol. The syntax is ordinary
+Rust with a <code>#[rpcnet::service]</code> attribute, so you can leverage the compiler and
+IDE tooling while you design the API:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// src/greeting.rpc.rs
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GreetRequest {
+    pub name: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GreetResponse {
+    pub message: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum GreetingError {
+    EmptyName,
+    InvalidInput(String),
+}
+
+#[rpcnet::service]
+pub trait Greeting {
+    async fn greet(&amp;self, request: GreetRequest) -&gt; Result&lt;GreetResponse, GreetingError&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="step-5-generate-client-and-server-code"><a class="header" href="#step-5-generate-client-and-server-code">Step 5: Generate client and server code</a></h2>
+<p>Point the CLI at the <code>.rpc</code> file and choose an output directory. Here we mirror
+<code>examples/basic_greeting</code> by writing into <code>src/generated</code>:</p>
+<pre><code class="language-bash">rpcnet-gen --input src/greeting.rpc.rs --output src/generated
+</code></pre>
+<p>The CLI confirms what it created:</p>
+<pre><code>📦 Generating code for service: Greeting
+  ✅ Generated server: src/generated/greeting/server.rs
+  ✅ Generated client: src/generated/greeting/client.rs
+  ✅ Generated types: src/generated/greeting/types.rs
+
+✨ Code generation complete!
+
+📝 Add the following to your code to use the generated service:
+    #[path = "generated/greeting/mod.rs"]
+    mod greeting;
+    use greeting::*;
+</code></pre>
+<p>Inspect the directory to see the modules that were created—this matches the
+layout under <code>examples/basic_greeting/generated/</code>:</p>
+<pre><code>src/generated/
+└── greeting/
+    ├── client.rs   # async client wrapper for calling the service
+    ├── mod.rs      # re-exports so `use greeting::*` pulls everything in
+    ├── server.rs   # server harness plus `GreetingHandler` trait
+    └── types.rs    # request/response/error structs cloned from the .rpc file
+</code></pre>
+<p><code>client.rs</code> exposes <code>GreetingClient</code>, <code>server.rs</code> wires your implementation into
+the transport via <code>GreetingServer</code>, and <code>types.rs</code> contains the shared data
+structures.</p>
+<h2 id="step-6-wire-the-generated-code-into-your-project"><a class="header" href="#step-6-wire-the-generated-code-into-your-project">Step 6: Wire the generated code into your project</a></h2>
+<p>Reference the generated module and bring the types into scope. For example,
+in <code>src/main.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[path = "generated/greeting/mod.rs"]
+mod greeting;
+
+use greeting::client::GreetingClient;
+use greeting::server::{GreetingHandler, GreetingServer};
+use greeting::{GreetRequest, GreetResponse, GreetingError};
+use rpcnet::RpcConfig;
+<span class="boring">}</span></code></pre></pre>
+<p>From here there are two pieces to wire up:</p>
+<ol>
+<li>
+<p><strong>Server</strong> – implement the generated <code>GreetingHandler</code> trait and launch the
+harness. This mirrors <code>examples/basic_greeting/server.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust">struct MyGreetingService;
+
+#[async_trait::async_trait]
+impl GreetingHandler for MyGreetingService {
+    async fn greet(&amp;self, request: GreetRequest) -&gt; Result&lt;GreetResponse, GreetingError&gt; {
+        Ok(GreetResponse { message: format!("Hello, {}!", request.name) })
+    }
+}
+
+#[tokio::main]
+async fn main() -&gt; anyhow::Result&lt;()&gt; {
+    let config = RpcConfig::new("certs/test_cert.pem", "127.0.0.1:8080")
+        .with_key_path("certs/test_key.pem")
+        .with_server_name("localhost");
+
+    GreetingServer::new(MyGreetingService, config).serve().await?;
+    Ok(())
+}</code></pre></pre>
+<p><code>GreetingServer::serve</code> handles QUIC I/O, wiring your implementation to the
+generated protocol handlers.</p>
+<p><strong>Tuning worker threads (optional).</strong> By default Tokio uses the number of
+available CPU cores. To override this for RpcNet services, set
+<code>RPCNET_SERVER_THREADS</code> and build your runtime manually:</p>
+<pre><pre class="playground"><code class="language-rust">fn main() -&gt; anyhow::Result&lt;()&gt; {
+    let worker_threads = rpcnet::runtime::server_worker_threads();
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(worker_threads)
+        .enable_all()
+        .build()?;
+
+    runtime.block_on(async {
+        // existing async server logic goes here
+        Ok::&lt;_, anyhow::Error&gt;(())
+    })?;
+
+    Ok(())
+}</code></pre></pre>
+<p>Run the binary with a custom thread count:</p>
+<pre><code class="language-bash">RPCNET_SERVER_THREADS=8 cargo run
+</code></pre>
+<p>Adjust the command if your server lives in a different binary target (for
+example <code>cargo run --bin my-server</code>).</p>
+<p>If you keep using the <code>#[tokio::main]</code> macro, Tokio will also honour the
+upstream <code>TOKIO_WORKER_THREADS</code> environment variable.</p>
+</li>
+<li>
+<p><strong>Client</strong> – construct <code>GreetingClient</code> to invoke the RPC. Compare with
+<code>examples/basic_greeting/client.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust">#[tokio::main]
+async fn main() -&gt; anyhow::Result&lt;()&gt; {
+    let config = RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0")
+        .with_server_name("localhost");
+
+    let server_addr = "127.0.0.1:8080".parse()?;
+    let client = GreetingClient::connect(server_addr, config).await?;
+
+    let response = client.greet(GreetRequest { name: "World".into() }).await?;
+    println!("Server replied: {}", response.message);
+    Ok(())
+}</code></pre></pre>
+</li>
+</ol>
+<p>The generated client takes care of serialization, TLS, and backpressure while
+presenting an async function per RPC method.</p>
+<h2 id="step-7-build-and-run"><a class="header" href="#step-7-build-and-run">Step 7: Build and run</a></h2>
+<p>Compile and execute as usual:</p>
+<pre><code class="language-bash">cargo build
+cargo run
+</code></pre>
+<p>While you experiment, keep the reference example nearby:</p>
+<pre><code class="language-bash">ls examples/basic_greeting
+# client.rs  generated/  greeting.rpc.rs  server.rs
+</code></pre>
+<p>Comparing your project with the example is a quick way to confirm the wiring
+matches what the CLI expects.</p>
+<h2 id="where-to-go-next"><a class="header" href="#where-to-go-next">Where to go next</a></h2>
+<ul>
+<li>Read the <a href="rpcnet-gen.html">rpcnet-gen CLI guide</a> for advanced flags such as
+<code>--server-only</code>, <code>--client-only</code>, and custom output paths.</li>
+<li>Explore the <a href="concepts.html">Concepts</a> chapter for runtime fundamentals,
+server/client wiring, and streaming patterns.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="concepts.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="connection-swapping.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="concepts.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="connection-swapping.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

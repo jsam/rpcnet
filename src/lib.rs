@@ -1,792 +1,115 @@
-//! # RpcNet: High-Performance RPC Library
-//!
-//! A modern, type-safe RPC library built on QUIC protocol with automatic code generation.
-//! 
-//! RpcNet provides two approaches for building distributed systems:
-//! 1. **Generated Code** (recommended) - Type-safe, maintainable services with automatic code generation
-//! 2. **Low-level API** - Direct access to the underlying RPC primitives
-//!
-//! ## Key Features
-//!
-//! - **🚀 QUIC Protocol**: Modern transport with connection multiplexing and migration
-//! - **🔒 TLS Security**: Built-in encryption and certificate-based authentication  
-//! - **⚡ Async/Await**: Full async support using Tokio runtime
-//! - **🛠️ Code Generation**: Type-safe client/server code from service definitions
-//! - **📦 Binary Serialization**: Efficient data serialization using bincode
-//! - **⏱️ Timeout Management**: Configurable timeouts for robust operation
-//! - **🔧 Error Handling**: Comprehensive error types and recovery mechanisms
-//!
-//! # Tutorial: Getting Started with RpcNet
-//!
-//! This tutorial walks you through building RPC services with RpcNet, from basic concepts
-//! to advanced patterns. We'll start with code generation (recommended approach) and then
-//! cover the low-level API.
-//!
-//! ## Prerequisites
-//!
-//! Add RpcNet to your `Cargo.toml`:
-//!
-//! ```toml
-//! [dependencies]
-//! rpcnet = { version = "0.1.0", features = ["codegen"] }
-//! async-trait = "0.1"
-//! serde = { version = "1.0", features = ["derive"] }
-//! tokio = { version = "1.0", features = ["full"] }
-//!
-//! [build-dependencies]
-//! rpcnet = { version = "0.1.0", features = ["codegen"] }
-//! ```
-//!
-//! Install the CLI tool:
-//! ```bash
-//! cargo install --path . --features codegen
-//! ```
-//!
-//! ## Part 1: Your First Service (Code Generation)
-//!
-//! ### Step 1: Define Your Service
-//!
-//! Create a service definition file `greeting.rpc.rs`:
-//!
-//! ```rust,no_run
-//! use rpcnet::service;
-//! use serde::{Serialize, Deserialize};
-//!
-//! #[derive(Serialize, Deserialize, Debug)]
-//! pub struct GreetingRequest {
-//!     pub name: String,
-//!     pub language: String,
-//! }
-//!
-//! #[derive(Serialize, Deserialize, Debug)]
-//! pub struct GreetingResponse {
-//!     pub message: String,
-//!     pub timestamp: u64,
-//! }
-//!
-//! #[derive(Debug)]
-//! pub enum GreetingError {
-//!     InvalidLanguage,
-//!     EmptyName,
-//! }
-//!
-//! #[service]
-//! pub trait GreetingService {
-//!     async fn greet(&self, request: GreetingRequest) -> Result<GreetingResponse, GreetingError>;
-//!     async fn farewell(&self, name: String) -> Result<String, GreetingError>;
-//! }
-//! ```
-//!
-//! ```rust,no_run
-//! use serde::{Serialize, Deserialize};
-//!
-//! #[derive(Serialize, Deserialize, Debug, Clone)]
-//! pub struct GreetRequest {
-//!     pub name: String,
-//! }
-//!
-//! #[derive(Serialize, Deserialize, Debug, Clone)]
-//! pub struct GreetResponse {
-//!     pub message: String,
-//! }
-//!
-//! #[derive(Serialize, Deserialize, Debug, Clone)]
-//! pub enum GreetingError {
-//!     EmptyName,
-//!     InvalidInput(String),
-//! }
-//!
-//! // This attribute is only available with the "codegen" feature
-//! #[cfg(feature = "codegen")]
-//! #[rpcnet::service]
-//! pub trait Greeting {
-//!     async fn greet(&self, request: GreetRequest) -> Result<GreetResponse, GreetingError>;
-//! }
-//! 
-//! // For documentation purposes when codegen is not available
-//! #[cfg(not(feature = "codegen"))]
-//! pub trait Greeting {
-//!     async fn greet(&self, request: GreetRequest) -> Result<GreetResponse, GreetingError>;
-//! }
-//! ```
-//!
-//! ### Step 2: Generate Code
-//!
-//! ```bash
-//! rpcnet-gen --input greeting.rpc.rs --output generated
-//! ```
-//!
-//! This creates:
-//! ```text
-//! generated/greeting/
-//! ├── mod.rs          # Module exports
-//! ├── types.rs        # Request/response types
-//! ├── server.rs       # Server trait and implementation
-//! └── client.rs       # Client implementation
-//! ```
-//!
-//! ### Step 3: Implement the Server
-//!
-//! ```rust,no_run
-//! // Mock the generated module for documentation
-//! mod greeting {
-//!     use serde::{Serialize, Deserialize};
-//!     
-//!     #[derive(Serialize, Deserialize, Debug, Clone)]
-//!     pub struct GreetRequest { pub name: String }
-//!     #[derive(Serialize, Deserialize, Debug, Clone)]
-//!     pub struct GreetResponse { pub message: String }
-//!     #[derive(Serialize, Deserialize, Debug, Clone)]
-//!     pub enum GreetingError { EmptyName, InvalidInput(String) }
-//!     
-//!     pub mod server {
-//!         use super::{GreetRequest, GreetResponse, GreetingError};
-//!         
-//!         #[async_trait::async_trait]
-//!         pub trait GreetingHandler {
-//!             async fn greet(&self, request: GreetRequest) -> Result<GreetResponse, GreetingError>;
-//!         }
-//!         
-//!         pub struct GreetingServer<H> {
-//!             handler: H,
-//!             config: rpcnet::RpcConfig,
-//!         }
-//!         
-//!         impl<H: GreetingHandler + Send + Sync + 'static> GreetingServer<H> {
-//!             pub fn new(handler: H, config: rpcnet::RpcConfig) -> Self {
-//!                 Self { handler, config }
-//!             }
-//!             
-//!             pub async fn serve(&self) -> Result<(), Box<dyn std::error::Error>> {
-//!                 // Mock implementation for documentation
-//!                 Ok(())
-//!             }
-//!         }
-//!     }
-//! }
-//!
-//! use greeting::{GreetRequest, GreetResponse, GreetingError};
-//! use greeting::server::{GreetingHandler, GreetingServer};
-//! use rpcnet::RpcConfig;
-//!
-//! struct MyGreetingService;
-//!
-//! #[async_trait::async_trait]
-//! impl GreetingHandler for MyGreetingService {
-//!     async fn greet(&self, request: GreetRequest) -> Result<GreetResponse, GreetingError> {
-//!         if request.name.trim().is_empty() {
-//!             return Err(GreetingError::EmptyName);
-//!         }
-//!         
-//!         let message = format!("Hello, {}!", request.name);
-//!         Ok(GreetResponse { message })
-//!     }
-//! }
-//!
-//! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let config = RpcConfig::new("cert.pem", "127.0.0.1:8080")
-//!         .with_key_path("key.pem")
-//!         .with_server_name("localhost");
-//!     
-//!     let server = GreetingServer::new(MyGreetingService, config);
-//!     println!("Starting greeting server...");
-//!     
-//!     server.serve().await?;
-//!     Ok(())
-//! }
-//! ```
-//!
-//! ### Step 4: Implement the Client
-//!
-//! ```rust,no_run
-//! // Mock the generated module for documentation
-//! mod greeting {
-//!     use serde::{Serialize, Deserialize};
-//!     
-//!     #[derive(Serialize, Deserialize, Debug, Clone)]
-//!     pub struct GreetRequest { pub name: String }
-//!     #[derive(Serialize, Deserialize, Debug, Clone)]
-//!     pub struct GreetResponse { pub message: String }
-//!     
-//!     pub mod client {
-//!         use super::{GreetRequest, GreetResponse};
-//!         use rpcnet::{RpcClient, RpcConfig};
-//!         use std::net::SocketAddr;
-//!         
-//!         pub struct GreetingClient {
-//!             client: RpcClient,
-//!         }
-//!         
-//!         impl GreetingClient {
-//!             pub async fn connect(addr: SocketAddr, config: RpcConfig) -> Result<Self, Box<dyn std::error::Error>> {
-//!                 let client = RpcClient::connect(addr, config).await?;
-//!                 Ok(Self { client })
-//!             }
-//!             
-//!             pub async fn greet(&self, request: GreetRequest) -> Result<GreetResponse, Box<dyn std::error::Error>> {
-//!                 // Mock implementation for documentation
-//!                 Ok(GreetResponse { message: format!("Hello, {}!", request.name) })
-//!             }
-//!         }
-//!     }
-//! }
-//!
-//! use greeting::GreetRequest;
-//! use greeting::client::GreetingClient;
-//! use rpcnet::RpcConfig;
-//! use std::net::SocketAddr;
-//!
-//! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let config = RpcConfig::new("cert.pem", "127.0.0.1:0")
-//!         .with_server_name("localhost");
-//!     
-//!     let server_addr: SocketAddr = "127.0.0.1:8080".parse()?;
-//!     let client = GreetingClient::connect(server_addr, config).await?;
-//!     
-//!     let request = GreetRequest { name: "World".to_string() };
-//!     let response = client.greet(request).await?;
-//!     println!("Response: {}", response.message);
-//!     
-//!     Ok(())
-//! }
-//! ```
-//!
-//! ## Part 2: Advanced Service Patterns
-//!
-//! ### Multiple Operations
-//!
-//! Services can have multiple methods:
-//!
-//! ```rust,no_run
-//! use serde::{Serialize, Deserialize};
-//!
-//! #[derive(Serialize, Deserialize, Debug, Clone)]
-//! pub struct AddRequest { pub a: i64, pub b: i64 }
-//! #[derive(Serialize, Deserialize, Debug, Clone)]
-//! pub struct AddResponse { pub result: i64 }
-//!
-//! #[derive(Serialize, Deserialize, Debug, Clone)]
-//! pub struct DivideRequest { pub dividend: f64, pub divisor: f64 }
-//! #[derive(Serialize, Deserialize, Debug, Clone)]
-//! pub struct DivideResponse { pub result: f64 }
-//!
-//! #[derive(Serialize, Deserialize, Debug, Clone)]
-//! pub enum MathError {
-//!     Overflow,
-//!     DivisionByZero,
-//! }
-//!
-//! // This attribute is only available with the "codegen" feature
-//! #[cfg(feature = "codegen")]
-//! #[rpcnet::service]
-//! pub trait Calculator {
-//!     async fn add(&self, request: AddRequest) -> Result<AddResponse, MathError>;
-//!     async fn divide(&self, request: DivideRequest) -> Result<DivideResponse, MathError>;
-//! }
-//!
-//! // For documentation purposes when codegen is not available
-//! #[cfg(not(feature = "codegen"))]
-//! pub trait Calculator {
-//!     async fn add(&self, request: AddRequest) -> Result<AddResponse, MathError>;
-//!     async fn divide(&self, request: DivideRequest) -> Result<DivideResponse, MathError>;
-//! }
-//! ```
-//!
-//! ### Stateful Services
-//!
-//! Services can maintain state using `Arc<Mutex<T>>`:
-//!
-//! ```rust,no_run
-//! use std::sync::Arc;
-//! use tokio::sync::Mutex;
-//!
-//! struct CounterService {
-//!     counter: Arc<Mutex<i64>>,
-//! }
-//!
-//! impl CounterService {
-//!     fn new() -> Self {
-//!         Self {
-//!             counter: Arc::new(Mutex::new(0)),
-//!         }
-//!     }
-//! }
-//!
-//! // Implement your handler trait here
-//! // The counter can be safely accessed across concurrent requests
-//! ```
-//!
-//! ### Binary Data Handling
-//!
-//! Services can handle binary data efficiently:
-//!
-//! ```rust
-//! use serde::{Serialize, Deserialize};
-//!
-//! #[derive(Serialize, Deserialize, Debug, Clone)]
-//! pub struct UploadRequest {
-//!     pub filename: String,
-//!     pub data: Vec<u8>,  // Binary data
-//! }
-//!
-//! #[derive(Serialize, Deserialize, Debug, Clone)]
-//! pub struct UploadResponse {
-//!     pub success: bool,
-//!     pub bytes_written: usize,
-//! }
-//! ```
-//!
-//! ## Part 3: Build Integration
-//!
-//! ### Automatic Code Generation
-//!
-//! Add to your `build.rs`:
-//!
-//! ```rust,no_run
-//! fn main() {
-//!     println!("cargo:rerun-if-changed=service.rpc.rs");
-//!     
-//!     #[cfg(feature = "codegen")]
-//!     {
-//!         rpcnet::codegen::Builder::new()
-//!             .input("service.rpc.rs")
-//!             .output("src/generated")
-//!             .build()
-//!             .expect("Failed to generate RPC code");
-//!     }
-//! }
-//! ```
-//!
-//! ### Project Structure
-//!
-//! Recommended project layout:
-//! ```text
-//! my-service/
-//! ├── Cargo.toml
-//! ├── build.rs              # Code generation
-//! ├── service.rpc.rs        # Service definition
-//! ├── src/
-//! │   ├── main.rs           # Server binary
-//! │   ├── client.rs         # Client binary  
-//! │   └── generated/        # Auto-generated (gitignored)
-//! └── examples/
-//!     └── client_example.rs
-//! ```
-//!
-//! ## Part 4: Configuration and Security
-//!
-//! ### TLS Configuration
-//!
-//! RpcNet requires TLS certificates. For development, generate self-signed certificates:
-//!
-//! ```bash
-//! # Generate a self-signed certificate (development only)
-//! openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
-//! ```
-//!
-//! ### Advanced Configuration
-//!
-//! ```rust,no_run
-//! use rpcnet::RpcConfig;
-//! use std::time::Duration;
-//!
-//! let config = RpcConfig::new("cert.pem", "127.0.0.1:8080")
-//!     .with_key_path("key.pem")
-//!     .with_server_name("myservice.example.com")
-//!     .with_keep_alive_interval(Duration::from_secs(30));
-//! ```
-//!
-//! ## Part 5: Error Handling and Best Practices
-//!
-//! ### Comprehensive Error Handling
-//!
-//! ```rust
-//! use serde::{Serialize, Deserialize};
-//!
-//! #[derive(Serialize, Deserialize, Debug, Clone)]
-//! pub enum ServiceError {
-//!     /// Input validation failed
-//!     ValidationError(String),
-//!     /// External service unavailable
-//!     ServiceUnavailable,
-//!     /// Rate limit exceeded
-//!     RateLimitExceeded,
-//!     /// Internal server error
-//!     InternalError(String),
-//! }
-//! ```
-//!
-//! ### Best Practices
-//!
-//! 1. **Service Design**:
-//!    - Keep interfaces focused and cohesive
-//!    - Use descriptive names for operations and types
-//!    - Design for forward compatibility
-//!
-//! 2. **Error Handling**:
-//!    - Define specific error types for your domain
-//!    - Use descriptive error messages
-//!    - Handle timeouts and network errors gracefully
-//!
-//! 3. **Testing**:
-//!    - Test both success and error cases
-//!    - Use integration tests for end-to-end validation
-//!    - Mock external dependencies
-//!
-//! 4. **Performance**:
-//!    - Reuse connections when possible
-//!    - Use appropriate timeouts
-//!    - Consider chunking for large data transfers
-//!
-//! ## Part 6: Examples and Patterns
-//!
-//! The `examples/` directory contains examples for both approaches:
-//!
-//! ### Basic Examples (Low-Level API)
-//! These work immediately without setup:
-//! - **`basic_server/client`**: Simple RPC communication
-//! - **`simple_echo_server/client`**: Text and binary data handling
-//!
-//! ```bash
-//! # Try these first - no setup required
-//! cargo run --example basic_server
-//! cargo run --example simple_echo_server
-//! ```
-//!
-//! ### Advanced Examples (Generated Code)
-//! Complete, self-contained examples with code generation:
-//! - **`basic_greeting/`**: Simple request/response service
-//! - **`echo/`**: Binary data handling and multiple methods  
-//! - **`calculator/`**: Mathematical operations with error handling
-//! - **`file_transfer/`**: Chunked operations and stateful services
-//! - **`concurrent_demo/`**: Concurrent operations and shared state
-//!
-//! ```bash
-//! # Generated code examples
-//! cargo run --example basic_greeting_server --features codegen
-//! cargo run --example basic_greeting_client --features codegen
-//! ```
-//!
-//! # Part 7: Low-Level API (Advanced)
-//!
-//! For cases where you need direct control over RPC operations, RpcNet provides
-//! a low-level API that works with raw bytes and string method names.
-//!
-//! ## Low-Level Server
-//!
-//! ```rust,no_run
-//! use rpcnet::{RpcServer, RpcConfig, RpcError};
-//! use serde::{Serialize, Deserialize};
-//!
-//! #[derive(Serialize, Deserialize)]
-//! struct CalculateRequest { a: i32, b: i32 }
-//!
-//! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let config = RpcConfig::new("cert.pem", "127.0.0.1:8080")
-//!         .with_key_path("key.pem")
-//!         .with_server_name("localhost");
-//!
-//!     let mut server = RpcServer::new(config);
-//!
-//!     // Register method with string name and raw bytes
-//!     server.register("calculate", |params| async move {
-//!         let request: CalculateRequest = bincode::deserialize(&params)
-//!             .map_err(RpcError::SerializationError)?;
-//!         
-//!         let result = request.a + request.b;
-//!         Ok(bincode::serialize(&result)?)
-//!     }).await;
-//!
-//!     let quic_server = server.bind()?;
-//!     server.start(quic_server).await?;
-//!     Ok(())
-//! }
-//! ```
-//!
-//! ## Low-Level Client
-//!
-//! ```rust,no_run
-//! use rpcnet::{RpcClient, RpcConfig};
-//! use serde::{Serialize, Deserialize};
-//! use std::net::SocketAddr;
-//!
-//! #[derive(Serialize, Deserialize)]
-//! struct CalculateRequest { a: i32, b: i32 }
-//!
-//! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let config = RpcConfig::new("cert.pem", "127.0.0.1:0")
-//!         .with_server_name("localhost");
-//!     
-//!     let server_addr: SocketAddr = "127.0.0.1:8080".parse()?;
-//!     let client = RpcClient::connect(server_addr, config).await?;
-//!     
-//!     // Manual serialization and method name
-//!     let request = CalculateRequest { a: 10, b: 20 };
-//!     let params = bincode::serialize(&request)?;
-//!     let response = client.call("calculate", params).await?;
-//!     let result: i32 = bincode::deserialize(&response)?;
-//!     
-//!     println!("Result: {}", result);
-//!     Ok(())
-//! }
-//! ```
-//!
-//! ## When to Use Low-Level API
-//!
-//! Consider the low-level API when you need:
-//! - Dynamic method dispatch at runtime
-//! - Custom serialization formats
-//! - Integration with existing non-Rust systems  
-//! - Maximum control over the RPC protocol
-//!
-//! For most use cases, the generated code approach is recommended for its
-//! type safety, maintainability, and ease of use.
-//!
-//! ## Quick Start
-//!
-//! ### Setting up a Server
-//!
-//! ```rust,no_run
-//! use rpcnet::{RpcServer, RpcConfig, RpcError};
-//! use serde::{Serialize, Deserialize};
-//!
-//! #[derive(Serialize, Deserialize)]
-//! struct CalculateRequest {
-//!     a: i32,
-//!     b: i32,
-//! }
-//!
-//! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Configure the server with TLS certificates
-//!     let config = RpcConfig::new("cert.pem", "127.0.0.1:8080")
-//!         .with_key_path("key.pem")
-//!         .with_server_name("localhost");
-//!
-//!     let mut server = RpcServer::new(config);
-//!
-//!     // Register an RPC method handler
-//!     server.register("calculate", |params| async move {
-//!         let request: CalculateRequest = bincode::deserialize(&params)
-//!             .map_err(RpcError::SerializationError)?;
-//!         
-//!         let result = request.a + request.b;
-//!         Ok(bincode::serialize(&result)?)
-//!     }).await;
-//!
-//!     // Start the server
-//!     let quic_server = server.bind()?;
-//!     server.start(quic_server).await?;
-//!     Ok(())
-//! }
-//! ```
-//!
-//! ### Connecting a Client
-//!
-//! ```rust,no_run
-//! use rpcnet::{RpcClient, RpcConfig};
-//! use serde::{Serialize, Deserialize};
-//! use std::net::SocketAddr;
-//!
-//! #[derive(Serialize, Deserialize)]
-//! struct CalculateRequest { a: i32, b: i32 }
-//!
-//! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let config = RpcConfig::new("cert.pem", "127.0.0.1:0")
-//!         .with_server_name("localhost");
-//!
-//!     let server_addr: SocketAddr = "127.0.0.1:8080".parse()?;
-//!     let client = RpcClient::connect(server_addr, config).await?;
-//!
-//!     // Prepare request data
-//!     let request = CalculateRequest { a: 10, b: 20 };
-//!     let params = bincode::serialize(&request)?;
-//!
-//!     // Make the RPC call
-//!     let response = client.call("calculate", params).await?;
-//!     let result: i32 = bincode::deserialize(&response)?;
-//!     
-//!     println!("Result: {}", result); // Result: 30
-//!     Ok(())
-//! }
-//! ```
-//!
-//! ## Architecture
-//!
-//! The library follows a straightforward client-server architecture:
-//!
-//! - **RpcServer**: Accepts incoming QUIC connections and dispatches RPC calls to registered handlers
-//! - **RpcClient**: Connects to servers and makes RPC calls over QUIC streams  
-//! - **RpcConfig**: Manages TLS certificates, network addresses, and connection parameters
-//! - **Handler Functions**: Async closures that process RPC requests and return responses
-//!
-//! Each RPC call uses its own bidirectional QUIC stream, providing natural isolation
-//! and allowing concurrent operations without blocking. The underlying QUIC connection
-//! handles multiplexing, flow control, and network-level optimizations automatically.
-//!
-//! ## Error Handling
-//!
-//! rpcnet provides comprehensive error handling through the [`RpcError`] enum, covering
-//! common scenarios like network failures, timeouts, serialization issues, and
-//! configuration problems. All operations return Results that should be properly
-//! handled in production code.
-//!
-//! ## Security Considerations
-//!
-//! - TLS certificates must be properly configured for secure communication
-//! - Certificate validation ensures clients connect to trusted servers
-//! - Consider certificate rotation and management in production deployments
-//! - Network-level security (firewalls, VPNs) may be needed depending on deployment
-
-use bytes::BytesMut;
+use async_trait::async_trait;
+use bytes::{Bytes, BytesMut};
 use futures::{Stream, StreamExt};
-use s2n_quic::{Client, client::Connect};
+use s2n_quic::{client::Connect, connection::Connection as QuicConnection, Client};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    fs,
     future::Future,
     net::SocketAddr,
+    path::Path,
     path::PathBuf,
     pin::Pin,
     sync::{
-        Arc,
         atomic::{AtomicU64, Ordering},
+        Arc,
     },
     time::Duration,
 };
 use thiserror::Error;
-use tokio::sync::RwLock;
+use tokio::{
+    sync::{oneshot, RwLock},
+    task::JoinHandle,
+};
+
+pub mod runtime {
+    //! Helpers for configuring Tokio runtimes.
+    use std::{env, thread};
+
+    /// Environment variable that controls the number of server worker threads.
+    pub const SERVER_THREADS_ENV: &str = "RPCNET_SERVER_THREADS";
+
+    /// Returns the worker thread count derived from [`SERVER_THREADS_ENV`],
+    /// falling back to the number of available CPU threads.
+    pub fn server_worker_threads() -> usize {
+        threads_from_env(SERVER_THREADS_ENV).unwrap_or_else(default_worker_threads)
+    }
+
+    /// Parses an environment variable as a positive worker-thread count.
+    pub fn threads_from_env(key: &str) -> Option<usize> {
+        let raw = env::var(key).ok()?;
+        parse_threads(&raw)
+    }
+
+    fn default_worker_threads() -> usize {
+        thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+    }
+
+    fn parse_threads(raw: &str) -> Option<usize> {
+        let value = raw.trim().parse::<usize>().ok()?;
+        (value > 0).then_some(value)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn parse_threads_rejects_invalid_values() {
+            assert_eq!(parse_threads("0"), None);
+            assert_eq!(parse_threads("-1"), None);
+            assert_eq!(parse_threads("abc"), None);
+        }
+
+        #[test]
+        fn parse_threads_accepts_positive_values() {
+            assert_eq!(parse_threads("8"), Some(8));
+            assert_eq!(parse_threads(" 4 "), Some(4));
+        }
+    }
+}
 
 // Code generation module
 #[cfg(feature = "codegen")]
 pub mod codegen;
+pub mod migration;
 
-/// Default timeout duration for RPC operations.
-/// 
-/// In production builds, RPC calls will timeout after 30 seconds if no response
-/// is received. This provides a reasonable balance between allowing complex
-/// operations to complete while preventing indefinite hangs.
-/// 
-/// In test builds, the timeout is reduced to 2 seconds to make test execution
-/// faster and detect timeout scenarios quickly.
 #[cfg(not(test))]
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Default timeout duration for RPC operations in tests.
-/// 
-/// Shortened timeout for faster test execution and reliable timeout testing.
 #[cfg(test)]
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(2);
 
-/// Comprehensive error type for all RPC operations.
-///
-/// This enum covers all possible error conditions that can occur during RPC
-/// communication, from network-level failures to application-level issues.
-/// Each variant provides detailed context to help with debugging and error
-/// handling in production systems.
-///
-/// # Examples
-///
-/// ```rust
-/// use rpcnet::RpcError;
-///
-/// // Network-related errors
-/// let conn_err = RpcError::ConnectionError("Server unreachable".to_string());
-/// let timeout_err = RpcError::Timeout;
-///
-/// // Configuration errors  
-/// let config_err = RpcError::ConfigError("Invalid certificate path".to_string());
-///
-/// // Application errors
-/// let method_err = RpcError::UnknownMethod("calculate_advanced".to_string());
-/// ```
 #[derive(Debug, Error)]
 pub enum RpcError {
-    /// Network connection failed or was lost.
-    ///
-    /// This occurs when the QUIC connection cannot be established or is
-    /// unexpectedly closed. Common causes include network outages, server
-    /// unavailability, or firewall blocking.
     #[error("Connection error: {0}")]
     ConnectionError(String),
 
-    /// QUIC stream operation failed.
-    ///
-    /// Individual streams within a QUIC connection can fail independently.
-    /// This includes stream creation failures, send/receive errors, and
-    /// stream closure issues. The connection may still be valid.
     #[error("Stream error: {0}")]
     StreamError(String),
 
-    /// TLS handshake or certificate validation failed.
-    ///
-    /// This indicates problems with TLS setup, certificate verification,
-    /// or cryptographic operations. Check certificate paths, validity,
-    /// and server name configuration.
     #[error("TLS error: {0}")]
     TlsError(String),
 
-    /// Binary serialization or deserialization failed.
-    ///
-    /// This occurs when request/response data cannot be properly encoded
-    /// or decoded using bincode. Usually indicates type mismatches between
-    /// client and server or corrupted data.
     #[error("Serialization error: {0}")]
     SerializationError(#[from] bincode::Error),
 
-    /// RPC operation exceeded the configured timeout.
-    ///
-    /// The server did not respond within the [`DEFAULT_TIMEOUT`] period.
-    /// This could indicate server overload, network delays, or long-running
-    /// operations that need timeout adjustments.
     #[error("Request timeout")]
     Timeout,
 
-    /// Server does not have a handler for the requested method.
-    ///
-    /// The method name in the RPC call does not match any registered
-    /// handler on the server. Check method names for typos and ensure
-    /// all required handlers are properly registered.
     #[error("Unknown method: {0}")]
     UnknownMethod(String),
 
-    /// Configuration parameter is invalid or missing.
-    ///
-    /// This includes invalid file paths, malformed addresses, missing
-    /// certificates, or other configuration issues that prevent proper
-    /// initialization of the RPC system.
     #[error("Configuration error: {0}")]
     ConfigError(String),
 
-    /// Underlying I/O operation failed.
-    ///
-    /// File system operations, network socket operations, or other
-    /// system-level I/O failed. Check file permissions, disk space,
-    /// and system resource availability.
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 }
 
-/// Internal RPC request structure.
-///
-/// This structure represents an RPC call being sent from client to server.
-/// It contains all the necessary information to identify, route, and process
-/// the request. The structure is serialized using bincode for efficient
-/// network transmission.
-///
-/// You typically don't need to create these directly - the [`RpcClient`]
-/// handles request creation automatically when you call [`RpcClient::call`].
-///
-/// # Fields
-///
-/// - `id`: Unique identifier for request/response matching
-/// - `method`: Name of the RPC method to invoke  
-/// - `params`: Serialized parameters for the method call
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RpcRequest {
     id: u64,
@@ -795,58 +118,23 @@ pub struct RpcRequest {
 }
 
 impl RpcRequest {
-    /// Creates a new RPC request.
-    ///
-    /// This is primarily used internally by the client. The `id` should be
-    /// unique per connection to enable proper request/response matching.
-    ///
-    /// # Parameters
-    ///
-    /// - `id`: Unique request identifier
-    /// - `method`: Name of the remote method to call
-    /// - `params`: Serialized parameters for the method
     pub fn new(id: u64, method: String, params: Vec<u8>) -> Self {
         Self { id, method, params }
     }
 
-    /// Returns the request ID.
-    ///
-    /// Used for matching responses to requests in concurrent scenarios.
     pub fn id(&self) -> u64 {
         self.id
     }
 
-    /// Returns the method name.
-    ///
-    /// This is used by the server to route the request to the appropriate handler.
     pub fn method(&self) -> &str {
         &self.method
     }
 
-    /// Returns the serialized parameters.
-    ///
-    /// These are the binary-encoded parameters that will be passed to
-    /// the handler function on the server side.
     pub fn params(&self) -> &[u8] {
         &self.params
     }
 }
 
-/// Internal RPC response structure.
-///
-/// This structure represents the response sent from server back to client
-/// after processing an RPC request. It contains either successful result data
-/// or error information, but never both.
-///
-/// Like [`RpcRequest`], you typically don't create these directly - the
-/// server framework handles response creation and the client automatically
-/// processes responses when calling [`RpcClient::call`].
-///
-/// # Fields
-///
-/// - `id`: Request ID this response corresponds to
-/// - `result`: Successful response data (mutually exclusive with error)
-/// - `error`: Error message if the operation failed
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RpcResponse {
     id: u64,
@@ -855,29 +143,10 @@ pub struct RpcResponse {
 }
 
 impl RpcResponse {
-    /// Creates a new RPC response.
-    ///
-    /// Either `result` or `error` should be provided, but not both.
-    /// This is used internally by the server framework.
-    ///
-    /// # Parameters
-    ///
-    /// - `id`: Request ID this response corresponds to
-    /// - `result`: Successful response data, if any
-    /// - `error`: Error message, if the operation failed
     pub fn new(id: u64, result: Option<Vec<u8>>, error: Option<String>) -> Self {
         Self { id, result, error }
     }
 
-    /// Creates a response from a Result.
-    ///
-    /// This is a convenience method that converts a standard Rust Result
-    /// into the appropriate RpcResponse with either success data or error message.
-    ///
-    /// # Parameters
-    ///
-    /// - `id`: Request ID this response corresponds to
-    /// - `result`: Result from handler execution
     pub fn from_result(id: u64, result: Result<Vec<u8>, RpcError>) -> Self {
         match result {
             Ok(data) => Self::new(id, Some(data), None),
@@ -885,108 +154,33 @@ impl RpcResponse {
         }
     }
 
-    /// Returns the request ID this response corresponds to.
     pub fn id(&self) -> u64 {
         self.id
     }
 
-    /// Returns the successful result data, if any.
-    ///
-    /// This will be `None` if the operation failed or returned an error.
     pub fn result(&self) -> Option<&Vec<u8>> {
         self.result.as_ref()
     }
 
-    /// Returns the error message, if any.
-    ///
-    /// This will be `None` if the operation succeeded.
     pub fn error(&self) -> Option<&String> {
         self.error.as_ref()
     }
 }
 
-/// Configuration for RPC client and server connections.
-///
-/// This structure holds all the necessary configuration parameters for establishing
-/// secure QUIC connections. It uses a builder pattern for convenient configuration
-/// and supports both client and server use cases.
-///
-/// # TLS Configuration
-///
-/// Both client and server require TLS certificates for secure communication:
-/// - **Server**: Requires both certificate (`cert_path`) and private key (`key_path`)
-/// - **Client**: Only requires the certificate for server verification
-///
-/// # Examples
-///
-/// ```rust
-/// use rpcnet::RpcConfig;
-/// use std::time::Duration;
-///
-/// // Basic server configuration
-/// let server_config = RpcConfig::new("server.pem", "127.0.0.1:8080")
-///     .with_key_path("server-key.pem")
-///     .with_server_name("myapp.example.com");
-///
-/// // Client configuration with custom keep-alive
-/// let client_config = RpcConfig::new("ca-cert.pem", "127.0.0.1:0")
-///     .with_server_name("myapp.example.com")
-///     .with_keep_alive_interval(Duration::from_secs(60));
-/// ```
 #[derive(Debug, Clone)]
 pub struct RpcConfig {
-    /// Path to the TLS certificate file.
-    /// 
-    /// For servers, this is their own certificate that clients will verify.
-    /// For clients, this is typically the CA certificate or server certificate
-    /// used to verify the server's identity.
     pub cert_path: PathBuf,
-    
-    /// Path to the private key file (required for servers).
-    /// 
-    /// This should correspond to the certificate in `cert_path`. Clients
-    /// typically don't need to set this unless using client certificates.
+
     pub key_path: Option<PathBuf>,
-    
-    /// Server name for TLS verification.
-    /// 
-    /// This must match the common name or subject alternative name in the
-    /// server's certificate. Used by clients to verify server identity.
+
     pub server_name: String,
-    
-    /// Network address to bind to (servers) or connect from (clients).
-    /// 
-    /// For servers, this specifies the interface and port to listen on.
-    /// For clients, use "127.0.0.1:0" to bind to any available local port.
+
     pub bind_address: String,
-    
-    /// Keep-alive interval for QUIC connections.
-    /// 
-    /// If set, enables periodic keep-alive packets to maintain connection
-    /// state through NATs and firewalls. Recommended for long-lived connections.
+
     pub keep_alive_interval: Option<Duration>,
 }
 
 impl RpcConfig {
-    /// Creates a new configuration with default settings.
-    ///
-    /// This initializes a configuration with sensible defaults:
-    /// - Server name: "localhost"
-    /// - Keep-alive: 30 seconds
-    /// - No private key (must be set for servers)
-    ///
-    /// # Parameters
-    ///
-    /// - `cert_path`: Path to TLS certificate file
-    /// - `bind_address`: Network address (e.g., "127.0.0.1:8080" for servers, "127.0.0.1:0" for clients)
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use rpcnet::RpcConfig;
-    ///
-    /// let config = RpcConfig::new("cert.pem", "127.0.0.1:8080");
-    /// ```
     pub fn new<P: Into<PathBuf>>(cert_path: P, bind_address: impl Into<String>) -> Self {
         Self {
             cert_path: cert_path.into(),
@@ -997,209 +191,181 @@ impl RpcConfig {
         }
     }
 
-    /// Sets the private key path (required for servers).
-    ///
-    /// The private key must correspond to the certificate specified in the constructor.
-    /// This is typically required for servers but optional for clients.
-    ///
-    /// # Parameters
-    ///
-    /// - `key_path`: Path to the private key file
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use rpcnet::RpcConfig;
-    ///
-    /// let config = RpcConfig::new("server.pem", "0.0.0.0:8080")
-    ///     .with_key_path("server-key.pem");
-    /// ```
     pub fn with_key_path<P: Into<PathBuf>>(mut self, key_path: P) -> Self {
         self.key_path = Some(key_path.into());
         self
     }
 
-    /// Sets the server name for TLS verification.
-    ///
-    /// This name must match the common name or a subject alternative name
-    /// in the server's certificate. Critical for proper TLS verification.
-    ///
-    /// # Parameters
-    ///
-    /// - `server_name`: Server hostname for TLS verification
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use rpcnet::RpcConfig;
-    ///
-    /// let config = RpcConfig::new("ca-cert.pem", "127.0.0.1:0")
-    ///     .with_server_name("api.myservice.com");
-    /// ```
     pub fn with_server_name(mut self, server_name: impl Into<String>) -> Self {
         self.server_name = server_name.into();
         self
     }
 
-    /// Sets the keep-alive interval for connections.
-    ///
-    /// When set, the QUIC connection will send periodic keep-alive packets
-    /// to maintain connection state through NATs and firewalls. This is
-    /// recommended for long-lived connections.
-    ///
-    /// # Parameters
-    ///
-    /// - `interval`: Time between keep-alive packets
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use rpcnet::RpcConfig;
-    /// use std::time::Duration;
-    ///
-    /// // Keep-alive every 60 seconds
-    /// let config = RpcConfig::new("cert.pem", "127.0.0.1:0")
-    ///     .with_keep_alive_interval(Duration::from_secs(60));
-    ///
-    /// // Disable keep-alive
-    /// let config = RpcConfig::new("cert.pem", "127.0.0.1:0")
-    ///     .with_keep_alive_interval(Duration::ZERO);
-    /// ```
     pub fn with_keep_alive_interval(mut self, interval: Duration) -> Self {
         self.keep_alive_interval = Some(interval);
         self
     }
 }
 
-/// Internal type alias for RPC handler functions.
-///
-/// This represents the boxed async closure type used internally to store
-/// registered RPC handlers. Each handler takes serialized parameters and
-/// returns a future that resolves to either response data or an error.
-///
-/// You don't need to work with this type directly - use the [`RpcServer::register`]
-/// method which accepts regular async closures and handles the boxing automatically.
-///
-/// # Handler Function Signature
-///
-/// ```rust,no_run
-/// # use std::future::Future;
-/// # use rpcnet::RpcError;
-/// # type HandlerFn = Box<dyn
-/// Fn(Vec<u8>) -> Box<dyn Future<Output = Result<Vec<u8>, RpcError>> + Send>
-/// # + Send + Sync>;
-/// ```
-///
-/// Where:
-/// - Input `Vec<u8>`: Serialized request parameters
-/// - Output `Vec<u8>`: Serialized response data  
-/// - `RpcError`: Any error that occurred during processing
 type AsyncHandlerFn = Box<
     dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RpcError>> + Send>>
         + Send
         + Sync,
 >;
 
-/// Type alias for streaming RPC handlers.
-/// 
-/// Streaming handlers receive a stream of request data and return a stream of response data.
-/// This enables bidirectional streaming communication between client and server.
 type AsyncStreamingHandlerFn = Box<
     dyn Fn(
             Pin<Box<dyn Stream<Item = Vec<u8>> + Send>>,
-        ) -> Pin<Box<dyn Future<Output = Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>> + Send>>
-        + Send
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>>
+                    + Send,
+            >,
+        > + Send
         + Sync,
 >;
 
-/// RPC server that handles incoming QUIC connections and dispatches requests.
-///
-/// The server accepts incoming QUIC connections, receives RPC requests over
-/// bidirectional streams, routes them to registered handler functions, and
-/// sends responses back to clients. It supports concurrent request handling
-/// and automatic connection management.
-///
-/// # Architecture
-///
-/// - Each client connection runs in its own task
-/// - Each RPC request uses a dedicated bidirectional QUIC stream
-/// - Handler functions are called asynchronously and concurrently
-/// - Responses are sent back over the same stream used for the request
-///
-/// # Example Usage
-///
-/// ```rust,no_run
-/// use rpcnet::{RpcServer, RpcConfig, RpcError};
-/// use serde::{Serialize, Deserialize};
-///
-/// #[derive(Serialize, Deserialize)]
-/// struct AddRequest { a: i32, b: i32 }
-///
-/// #[tokio::main]
-/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let config = RpcConfig::new("cert.pem", "127.0.0.1:8080")
-///         .with_key_path("key.pem")
-///         .with_server_name("localhost");
-///
-///     let mut server = RpcServer::new(config);
-///
-///     // Register a handler for the "add" method
-///     server.register("add", |params| async move {
-///         let req: AddRequest = bincode::deserialize(&params)
-///             .map_err(RpcError::SerializationError)?;
-///         let result = req.a + req.b;
-///         Ok(bincode::serialize(&result)?)
-///     }).await;
-///
-///     // Start the server (this blocks)
-///     let quic_server = server.bind()?;
-///     server.start(quic_server).await?;
-///     Ok(())
-/// }
-/// ```
 #[derive(Clone)]
 pub struct RpcServer {
-    /// Map of method names to their handler functions.
-    /// 
-    /// Protected by RwLock to allow concurrent reads during request handling
-    /// while still supporting dynamic handler registration.
     pub handlers: Arc<RwLock<HashMap<String, AsyncHandlerFn>>>,
-    
-    /// Map of streaming method names to their streaming handler functions.
-    /// 
-    /// Protected by RwLock to allow concurrent reads during request handling
-    /// while still supporting dynamic handler registration.
+
     pub streaming_handlers: Arc<RwLock<HashMap<String, AsyncStreamingHandlerFn>>>,
-    
-    /// The local socket address the server is bound to, if any.
-    /// 
-    /// This is populated when [`bind`](RpcServer::bind) is called and can be
-    /// used to discover the actual port when binding to port 0.
+
     pub socket_addr: Option<SocketAddr>,
-    
-    /// Server configuration including TLS settings and network parameters.
+
     pub config: RpcConfig,
 }
 
+#[derive(Debug)]
+pub enum ConnectionDriveOutcome {
+    /// The client closed the connection while being served by the current worker.
+    ConnectionClosed,
+    /// The worker was asked to hand off the live connection to another worker.
+    HandoffReady(QuicConnection),
+}
+
+#[async_trait]
+pub(crate) trait QuicStreamAdapter: Send {
+    async fn send_bytes(&mut self, data: Bytes) -> Result<(), RpcError>;
+    async fn receive_bytes(&mut self) -> Result<Option<Bytes>, RpcError>;
+}
+
+#[async_trait]
+impl QuicStreamAdapter for s2n_quic::stream::BidirectionalStream {
+    async fn send_bytes(&mut self, data: Bytes) -> Result<(), RpcError> {
+        self.send(data)
+            .await
+            .map_err(|err| RpcError::StreamError(err.to_string()))
+    }
+
+    async fn receive_bytes(&mut self) -> Result<Option<Bytes>, RpcError> {
+        self.receive()
+            .await
+            .map_err(|err| RpcError::StreamError(err.to_string()))
+    }
+}
+
+#[async_trait]
+impl<T> QuicStreamAdapter for Box<T>
+where
+    T: QuicStreamAdapter + ?Sized,
+{
+    async fn send_bytes(&mut self, data: Bytes) -> Result<(), RpcError> {
+        (**self).send_bytes(data).await
+    }
+
+    async fn receive_bytes(&mut self) -> Result<Option<Bytes>, RpcError> {
+        (**self).receive_bytes().await
+    }
+}
+
+#[async_trait]
+pub(crate) trait QuicConnectionAdapter: Send + Sync {
+    async fn open_bidirectional_stream(
+        &mut self,
+    ) -> Result<Box<dyn QuicStreamAdapter + Send>, RpcError>;
+}
+
+pub(crate) struct RealConnectionAdapter {
+    inner: s2n_quic::Connection,
+}
+
+impl RealConnectionAdapter {
+    fn new(inner: s2n_quic::Connection) -> Self {
+        Self { inner }
+    }
+}
+
+#[async_trait]
+impl QuicConnectionAdapter for RealConnectionAdapter {
+    async fn open_bidirectional_stream(
+        &mut self,
+    ) -> Result<Box<dyn QuicStreamAdapter + Send>, RpcError> {
+        let stream = self
+            .inner
+            .open_bidirectional_stream()
+            .await
+            .map_err(|e| RpcError::StreamError(e.to_string()))?;
+        Ok(Box::new(stream))
+    }
+}
+
+#[async_trait]
+pub(crate) trait QuicServerConnectionAdapter: Send {
+    async fn accept_bidirectional_stream(
+        &mut self,
+    ) -> Result<Option<Box<dyn QuicStreamAdapter + Send>>, RpcError>;
+}
+
+pub(crate) struct RealServerConnectionAdapter {
+    inner: s2n_quic::connection::Connection,
+}
+
+impl RealServerConnectionAdapter {
+    fn new(inner: s2n_quic::connection::Connection) -> Self {
+        Self { inner }
+    }
+}
+
+#[async_trait]
+impl QuicServerConnectionAdapter for RealServerConnectionAdapter {
+    async fn accept_bidirectional_stream(
+        &mut self,
+    ) -> Result<Option<Box<dyn QuicStreamAdapter + Send>>, RpcError> {
+        match self.inner.accept_bidirectional_stream().await {
+            Ok(Some(stream)) => Ok(Some(Box::new(stream))),
+            Ok(None) => Ok(None),
+            Err(e) => Err(RpcError::StreamError(e.to_string())),
+        }
+    }
+}
+
+#[async_trait]
+pub(crate) trait QuicServerAdapter: Send {
+    async fn accept(&mut self) -> Option<Box<dyn QuicServerConnectionAdapter>>;
+}
+
+pub(crate) struct RealServerAdapter {
+    inner: s2n_quic::Server,
+}
+
+impl RealServerAdapter {
+    fn new(inner: s2n_quic::Server) -> Self {
+        Self { inner }
+    }
+}
+
+#[async_trait]
+impl QuicServerAdapter for RealServerAdapter {
+    async fn accept(&mut self) -> Option<Box<dyn QuicServerConnectionAdapter>> {
+        self.inner
+            .accept()
+            .await
+            .map(|connection| Box::new(RealServerConnectionAdapter::new(connection)) as _)
+    }
+}
+
 impl RpcServer {
-    /// Creates a new RPC server with the given configuration.
-    ///
-    /// The server starts with no registered handlers. You must register at least
-    /// one handler using [`register`](RpcServer::register) before starting the server.
-    ///
-    /// # Parameters
-    ///
-    /// - `config`: Server configuration including TLS certificates and network settings
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use rpcnet::{RpcServer, RpcConfig};
-    ///
-    /// let config = RpcConfig::new("cert.pem", "127.0.0.1:8080")
-    ///     .with_key_path("key.pem");
-    /// let server = RpcServer::new(config);
-    /// ```
     pub fn new(config: RpcConfig) -> Self {
         Self {
             handlers: Arc::new(RwLock::new(HashMap::new())),
@@ -1209,62 +375,6 @@ impl RpcServer {
         }
     }
 
-    /// Registers an async RPC method handler.
-    ///
-    /// This method allows you to register a handler function for a specific RPC method name.
-    /// The handler receives the raw serialized parameters and must return serialized response data.
-    /// Multiple handlers can be registered for different methods.
-    ///
-    /// # Handler Function Requirements
-    ///
-    /// - Must be `Send + Sync + 'static` for thread safety
-    /// - Takes `Vec<u8>` (serialized parameters) as input
-    /// - Returns a Future that resolves to `Result<Vec<u8>, RpcError>`
-    /// - Should handle deserialization of input and serialization of output
-    ///
-    /// # Parameters
-    ///
-    /// - `method`: The RPC method name that clients will call
-    /// - `handler`: Async function that processes requests for this method
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use rpcnet::{RpcServer, RpcConfig, RpcError};
-    /// use serde::{Serialize, Deserialize};
-    ///
-    /// #[derive(Serialize, Deserialize)]
-    /// struct EchoRequest { message: String }
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let config = RpcConfig::new("cert.pem", "127.0.0.1:8080")
-    ///     .with_key_path("key.pem");
-    /// let server = RpcServer::new(config);
-    ///
-    /// // Register an echo handler
-    /// server.register("echo", |params| async move {
-    ///     let request: EchoRequest = bincode::deserialize(&params)
-    ///         .map_err(RpcError::SerializationError)?;
-    ///     
-    ///     println!("Echoing: {}", request.message);
-    ///     Ok(bincode::serialize(&request.message)?)
-    /// }).await;
-    ///
-    /// // Register a handler that can fail
-    /// server.register("divide", |params| async move {
-    ///     let (a, b): (f64, f64) = bincode::deserialize(&params)
-    ///         .map_err(RpcError::SerializationError)?;
-    ///     
-    ///     if b == 0.0 {
-    ///         return Err(RpcError::StreamError("Division by zero".to_string()));
-    ///     }
-    ///     
-    ///     Ok(bincode::serialize(&(a / b))?)
-    /// }).await;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn register<F, Fut>(&self, method: &str, handler: F)
     where
         F: Fn(Vec<u8>) -> Fut + Send + Sync + 'static,
@@ -1279,55 +389,6 @@ impl RpcServer {
         );
     }
 
-    /// Registers a streaming RPC method handler.
-    ///
-    /// This method allows you to register a handler function for streaming RPC operations.
-    /// Streaming handlers receive a stream of requests and return a stream of responses,
-    /// enabling efficient bulk operations and real-time communication.
-    ///
-    /// # Parameters
-    ///
-    /// - `method`: The name of the RPC method to handle (e.g., "stream_process")
-    /// - `handler`: An async function that takes a request stream and returns a response stream
-    ///
-    /// # Handler Function Signature
-    ///
-    /// The handler function should have the signature:
-    /// ```rust,no_run
-    /// # use futures::Stream;
-    /// # use rpcnet::RpcError;
-    /// # use std::pin::Pin;
-    /// # type StreamHandler = Box<dyn
-    /// # Fn(Pin<Box<dyn Stream<Item = Vec<u8>> + Send>>) 
-    /// #     -> Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>
-    /// # >;
-    /// ```
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use rpcnet::{RpcServer, RpcConfig, RpcError};
-    /// use futures::{Stream, StreamExt, stream};
-    /// use async_stream::stream;
-    ///
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let config = RpcConfig::new("cert.pem", "127.0.0.1:8080")
-    ///     .with_key_path("key.pem");
-    /// let server = RpcServer::new(config);
-    ///
-    /// // Register a streaming echo handler
-    /// server.register_streaming("echo_stream", |request_stream| async move {
-    ///     let mut request_stream = request_stream;
-    ///     Box::pin(stream! {
-    ///         while let Some(data) = request_stream.next().await {
-    ///             // Echo each request back
-    ///             yield Ok(data);
-    ///         }
-    ///     }) as std::pin::Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>
-    /// }).await;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn register_streaming<F, Fut, S>(&self, method: &str, handler: F)
     where
         F: Fn(Pin<Box<dyn Stream<Item = Vec<u8>> + Send>>) -> Fut + Send + Sync + Clone + 'static,
@@ -1341,152 +402,190 @@ impl RpcServer {
                 let handler = handler.clone();
                 Box::pin(async move {
                     let response_stream = handler(request_stream).await;
-                    Box::pin(response_stream) as Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>
+                    Box::pin(response_stream)
+                        as Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>
                 })
             }),
         );
     }
 
-    /// Starts the server and begins accepting client connections.
-    ///
-    /// This method runs the main server loop, accepting incoming QUIC connections
-    /// and spawning tasks to handle each client. It will block indefinitely until
-    /// the server is shut down or an unrecoverable error occurs.
-    ///
-    /// # Server Operation
-    ///
-    /// 1. Accepts new QUIC connections from clients
-    /// 2. For each connection, spawns a task to handle all streams from that client
-    /// 3. For each stream, spawns another task to handle the individual RPC request
-    /// 4. Routes requests to the appropriate registered handlers
-    /// 5. Sends responses back over the same stream
-    ///
-    /// # Parameters
-    ///
-    /// - `server`: The bound QUIC server from [`bind`](RpcServer::bind)
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use rpcnet::{RpcServer, RpcConfig};
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let config = RpcConfig::new("cert.pem", "127.0.0.1:8080")
-    ///     .with_key_path("key.pem");
-    /// let mut server = RpcServer::new(config);
-    ///
-    /// // Register handlers first
-    /// server.register("ping", |_| async move {
-    ///     Ok(b"pong".to_vec())
-    /// }).await;
-    ///
-    /// // Bind and start the server
-    /// let quic_server = server.bind()?;
-    /// println!("Server listening on: {:?}", server.socket_addr);
-    /// 
-    /// // This blocks until the server is shutdown
-    /// server.start(quic_server).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn start(&mut self, mut server: s2n_quic::Server) -> Result<(), RpcError> {
+    pub async fn start(&mut self, server: s2n_quic::Server) -> Result<(), RpcError> {
+        let mut adapter = RealServerAdapter::new(server);
+        self.start_with_adapter(&mut adapter).await
+    }
 
+    async fn start_with_adapter<A>(&mut self, server: &mut A) -> Result<(), RpcError>
+    where
+        A: QuicServerAdapter,
+    {
         while let Some(mut connection) = server.accept().await {
             let handlers = self.handlers.clone();
             let streaming_handlers = self.streaming_handlers.clone();
-            
+
             tokio::spawn(async move {
                 // For each accepted connection, keep accepting streams:
-                while let Ok(Some(mut stream)) = connection.accept_bidirectional_stream().await {
+                while let Ok(Some(stream)) = connection.accept_bidirectional_stream().await {
                     let handlers = handlers.clone();
                     let streaming_handlers = streaming_handlers.clone();
-                    
-                    tokio::spawn(async move {
-                        let mut request_data = Vec::with_capacity(8192);
-                        
-                        while let Ok(Some(data)) = stream.receive().await {
-                            request_data.extend_from_slice(&data);
-                            
-                            // First, try to parse as regular RPC request (original behavior)
-                            if let Ok(request) = bincode::deserialize::<RpcRequest>(&request_data) {
-                                let handlers = handlers.read().await;
-                                let response = match handlers.get(request.method()) {
-                                    Some(handler) => {
-                                        let result = handler(request.params().to_vec()).await;
-                                        RpcResponse::from_result(request.id(), result)
-                                    }
-                                    None => RpcResponse::new(
-                                        request.id(),
-                                        None,
-                                        Some(format!("Unknown method: {}", request.method())),
-                                    ),
-                                };
-                                if let Ok(response_data) = bincode::serialize(&response) {
-                                    let _ = stream.send(response_data.into()).await;
-                                }
-                                break; // Handle one request per stream
-                            }
-                            
-                            // If regular RPC parsing fails and we have enough data, check for streaming protocol
-                            if request_data.len() >= 4 {
-                                let method_len = u32::from_le_bytes([
-                                    request_data[0], request_data[1], request_data[2], request_data[3]
-                                ]) as usize;
-                                
-                                // Validate method length is reasonable (prevent huge allocations)
-                                if method_len > 0 && method_len < 1024 && request_data.len() >= 4 + method_len {
-                                    if let Ok(method_name) = std::str::from_utf8(&request_data[4..4 + method_len]) {
-                                        // Check if this is a known streaming method
-                                        let streaming_handlers_ref = streaming_handlers.read().await;
-                                        if streaming_handlers_ref.contains_key(method_name) {
-                                            // This is a streaming request - handle it differently
-                                            drop(streaming_handlers_ref); // Release the read lock
-                                            
-                                            // Create stream with remaining data after method name
-                                            let remaining_data = request_data[4 + method_len..].to_owned();
-                                            let stream_arc = std::sync::Arc::new(tokio::sync::Mutex::new(stream));
-                                            let request_stream = Self::create_request_stream_with_initial_data(stream_arc.clone(), remaining_data);
-                                            
-                                            let streaming_handlers_ref = streaming_handlers.read().await;
-                                            if let Some(handler) = streaming_handlers_ref.get(method_name) {
-                                                let response_stream = handler(request_stream).await;
-                                                Self::send_response_stream(stream_arc, response_stream).await;
-                                            }
-                                            return; // Exit properly instead of break
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
+
+                    tokio::spawn(Self::handle_stream(handlers, streaming_handlers, stream));
                 }
             });
         }
 
         Ok(())
     }
-    
-    /// Creates a stream of incoming requests from the QUIC stream with initial data.
-    fn create_request_stream_with_initial_data(
-        stream: std::sync::Arc<tokio::sync::Mutex<s2n_quic::stream::BidirectionalStream>>, 
-        initial_data: Vec<u8>
-    ) -> Pin<Box<dyn Stream<Item = Vec<u8>> + Send>> {
-        Box::pin(
-        async_stream::stream! {
+
+    async fn handle_stream(
+        handlers: Arc<RwLock<HashMap<String, AsyncHandlerFn>>>,
+        streaming_handlers: Arc<RwLock<HashMap<String, AsyncStreamingHandlerFn>>>,
+        stream: Box<dyn QuicStreamAdapter + Send>,
+    ) {
+        let stream = Arc::new(tokio::sync::Mutex::new(stream));
+        let mut request_data = Vec::with_capacity(8192);
+
+        loop {
+            let chunk = {
+                let mut stream_guard = stream.lock().await;
+                stream_guard.receive_bytes().await
+            };
+
+            let chunk = match chunk {
+                Ok(Some(bytes)) => bytes,
+                _ => break,
+            };
+
+            request_data.extend_from_slice(&chunk);
+
+            // First, try to parse as regular RPC request (original behavior)
+            if let Ok(request) = bincode::deserialize::<RpcRequest>(&request_data) {
+                let handlers = handlers.read().await;
+                let response = match handlers.get(request.method()) {
+                    Some(handler) => {
+                        let result = handler(request.params().to_vec()).await;
+                        RpcResponse::from_result(request.id(), result)
+                    }
+                    None => RpcResponse::new(
+                        request.id(),
+                        None,
+                        Some(format!("Unknown method: {}", request.method())),
+                    ),
+                };
+                if let Ok(response_data) = bincode::serialize(&response) {
+                    let mut stream_guard = stream.lock().await;
+                    let _ = stream_guard.send_bytes(Bytes::from(response_data)).await;
+                }
+                break; // Handle one request per stream
+            }
+
+            // If regular RPC parsing fails and we have enough data, check for streaming protocol
+            if request_data.len() >= 4 {
+                let method_len = u32::from_le_bytes([
+                    request_data[0],
+                    request_data[1],
+                    request_data[2],
+                    request_data[3],
+                ]) as usize;
+
+                // Validate method length is reasonable (prevent huge allocations)
+                if method_len > 0 && method_len < 1024 && request_data.len() >= 4 + method_len {
+                    if let Ok(method_name) = std::str::from_utf8(&request_data[4..4 + method_len]) {
+                        // Check if this is a known streaming method
+                        let streaming_handlers_ref = streaming_handlers.read().await;
+                        if streaming_handlers_ref.contains_key(method_name) {
+                            drop(streaming_handlers_ref); // Release the read lock
+
+                            // Create stream with remaining data after method name
+                            let remaining_data = request_data[4 + method_len..].to_owned();
+                            let stream_arc = stream.clone();
+                            let request_stream = Self::create_request_stream_with_initial_data(
+                                stream_arc.clone(),
+                                remaining_data,
+                            );
+
+                            let streaming_handlers_ref = streaming_handlers.read().await;
+                            if let Some(handler) = streaming_handlers_ref.get(method_name) {
+                                let response_stream = handler(request_stream).await;
+                                Self::send_response_stream(stream_arc, response_stream).await;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Drives an existing QUIC connection until it is either closed by the client
+    /// or a shutdown signal requests that it be handed off to another worker.
+    pub async fn drive_connection(
+        &self,
+        mut connection: QuicConnection,
+        mut shutdown: oneshot::Receiver<()>,
+    ) -> Result<ConnectionDriveOutcome, RpcError> {
+        let handlers = self.handlers.clone();
+        let streaming_handlers = self.streaming_handlers.clone();
+        let mut stream_tasks: Vec<JoinHandle<()>> = Vec::new();
+
+        loop {
+            tokio::select! {
+                _ = &mut shutdown => {
+                    for task in stream_tasks {
+                        task.abort();
+                    }
+                    return Ok(ConnectionDriveOutcome::HandoffReady(connection));
+                }
+                accept_result = connection.accept_bidirectional_stream() => {
+                    match accept_result {
+                        Ok(Some(stream)) => {
+                            let handlers = handlers.clone();
+                            let streaming_handlers = streaming_handlers.clone();
+                            let task = tokio::spawn(Self::handle_stream(
+                                handlers,
+                                streaming_handlers,
+                                Box::new(stream) as Box<dyn QuicStreamAdapter + Send>,
+                            ));
+                            stream_tasks.push(task);
+                        }
+                        Ok(None) => {
+                            for task in stream_tasks {
+                                let _ = task.await;
+                            }
+                            return Ok(ConnectionDriveOutcome::ConnectionClosed);
+                        }
+                        Err(err) => {
+                            for task in stream_tasks {
+                                task.abort();
+                            }
+                            return Err(RpcError::StreamError(err.to_string()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn create_request_stream_with_initial_data<S>(
+        stream: Arc<tokio::sync::Mutex<S>>,
+        initial_data: Vec<u8>,
+    ) -> Pin<Box<dyn Stream<Item = Vec<u8>> + Send>>
+    where
+        S: QuicStreamAdapter + 'static,
+    {
+        Box::pin(async_stream::stream! {
             let mut buffer = BytesMut::with_capacity(8192 + initial_data.len());
             buffer.extend_from_slice(&initial_data);
-            
+
             loop {
                 // First try to parse any complete messages from existing buffer
                 while buffer.len() >= 4 {
                     let len = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]) as usize;
-                    
+
                     if len == 0 {
                         // End of stream marker
                         return;
                     }
-                    
+
                     if buffer.len() >= 4 + len {
                         // We have a complete message
                         let message_data = buffer.split_to(4 + len);
@@ -1497,77 +596,86 @@ impl RpcServer {
                         break;
                     }
                 }
-                
+
                 // If we need more data, receive from stream
                 let chunk = {
                     let mut stream_guard = stream.lock().await;
-                    stream_guard.receive().await
+                    stream_guard.receive_bytes().await
                 };
-                
-                if let Ok(Some(chunk)) = chunk {
-                    buffer.extend_from_slice(&chunk);
-                } else {
-                    // Connection closed or error
-                    break;
-                }
-            }
-        }
-        )
-    }
 
-    /// Creates a stream of incoming requests from the QUIC stream.
-    fn create_request_stream(stream: std::sync::Arc<tokio::sync::Mutex<s2n_quic::stream::BidirectionalStream>>) -> Pin<Box<dyn Stream<Item = Vec<u8>> + Send>> {
-        Box::pin(
-        async_stream::stream! {
-            let mut buffer = BytesMut::with_capacity(8192);
-            
-            loop {
-                let chunk = {
-                    let mut stream_guard = stream.lock().await;
-                    stream_guard.receive().await
-                };
-                
-                if let Ok(Some(chunk)) = chunk {
-                buffer.extend_from_slice(&chunk);
-                
-                // Parse length-prefixed messages
-                while buffer.len() >= 4 {
-                    let len = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]) as usize;
-                    
-                    if len == 0 {
-                        // End of stream marker
-                        return;
-                    }
-                    
-                    if buffer.len() >= 4 + len {
-                        // We have a complete message
-                        let message_data = buffer.split_to(4 + len);
-                        let request_data = message_data[4..].to_owned();
-                        yield request_data;
-                    } else {
-                        // Need more data
-                        break;
-                    }
-                }
-                } else {
-                    // Connection closed or error
-                    break;
+                match chunk {
+                    Ok(Some(chunk)) => buffer.extend_from_slice(&chunk),
+                    _ => break, // Connection closed or error
                 }
             }
         })
     }
-    
-    /// Sends a stream of responses back over the QUIC stream.
-    async fn send_response_stream(
-        stream: std::sync::Arc<tokio::sync::Mutex<s2n_quic::stream::BidirectionalStream>>,
+
+    fn create_request_stream<S>(
+        stream: Arc<tokio::sync::Mutex<S>>,
+    ) -> Pin<Box<dyn Stream<Item = Vec<u8>> + Send>>
+    where
+        S: QuicStreamAdapter + 'static,
+    {
+        Box::pin(async_stream::stream! {
+            let mut buffer = BytesMut::with_capacity(8192);
+
+            loop {
+                let chunk = {
+                    let mut stream_guard = stream.lock().await;
+                    stream_guard.receive_bytes().await
+                };
+
+                match chunk {
+                    Ok(Some(chunk)) => {
+                        buffer.extend_from_slice(&chunk);
+
+                        // Parse length-prefixed messages
+                        while buffer.len() >= 4 {
+                            let len = u32::from_le_bytes([
+                                buffer[0],
+                                buffer[1],
+                                buffer[2],
+                                buffer[3],
+                            ]) as usize;
+
+                            if len == 0 {
+                                // End of stream marker
+                                return;
+                            }
+
+                            if buffer.len() >= 4 + len {
+                                // We have a complete message
+                                let message_data = buffer.split_to(4 + len);
+                                let request_data = message_data[4..].to_owned();
+                                yield request_data;
+                            } else {
+                                // Need more data
+                                break;
+                            }
+                        }
+                    }
+                    _ => break, // Connection closed or error
+                }
+            }
+        })
+    }
+
+    async fn send_response_stream<S>(
+        stream: Arc<tokio::sync::Mutex<S>>,
         mut response_stream: Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>,
-    ) {
+    ) where
+        S: QuicStreamAdapter + 'static,
+    {
         while let Some(response_result) = response_stream.next().await {
             match response_result {
                 Ok(response_data) => {
                     let data_len = (response_data.len() as u32).to_le_bytes();
                     let mut stream_guard = stream.lock().await;
-                    if stream_guard.send([&data_len[..], &response_data].concat().into()).await.is_err() {
+                    let mut payload = Vec::with_capacity(4 + response_data.len());
+                    payload.extend_from_slice(&data_len);
+                    payload.extend_from_slice(&response_data);
+                    if stream_guard.send_bytes(Bytes::from(payload)).await.is_err() {
                         break;
                     }
                 }
@@ -1576,72 +684,30 @@ impl RpcServer {
                     let error_data = b"Error processing request";
                     let data_len = (error_data.len() as u32).to_le_bytes();
                     let mut stream_guard = stream.lock().await;
-                    if stream_guard.send([&data_len[..], error_data].concat().into()).await.is_err() {
+                    let mut payload = Vec::with_capacity(4 + error_data.len());
+                    payload.extend_from_slice(&data_len);
+                    payload.extend_from_slice(error_data);
+                    if stream_guard.send_bytes(Bytes::from(payload)).await.is_err() {
                         break;
                     }
                 }
             }
         }
-        
+
         // Send end-of-stream marker
         let mut stream_guard = stream.lock().await;
-        let _ = stream_guard.send(vec![0, 0, 0, 0].into()).await;
+        let _ = stream_guard
+            .send_bytes(Bytes::from_static(&[0, 0, 0, 0]))
+            .await;
     }
 
-    /// Binds the server to the configured address and prepares it for accepting connections.
-    ///
-    /// This method sets up the QUIC server with TLS configuration and binds it to
-    /// the network address specified in the config. It must be called before
-    /// [`start`](RpcServer::start).
-    ///
-    /// # TLS Requirements
-    ///
-    /// The server requires both a certificate and private key file for TLS operation.
-    /// The certificate file should contain the server's TLS certificate, and the
-    /// key file should contain the corresponding private key.
-    ///
-    /// # Network Binding
-    ///
-    /// The server binds to the address specified in `config.bind_address`. Use
-    /// "0.0.0.0:port" to listen on all interfaces, or "127.0.0.1:port" for localhost only.
-    /// Using port 0 will bind to any available port - check `socket_addr` after binding
-    /// to see the actual port assigned.
-    ///
-    /// # Returns
-    ///
-    /// Returns a bound QUIC server ready to be passed to [`start`](RpcServer::start).
-    /// The server's local address is also stored in `socket_addr` for reference.
-    ///
-    /// # Errors
-    ///
-    /// - [`RpcError::ConfigError`] if required configuration is missing or invalid
-    /// - [`RpcError::TlsError`] if TLS setup fails
-    /// - [`RpcError::IoError`] if network binding fails
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use rpcnet::{RpcServer, RpcConfig};
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let config = RpcConfig::new("server.pem", "127.0.0.1:0")  // Port 0 = any port
-    ///     .with_key_path("server-key.pem")
-    ///     .with_server_name("localhost");
-    ///
-    /// let mut server = RpcServer::new(config);
-    /// let quic_server = server.bind()?;
-    ///
-    /// // Check what port was actually assigned
-    /// println!("Server bound to: {:?}", server.socket_addr);
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn bind(&mut self) -> Result<s2n_quic::Server, RpcError> {
+        let cert_path = canonicalize_path(&self.config.cert_path)?;
         let key_path =
             self.config.key_path.as_ref().ok_or_else(|| {
                 RpcError::ConfigError("Server key path not configured".to_string())
             })?;
+        let key_path = canonicalize_path(key_path)?;
 
         // Create optimized limits for high-performance RPC
         let limits = s2n_quic::provider::limits::Limits::new()
@@ -1654,7 +720,9 @@ impl RpcServer {
             .with_data_window(16 * 1024 * 1024)
             .map_err(|e| RpcError::ConfigError(format!("Failed to set data window: {:?}", e)))?
             .with_bidirectional_local_data_window(8 * 1024 * 1024)
-            .map_err(|e| RpcError::ConfigError(format!("Failed to set bidirectional window: {:?}", e)))?
+            .map_err(|e| {
+                RpcError::ConfigError(format!("Failed to set bidirectional window: {:?}", e))
+            })?
             // Optimize for local network performance
             .with_initial_round_trip_time(Duration::from_millis(1)) // Low RTT for local connections
             .map_err(|e| RpcError::ConfigError(format!("Failed to set RTT: {:?}", e)))?
@@ -1665,7 +733,7 @@ impl RpcServer {
             .map_err(|e| RpcError::ConfigError(format!("Failed to set send buffer: {:?}", e)))?;
 
         let server = s2n_quic::Server::builder()
-            .with_tls((self.config.cert_path.as_path(), key_path.as_path()))
+            .with_tls((cert_path.as_path(), key_path.as_path()))
             .map_err(|e| RpcError::TlsError(format!("{:?}", e)))?
             .with_limits(limits)
             .map_err(|e| RpcError::ConfigError(format!("Failed to apply limits: {:?}", e)))?
@@ -1684,158 +752,49 @@ impl RpcServer {
     }
 }
 
-/// RPC client for making calls to remote servers over QUIC.
-///
-/// The client manages a QUIC connection to a server and provides methods for
-/// making RPC calls. It handles connection management, request ID generation,
-/// stream creation, and response processing automatically.
-///
-/// # Connection Management
-///
-/// Each client maintains a single QUIC connection to the server, but can make
-/// multiple concurrent RPC calls over different streams within that connection.
-/// This provides excellent performance for applications that make many requests
-/// to the same server.
-///
-/// # Thread Safety
-///
-/// The client is designed to be used from multiple threads concurrently. All
-/// methods are async and thread-safe, allowing you to make multiple RPC calls
-/// simultaneously from different tasks.
-///
-/// # Examples
-///
-/// ## Basic Usage
-///
-/// ```rust,no_run
-/// use rpcnet::{RpcClient, RpcConfig};
-/// use std::net::SocketAddr;
-///
-/// #[tokio::main]
-/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     // Configure client
-///     let config = RpcConfig::new("ca-cert.pem", "127.0.0.1:0")
-///         .with_server_name("myserver.example.com");
-///
-///     // Connect to server
-///     let server_addr: SocketAddr = "127.0.0.1:8080".parse()?;
-///     let client = RpcClient::connect(server_addr, config).await?;
-///
-///     // Make an RPC call
-///     let request_data = bincode::serialize(&"Hello, Server!")?;
-///     let response = client.call("echo", request_data).await?;
-///     let result: String = bincode::deserialize(&response)?;
-///     
-///     println!("Server replied: {}", result);
-///     Ok(())
-/// }
-/// ```
-///
-/// ## Concurrent Calls
-///
-/// ```rust,no_run
-/// use rpcnet::{RpcClient, RpcConfig};
-/// use std::{net::SocketAddr, sync::Arc};
-/// use tokio::join;
-///
-/// #[tokio::main]
-/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let config = RpcConfig::new("cert.pem", "127.0.0.1:0");
-///     let server_addr: SocketAddr = "127.0.0.1:8080".parse()?;
-///     let client = Arc::new(RpcClient::connect(server_addr, config).await?);
-///
-///     // Make multiple concurrent calls
-///     let client1 = client.clone();
-///     let client2 = client.clone();
-///
-///     let (result1, result2) = join!(
-///         client1.call("method1", vec![]),
-///         client2.call("method2", vec![])
-///     );
-///
-///     println!("Results: {:?}, {:?}", result1, result2);
-///     Ok(())
-/// }
-/// ```
+fn canonicalize_path(path: &Path) -> Result<std::path::PathBuf, RpcError> {
+    fs::canonicalize(path).map_err(|e| {
+        RpcError::ConfigError(format!("Failed to canonicalize {}: {e}", path.display()))
+    })
+}
+
 pub struct RpcClient {
-    /// Shared QUIC connection to the server.
-    /// 
-    /// Protected by RwLock to allow concurrent access while supporting
-    /// connection-level operations that need exclusive access.
-    connection: Arc<RwLock<s2n_quic::Connection>>,
-    
-    /// Atomic counter for generating unique request IDs.
-    /// 
-    /// Each RPC call gets a unique ID that's used to match responses
-    /// to requests, enabling correct handling of concurrent calls.
+    connection: Arc<RwLock<Box<dyn QuicConnectionAdapter + Send + Sync>>>,
+
     pub next_id: Arc<AtomicU64>,
 }
 
 impl RpcClient {
-    /// Establishes a connection to an RPC server.
-    ///
-    /// This method creates a new QUIC connection to the specified server address
-    /// using the provided configuration. The connection includes TLS verification
-    /// and optional keep-alive settings.
-    ///
-    /// # TLS Verification
-    ///
-    /// The client will verify the server's TLS certificate using the certificate
-    /// specified in the config. The server name in the config must match the
-    /// certificate's common name or subject alternative names.
-    ///
-    /// # Parameters
-    ///
-    /// - `connect_addr`: The server's socket address to connect to
-    /// - `config`: Client configuration including TLS certificates and network settings
-    ///
-    /// # Returns
-    ///
-    /// Returns a connected client ready to make RPC calls, or an error if the
-    /// connection could not be established.
-    ///
-    /// # Errors
-    ///
-    /// - [`RpcError::TlsError`] if TLS setup or certificate verification fails
-    /// - [`RpcError::ConnectionError`] if the network connection fails
-    /// - [`RpcError::ConfigError`] if the configuration is invalid
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use rpcnet::{RpcClient, RpcConfig};
-    /// use std::net::SocketAddr;
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     // Connect to a server
-    ///     let config = RpcConfig::new("server-cert.pem", "127.0.0.1:0")
-    ///         .with_server_name("myserver.local");
-    ///         
-    ///     let server_addr: SocketAddr = "192.168.1.100:8080".parse()?;
-    ///     let client = RpcClient::connect(server_addr, config).await?;
-    ///     
-    ///     println!("Connected successfully!");
-    ///     Ok(())
-    /// }
-    /// ```
     pub async fn connect(connect_addr: SocketAddr, config: RpcConfig) -> Result<Self, RpcError> {
         // Create optimized limits matching server configuration
         let limits = s2n_quic::provider::limits::Limits::new()
             .with_max_open_local_bidirectional_streams(10_000)
-            .map_err(|e| RpcError::ConfigError(format!("Failed to set client stream limits: {:?}", e)))?
+            .map_err(|e| {
+                RpcError::ConfigError(format!("Failed to set client stream limits: {:?}", e))
+            })?
             .with_max_open_remote_bidirectional_streams(10_000)
-            .map_err(|e| RpcError::ConfigError(format!("Failed to set client stream limits: {:?}", e)))?
+            .map_err(|e| {
+                RpcError::ConfigError(format!("Failed to set client stream limits: {:?}", e))
+            })?
             .with_data_window(16 * 1024 * 1024)
-            .map_err(|e| RpcError::ConfigError(format!("Failed to set client data window: {:?}", e)))?
+            .map_err(|e| {
+                RpcError::ConfigError(format!("Failed to set client data window: {:?}", e))
+            })?
             .with_bidirectional_local_data_window(8 * 1024 * 1024)
-            .map_err(|e| RpcError::ConfigError(format!("Failed to set client bidirectional window: {:?}", e)))?
+            .map_err(|e| {
+                RpcError::ConfigError(format!(
+                    "Failed to set client bidirectional window: {:?}",
+                    e
+                ))
+            })?
             .with_initial_round_trip_time(Duration::from_millis(1))
             .map_err(|e| RpcError::ConfigError(format!("Failed to set client RTT: {:?}", e)))?
             .with_max_ack_delay(Duration::from_millis(5))
             .map_err(|e| RpcError::ConfigError(format!("Failed to set client ACK delay: {:?}", e)))?
             .with_max_send_buffer_size(2 * 1024 * 1024)
-            .map_err(|e| RpcError::ConfigError(format!("Failed to set client send buffer: {:?}", e)))?;
+            .map_err(|e| {
+                RpcError::ConfigError(format!("Failed to set client send buffer: {:?}", e))
+            })?;
 
         let client = Client::builder()
             .with_tls(config.cert_path.as_path())
@@ -1860,122 +819,23 @@ impl RpcClient {
         }
 
         Ok(Self {
-            connection: Arc::new(RwLock::new(connection)),
+            connection: Arc::new(RwLock::new(Box::new(RealConnectionAdapter::new(
+                connection,
+            )))),
             next_id: Arc::new(AtomicU64::new(1)),
         })
     }
 
-    /// Makes an RPC call to the server.
-    ///
-    /// This method sends an RPC request to the server and waits for a response.
-    /// Each call uses a new bidirectional QUIC stream, allowing for excellent
-    /// concurrency when making multiple calls. The call includes automatic
-    /// timeout handling based on [`DEFAULT_TIMEOUT`].
-    ///
-    /// # Call Process
-    ///
-    /// 1. Generates a unique request ID for response matching
-    /// 2. Creates a new bidirectional QUIC stream  
-    /// 3. Serializes and sends the request
-    /// 4. Reads and deserializes the response
-    /// 5. Matches response to request by ID
-    /// 6. Returns result data or propagates server errors
-    ///
-    /// # Parameters
-    ///
-    /// - `method`: The name of the RPC method to call on the server
-    /// - `params`: Serialized parameters to send to the method handler
-    ///
-    /// # Returns
-    ///
-    /// Returns the serialized response data from the server on success.
-    /// You'll typically want to deserialize this data into your expected response type.
-    ///
-    /// # Errors
-    ///
-    /// - [`RpcError::StreamError`] if stream operations fail or server returns an error
-    /// - [`RpcError::ConnectionError`] if the connection is lost
-    /// - [`RpcError::SerializationError`] if request serialization fails
-    /// - [`RpcError::Timeout`] if the server doesn't respond within the timeout period
-    ///
-    /// # Examples
-    ///
-    /// ## Simple Call
-    ///
-    /// ```rust,no_run
-    /// use rpcnet::{RpcClient, RpcConfig};
-    /// use std::net::SocketAddr;
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let config = RpcConfig::new("cert.pem", "127.0.0.1:0");
-    ///     let addr: SocketAddr = "127.0.0.1:8080".parse()?;
-    ///     let client = RpcClient::connect(addr, config).await?;
-    ///
-    ///     // Call a method with no parameters
-    ///     let response = client.call("ping", vec![]).await?;
-    ///     let result: String = bincode::deserialize(&response)?;
-    ///     println!("Server said: {}", result);
-    ///     Ok(())
-    /// }
-    /// ```
-    ///
-    /// ## Call with Parameters
-    ///
-    /// ```rust,no_run
-    /// use rpcnet::{RpcClient, RpcConfig};
-    /// use serde::{Serialize, Deserialize};
-    /// use std::net::SocketAddr;
-    ///
-    /// #[derive(Serialize, Deserialize)]
-    /// struct MathRequest { a: i32, b: i32 }
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let config = RpcConfig::new("cert.pem", "127.0.0.1:0");
-    ///     let addr: SocketAddr = "127.0.0.1:8080".parse()?;
-    ///     let client = RpcClient::connect(addr, config).await?;
-    ///
-    ///     // Call a method with parameters
-    ///     let request = MathRequest { a: 10, b: 5 };
-    ///     let params = bincode::serialize(&request)?;
-    ///     let response = client.call("add", params).await?;
-    ///     
-    ///     let sum: i32 = bincode::deserialize(&response)?;
-    ///     println!("10 + 5 = {}", sum);
-    ///     Ok(())
-    /// }
-    /// ```
-    ///
-    /// ## Error Handling
-    ///
-    /// ```rust,no_run
-    /// use rpcnet::{RpcClient, RpcConfig, RpcError};
-    /// use std::net::SocketAddr;
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let config = RpcConfig::new("cert.pem", "127.0.0.1:0");
-    ///     let addr: SocketAddr = "127.0.0.1:8080".parse()?;
-    ///     let client = RpcClient::connect(addr, config).await?;
-    ///
-    ///     match client.call("risky_operation", vec![]).await {
-    ///         Ok(response) => {
-    ///             println!("Success: {:?}", response);
-    ///         }
-    ///         Err(RpcError::Timeout) => {
-    ///             println!("Server took too long to respond");
-    ///         }
-    ///         Err(RpcError::StreamError(msg)) => {
-    ///             println!("Server error: {}", msg);
-    ///         }
-    ///         Err(e) => {
-    ///             println!("Other error: {}", e);
-    ///         }
-    ///     }
-    ///     Ok(())
-    /// }
-    /// ```
+    #[cfg(test)]
+    pub(crate) fn with_connection(
+        connection: Box<dyn QuicConnectionAdapter + Send + Sync>,
+    ) -> Self {
+        Self {
+            connection: Arc::new(RwLock::new(connection)),
+            next_id: Arc::new(AtomicU64::new(1)),
+        }
+    }
+
     pub async fn call(&self, method: &str, params: Vec<u8>) -> Result<Vec<u8>, RpcError> {
         // Generate a new request ID
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
@@ -1986,32 +846,30 @@ impl RpcClient {
         // Open a new bidirectional stream with minimal lock time
         let mut stream = {
             let mut conn = self.connection.write().await;
-            conn.open_bidirectional_stream()
-                .await
-                .map_err(|e| RpcError::StreamError(e.to_string()))?
+            conn.open_bidirectional_stream().await?
         }; // Lock released immediately after stream creation
 
         // Send the request
-        stream
-            .send(req_data.into())
-            .await
-            .map_err(|e| RpcError::StreamError(e.to_string()))?;
+        stream.send_bytes(Bytes::from(req_data)).await?;
 
         // Read back the response with optimized buffering
         let read_future = async {
             // Use BytesMut for more efficient buffer management
             let mut response_data = BytesMut::with_capacity(1024);
-            while let Ok(Some(chunk)) = stream.receive().await {
+            while let Ok(Some(chunk)) = stream.receive_bytes().await {
                 response_data.extend_from_slice(&chunk);
-                
+
                 // Only attempt deserialization if we have a reasonable amount of data
-                if response_data.len() >= 16 { // Minimum for a valid response
+                if response_data.len() >= 16 {
+                    // Minimum for a valid response
                     if let Ok(response) = bincode::deserialize::<RpcResponse>(&response_data[..]) {
                         if response.id() == id {
                             // Extract data without cloning when possible
                             return match (response.result(), response.error()) {
                                 (Some(data), None) => Ok(data.to_vec()), // More explicit about the copy
-                                (None, Some(err_msg)) => Err(RpcError::StreamError(err_msg.to_string())), // Already owned
+                                (None, Some(err_msg)) => {
+                                    Err(RpcError::StreamError(err_msg.to_string()))
+                                } // Already owned
                                 _ => Err(RpcError::StreamError("Invalid response".into())), // Avoid string allocation
                             };
                         }
@@ -2031,66 +889,6 @@ impl RpcClient {
         }
     }
 
-    /// Calls a streaming RPC method where the client sends multiple requests and receives multiple responses.
-    ///
-    /// This method enables bidirectional streaming where both the client and server can send
-    /// multiple messages over a single stream. This is useful for real-time communication,
-    /// bulk operations, or scenarios where multiple request/response pairs need to be processed
-    /// efficiently over a single connection.
-    ///
-    /// # Stream Protocol
-    ///
-    /// Each message in the stream is length-prefixed to enable proper message framing:
-    /// - 4 bytes: Message length (little-endian u32)
-    /// - N bytes: Serialized message data
-    ///
-    /// # Parameters
-    ///
-    /// - `method`: The name of the streaming RPC method to call
-    /// - `request_stream`: A stream of request data (Vec<u8>) to send to the server
-    ///
-    /// # Returns
-    ///
-    /// Returns a stream of response data (Vec<u8>) from the server.
-    ///
-    /// # Errors
-    ///
-    /// - [`RpcError::StreamError`] if the stream encounters an error
-    /// - [`RpcError::ConnectionError`] if the connection fails
-    /// - [`RpcError::SerializationError`] if message framing fails
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use rpcnet::{RpcClient, RpcConfig};
-    /// use futures::{stream, StreamExt};
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let config = RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0")
-    ///         .with_server_name("localhost");
-    ///     let client = RpcClient::connect("127.0.0.1:8080".parse()?, config).await?;
-    ///
-    ///     // Create a stream of requests
-    ///     let requests = stream::iter(vec![
-    ///         b"request1".to_vec(),
-    ///         b"request2".to_vec(),
-    ///         b"request3".to_vec(),
-    ///     ]);
-    ///
-    ///     // Call streaming method
-    ///     let response_stream = client.call_streaming("echo_stream", requests).await?;
-    ///     let mut response_stream = Box::pin(response_stream);
-    ///
-    ///     // Process responses
-    ///     while let Some(response) = response_stream.next().await {
-    ///         let response = response?;
-    ///         println!("Received: {}", String::from_utf8_lossy(&response));
-    ///     }
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
     pub async fn call_streaming<S>(
         &self,
         method: &str,
@@ -2102,19 +900,16 @@ impl RpcClient {
         // Open a new bidirectional stream
         let mut stream = {
             let mut conn = self.connection.write().await;
-            conn.open_bidirectional_stream()
-                .await
-                .map_err(|e| RpcError::StreamError(e.to_string()))?
+            conn.open_bidirectional_stream().await?
         };
 
         // Send the method name first (with length prefix)
         let method_data = method.as_bytes();
         let method_len = (method_data.len() as u32).to_le_bytes();
         stream
-            .send([&method_len[..], method_data].concat().into())
-            .await
-            .map_err(|e| RpcError::StreamError(e.to_string()))?;
-        
+            .send_bytes(Bytes::from([&method_len[..], method_data].concat()))
+            .await?;
+
         // Removed artificial delay for better performance
 
         // Use Arc<tokio::sync::Mutex> to share the stream
@@ -2129,39 +924,44 @@ impl RpcClient {
                 _count += 1;
                 let data_len = (request_data.len() as u32).to_le_bytes();
                 let mut stream_guard = send_stream.lock().await;
-                if let Err(_e) = stream_guard.send([&data_len[..], &request_data].concat().into()).await {
+                if let Err(_e) = stream_guard
+                    .send_bytes(Bytes::from([&data_len[..], &request_data].concat()))
+                    .await
+                {
                     break;
                 }
                 drop(stream_guard); // Release lock
             }
             // Send empty frame to signal end of requests
             let mut stream_guard = send_stream.lock().await;
-            let _ = stream_guard.send(vec![0, 0, 0, 0].into()).await;
+            let _ = stream_guard
+                .send_bytes(Bytes::from_static(&[0, 0, 0, 0]))
+                .await;
         });
 
         let receive_stream = stream.clone();
         // Return a stream of responses
         Ok(async_stream::stream! {
             let mut buffer = BytesMut::with_capacity(8192);
-            
+
             loop {
                 let chunk = {
                     let mut stream_guard = receive_stream.lock().await;
-                    stream_guard.receive().await
+                    stream_guard.receive_bytes().await
                 };
-                
+
                 if let Ok(Some(chunk)) = chunk {
                     buffer.extend_from_slice(&chunk);
-                    
+
                     // Try to parse complete messages
                     while buffer.len() >= 4 {
                         let len = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]) as usize;
-                        
+
                         if len == 0 {
                             // End of stream marker
                             return;
                         }
-                        
+
                         if buffer.len() >= 4 + len {
                             // We have a complete message
                             let message_data = buffer.split_to(4 + len);
@@ -2180,101 +980,20 @@ impl RpcClient {
         })
     }
 
-    /// Calls a server-streaming RPC method where the client sends one request and receives multiple responses.
-    ///
-    /// This method is useful for scenarios where a single request should generate multiple
-    /// responses, such as database queries returning multiple rows, file listings, or
-    /// real-time updates.
-    ///
-    /// # Parameters
-    ///
-    /// - `method`: The name of the server-streaming RPC method to call
-    /// - `request`: The request data to send to the server
-    ///
-    /// # Returns
-    ///
-    /// Returns a stream of response data from the server.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use rpcnet::{RpcClient, RpcConfig};
-    /// use futures::StreamExt;
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let config = RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0")
-    ///         .with_server_name("localhost");
-    ///     let client = RpcClient::connect("127.0.0.1:8080".parse()?, config).await?;
-    ///
-    ///     // Call server-streaming method
-    ///     let response_stream = client.call_server_streaming("list_files", b"/home".to_vec()).await?;
-    ///     let mut response_stream = Box::pin(response_stream);
-    ///
-    ///     // Process responses
-    ///     while let Some(response) = response_stream.next().await {
-    ///         let file_info = response?;
-    ///         println!("File: {}", String::from_utf8_lossy(&file_info));
-    ///     }
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
     pub async fn call_server_streaming(
         &self,
         method: &str,
         request: Vec<u8>,
     ) -> Result<impl Stream<Item = Result<Vec<u8>, RpcError>>, RpcError> {
         use futures::stream;
-        
+
         // Create a single-item stream for the request
         let request_stream = stream::iter(vec![request]);
-        
+
         // Use the bidirectional streaming method
         self.call_streaming(method, request_stream).await
     }
 
-    /// Calls a client-streaming RPC method where the client sends multiple requests and receives one response.
-    ///
-    /// This method is useful for scenarios where multiple related requests should be processed
-    /// together and return a single aggregated response, such as bulk inserts, file uploads,
-    /// or batch processing operations.
-    ///
-    /// # Parameters
-    ///
-    /// - `method`: The name of the client-streaming RPC method to call
-    /// - `request_stream`: A stream of request data to send to the server
-    ///
-    /// # Returns
-    ///
-    /// Returns a single aggregated response from the server.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use rpcnet::{RpcClient, RpcConfig};
-    /// use futures::stream;
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let config = RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0")
-    ///         .with_server_name("localhost");
-    ///     let client = RpcClient::connect("127.0.0.1:8080".parse()?, config).await?;
-    ///
-    ///     // Create a stream of data to upload
-    ///     let data_chunks = stream::iter(vec![
-    ///         b"chunk1".to_vec(),
-    ///         b"chunk2".to_vec(),
-    ///         b"chunk3".to_vec(),
-    ///     ]);
-    ///
-    ///     // Call client-streaming method
-    ///     let result = client.call_client_streaming("upload_file", data_chunks).await?;
-    ///     println!("Upload result: {}", String::from_utf8_lossy(&result));
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
     pub async fn call_client_streaming<S>(
         &self,
         method: &str,
@@ -2286,12 +1005,1226 @@ impl RpcClient {
         // Use the bidirectional streaming method and collect the first response
         let response_stream = self.call_streaming(method, request_stream).await?;
         let mut response_stream = Box::pin(response_stream);
-        
+
         match response_stream.next().await {
             Some(Ok(response)) => Ok(response),
             Some(Err(e)) => Err(e),
             None => Err(RpcError::StreamError("No response received".to_string())),
         }
+    }
+}
+
+#[cfg(test)]
+mod rpc_response_tests {
+    use super::{RpcError, RpcResponse};
+
+    #[test]
+    fn from_result_success() {
+        let resp = RpcResponse::from_result(42, Ok(b"ok".to_vec()));
+        assert_eq!(resp.id(), 42);
+        assert_eq!(resp.result(), Some(&b"ok".to_vec()));
+        assert!(resp.error().is_none());
+    }
+
+    #[test]
+    fn from_result_error() {
+        let resp = RpcResponse::from_result(7, Err(RpcError::StreamError("boom".into())));
+        assert_eq!(resp.id(), 7);
+        assert!(resp.result().is_none());
+        assert_eq!(resp.error(), Some(&"Stream error: boom".to_string()));
+    }
+}
+
+#[cfg(test)]
+mod streaming_helper_tests {
+    use super::{QuicStreamAdapter, RpcError, RpcServer};
+    use async_trait::async_trait;
+    use bytes::Bytes;
+    use futures::{stream, StreamExt};
+    use std::collections::VecDeque;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    struct MockStream {
+        pending: VecDeque<Result<Option<Vec<u8>>, RpcError>>,
+        sent: Vec<Vec<u8>>,
+        send_error_after: Option<usize>,
+        send_calls: usize,
+    }
+
+    impl MockStream {
+        fn new(pending: VecDeque<Result<Option<Vec<u8>>, RpcError>>) -> Self {
+            Self {
+                pending,
+                sent: Vec::new(),
+                send_error_after: None,
+                send_calls: 0,
+            }
+        }
+
+        fn with_send_error_after(mut self, after: usize) -> Self {
+            self.send_error_after = Some(after);
+            self
+        }
+    }
+
+    #[async_trait]
+    impl QuicStreamAdapter for MockStream {
+        async fn send_bytes(&mut self, data: Bytes) -> Result<(), RpcError> {
+            if let Some(limit) = self.send_error_after {
+                if self.send_calls >= limit {
+                    return Err(RpcError::StreamError("mock send failure".to_string()));
+                }
+            }
+
+            self.send_calls += 1;
+            self.sent.push(data.to_vec());
+            Ok(())
+        }
+
+        async fn receive_bytes(&mut self) -> Result<Option<Bytes>, RpcError> {
+            match self.pending.pop_front() {
+                Some(Ok(Some(chunk))) => Ok(Some(Bytes::from(chunk))),
+                Some(Ok(None)) | None => Ok(None),
+                Some(Err(err)) => Err(err),
+            }
+        }
+    }
+
+    fn make_stream(pending: VecDeque<Result<Option<Vec<u8>>, RpcError>>) -> Arc<Mutex<MockStream>> {
+        Arc::new(Mutex::new(MockStream::new(pending)))
+    }
+
+    fn encode_message(payload: &[u8]) -> Vec<u8> {
+        let mut frame = Vec::with_capacity(4 + payload.len());
+        frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        frame.extend_from_slice(payload);
+        frame
+    }
+
+    #[tokio::test]
+    async fn request_stream_with_initial_data_consumes_buffer_and_additional_chunks() {
+        let message_one = b"hello".to_vec();
+        let message_two = b"stream".to_vec();
+
+        let mut initial = Vec::new();
+        initial.extend_from_slice(&(message_one.len() as u32).to_le_bytes());
+        initial.extend_from_slice(&message_one);
+        initial.extend_from_slice(&(message_two.len() as u32).to_le_bytes());
+        initial.extend_from_slice(&message_two[..3]);
+
+        let mut pending = VecDeque::new();
+        let mut tail = Vec::new();
+        tail.extend_from_slice(&message_two[3..]);
+        tail.extend_from_slice(&[0, 0, 0, 0]);
+        pending.push_back(Ok(Some(tail)));
+
+        let stream = make_stream(pending);
+        let mut request_stream =
+            RpcServer::create_request_stream_with_initial_data(stream, initial);
+
+        let first = request_stream.next().await;
+        assert_eq!(first.as_deref(), Some(message_one.as_slice()));
+
+        let second = request_stream.next().await;
+        assert_eq!(second.as_deref(), Some(message_two.as_slice()));
+
+        assert!(request_stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn request_stream_with_initial_data_handles_receive_errors() {
+        let mut pending = VecDeque::new();
+        pending.push_back(Err(RpcError::StreamError("boom".into())));
+
+        let stream = make_stream(pending);
+        let mut request_stream =
+            RpcServer::create_request_stream_with_initial_data(stream, Vec::new());
+
+        assert!(request_stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn request_stream_handles_connection_close() {
+        let mut pending = VecDeque::new();
+        pending.push_back(Ok(None));
+
+        let stream = make_stream(pending);
+        let mut request_stream = RpcServer::create_request_stream(stream);
+
+        assert!(request_stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn request_stream_exits_on_zero_length_marker() {
+        let pending = VecDeque::from([Ok(Some(vec![0, 0, 0, 0]))]);
+        let stream = make_stream(pending);
+        let mut request_stream = RpcServer::create_request_stream(stream);
+
+        assert!(request_stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn send_response_stream_writes_all_frames_and_end_marker() {
+        let stream = make_stream(VecDeque::new());
+        let frames = vec![Ok(b"one".to_vec()), Ok(b"two".to_vec())];
+
+        RpcServer::send_response_stream(stream.clone(), Box::pin(stream::iter(frames))).await;
+
+        let guard = stream.lock().await;
+        assert_eq!(guard.sent.len(), 3);
+        assert_eq!(guard.sent[0], encode_message(b"one"));
+        assert_eq!(guard.sent[1], encode_message(b"two"));
+        assert_eq!(guard.sent[2], vec![0, 0, 0, 0]);
+    }
+
+    #[tokio::test]
+    async fn send_response_stream_inserts_error_frame() {
+        let stream = make_stream(VecDeque::new());
+        let frames = vec![Ok(b"ok".to_vec()), Err(RpcError::StreamError("err".into()))];
+
+        RpcServer::send_response_stream(stream.clone(), Box::pin(stream::iter(frames))).await;
+
+        let guard = stream.lock().await;
+        assert_eq!(guard.sent.len(), 3);
+        assert_eq!(guard.sent[0], encode_message(b"ok"));
+        assert_eq!(guard.sent[1], encode_message(b"Error processing request"));
+        assert_eq!(guard.sent[2], vec![0, 0, 0, 0]);
+    }
+
+    #[tokio::test]
+    async fn send_response_stream_breaks_on_send_failure() {
+        let stream = Arc::new(Mutex::new(
+            MockStream::new(VecDeque::new()).with_send_error_after(0),
+        ));
+        let frames = vec![Ok(b"data".to_vec()), Ok(b"more".to_vec())];
+
+        RpcServer::send_response_stream(stream.clone(), Box::pin(stream::iter(frames))).await;
+
+        let guard = stream.lock().await;
+        assert!(guard.sent.is_empty());
+        assert_eq!(guard.send_calls, 0);
+    }
+}
+
+#[cfg(test)]
+mod server_register_tests {
+    use super::{RpcConfig, RpcServer};
+    use async_stream::stream;
+    use futures::{stream as futures_stream, StreamExt};
+    use std::time::Duration;
+
+    pub(super) fn config() -> RpcConfig {
+        RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0")
+            .with_key_path("certs/test_key.pem")
+            .with_server_name("localhost")
+            .with_keep_alive_interval(Duration::from_millis(50))
+    }
+
+    #[tokio::test]
+    async fn register_streaming_inserts_handler_and_invokes_it() {
+        let server = RpcServer::new(config());
+
+        server
+            .register_streaming("upper", |mut requests| async move {
+                stream! {
+                    while let Some(next) = requests.next().await {
+                        yield Ok(next.iter().map(|b| b.to_ascii_uppercase()).collect());
+                    }
+                    yield Ok(b"done".to_vec());
+                }
+            })
+            .await;
+
+        let handlers = server.streaming_handlers.read().await;
+        let handler = handlers.get("upper").expect("handler should be registered");
+
+        let request_stream = Box::pin(futures_stream::iter(vec![b"abc".to_vec(), b"xyz".to_vec()]));
+        let mut response_stream = handler(request_stream).await;
+
+        let mut collected = Vec::new();
+        while let Some(item) = response_stream.next().await {
+            collected.push(item.expect("response should be Ok"));
+        }
+
+        assert_eq!(
+            collected,
+            vec![b"ABC".to_vec(), b"XYZ".to_vec(), b"done".to_vec()]
+        );
+    }
+
+    #[tokio::test]
+    async fn register_streaming_clones_handler_for_multiple_invocations() {
+        let server = RpcServer::new(config());
+        let call_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let counter = call_count.clone();
+
+        server
+            .register_streaming("count", move |requests| {
+                let counter = counter.clone();
+                async move {
+                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    stream! {
+                        let mut reqs = requests;
+                        while let Some(item) = reqs.next().await {
+                            yield Ok(item);
+                        }
+                    }
+                }
+            })
+            .await;
+
+        let handlers = server.streaming_handlers.read().await;
+        let handler = handlers.get("count").unwrap();
+
+        for _ in 0..2 {
+            let request_stream = Box::pin(futures_stream::iter(Vec::<Vec<u8>>::new()));
+            let mut response_stream = handler(request_stream).await;
+            assert!(response_stream.next().await.is_none());
+        }
+
+        assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 2);
+    }
+}
+
+#[cfg(test)]
+mod client_streaming_helper_tests {
+    use super::{QuicConnectionAdapter, QuicStreamAdapter, RpcClient, RpcError};
+    use async_trait::async_trait;
+    use bytes::Bytes;
+    use futures::{stream, StreamExt};
+    use std::{collections::VecDeque, sync::Arc, time::Duration};
+    use tokio::sync::Mutex;
+
+    struct MockStreamState {
+        sent_frames: Vec<Vec<u8>>,
+        send_plan: VecDeque<Result<(), RpcError>>,
+        recv_plan: VecDeque<Result<Option<Vec<u8>>, RpcError>>,
+    }
+
+    impl MockStreamState {
+        fn new() -> Self {
+            Self {
+                sent_frames: Vec::new(),
+                send_plan: VecDeque::new(),
+                recv_plan: VecDeque::new(),
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct MockStream {
+        state: Arc<Mutex<MockStreamState>>,
+    }
+
+    #[async_trait]
+    impl QuicStreamAdapter for MockStream {
+        async fn send_bytes(&mut self, data: Bytes) -> Result<(), RpcError> {
+            let mut state = self.state.lock().await;
+            state.sent_frames.push(data.to_vec());
+            match state.send_plan.pop_front() {
+                Some(result) => result,
+                None => Ok(()),
+            }
+        }
+
+        async fn receive_bytes(&mut self) -> Result<Option<Bytes>, RpcError> {
+            let mut state = self.state.lock().await;
+            match state.recv_plan.pop_front() {
+                Some(Ok(Some(chunk))) => Ok(Some(Bytes::from(chunk))),
+                Some(Ok(None)) => Ok(None),
+                Some(Err(err)) => Err(err),
+                None => Ok(None),
+            }
+        }
+    }
+
+    struct MockConnection {
+        state: Arc<Mutex<MockStreamState>>,
+        open_error: Option<RpcError>,
+    }
+
+    impl MockConnection {
+        fn new(state: Arc<Mutex<MockStreamState>>) -> Self {
+            Self {
+                state,
+                open_error: None,
+            }
+        }
+
+        fn with_error(error: RpcError) -> Self {
+            Self {
+                state: Arc::new(Mutex::new(MockStreamState::new())),
+                open_error: Some(error),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl QuicConnectionAdapter for MockConnection {
+        async fn open_bidirectional_stream(
+            &mut self,
+        ) -> Result<Box<dyn QuicStreamAdapter + Send>, RpcError> {
+            if let Some(err) = self.open_error.take() {
+                return Err(err);
+            }
+
+            Ok(Box::new(MockStream {
+                state: self.state.clone(),
+            }))
+        }
+    }
+
+    fn encode_frame(payload: &[u8]) -> Vec<u8> {
+        let mut frame = Vec::with_capacity(4 + payload.len());
+        frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        frame.extend_from_slice(payload);
+        frame
+    }
+
+    async fn wait_for_sent(state: &Arc<Mutex<MockStreamState>>, expected: usize) {
+        for _ in 0..50 {
+            {
+                if state.lock().await.sent_frames.len() >= expected {
+                    return;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+        // Final check to avoid missing race
+        let len = state.lock().await.sent_frames.len();
+        assert!(len >= expected, "expected {expected} frames but saw {len}");
+    }
+
+    #[tokio::test]
+    async fn call_streaming_happy_path() {
+        let state = Arc::new(Mutex::new(MockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            let mut response_chunk = encode_frame(b"resp-one");
+            response_chunk.extend_from_slice(&encode_frame(b"resp-two"));
+            response_chunk.extend_from_slice(&[0, 0, 0, 0]);
+            guard.recv_plan.push_back(Ok(Some(response_chunk)));
+            guard.recv_plan.push_back(Ok(None));
+        }
+
+        let connection = Box::new(MockConnection::new(state.clone()));
+        let client = RpcClient::with_connection(connection);
+        let requests = stream::iter(vec![b"req1".to_vec(), b"req2".to_vec()]);
+
+        let response_stream = client
+            .call_streaming("test_method", requests)
+            .await
+            .expect("call_streaming should succeed");
+        let mut response_stream = Box::pin(response_stream);
+
+        let mut responses = Vec::new();
+        while let Some(item) = response_stream.next().await {
+            responses.push(item.expect("response should be Ok"));
+        }
+        assert_eq!(responses, vec![b"resp-one".to_vec(), b"resp-two".to_vec()]);
+
+        wait_for_sent(&state, 4).await;
+        let sent_frames = { state.lock().await.sent_frames.clone() };
+        assert_eq!(sent_frames.len(), 4);
+        assert_eq!(sent_frames[0], encode_frame(b"test_method"));
+        assert_eq!(sent_frames[1], encode_frame(b"req1"));
+        assert_eq!(sent_frames[2], encode_frame(b"req2"));
+        assert_eq!(sent_frames[3], vec![0, 0, 0, 0]);
+    }
+
+    #[tokio::test]
+    async fn call_streaming_method_send_error() {
+        let state = Arc::new(Mutex::new(MockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            guard.send_plan.push_back(Err(RpcError::StreamError(
+                "method send failure".to_string(),
+            )));
+        }
+
+        let connection = Box::new(MockConnection::new(state.clone()));
+        let client = RpcClient::with_connection(connection);
+
+        let result = client
+            .call_streaming("failing_method", stream::iter(Vec::<Vec<u8>>::new()))
+            .await;
+
+        assert!(matches!(result, Err(RpcError::StreamError(_))));
+        let sent_frames = { state.lock().await.sent_frames.clone() };
+        assert_eq!(sent_frames.len(), 1);
+        assert_eq!(sent_frames[0], encode_frame(b"failing_method"));
+    }
+
+    #[tokio::test]
+    async fn call_streaming_request_send_error_breaks_loop() {
+        let state = Arc::new(Mutex::new(MockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            guard.send_plan.push_back(Ok(()));
+            guard
+                .send_plan
+                .push_back(Err(RpcError::StreamError("loop send fail".into())));
+            guard.send_plan.push_back(Ok(()));
+            guard.recv_plan.push_back(Ok(Some(vec![0, 0, 0, 0])));
+        }
+
+        let connection = Box::new(MockConnection::new(state.clone()));
+        let client = RpcClient::with_connection(connection);
+
+        let response_stream = client
+            .call_streaming("loop", stream::iter(vec![b"payload".to_vec()]))
+            .await
+            .expect("call_streaming should still return stream");
+        let mut response_stream = Box::pin(response_stream);
+
+        assert!(response_stream.next().await.is_none());
+
+        wait_for_sent(&state, 3).await;
+        let sent_frames = { state.lock().await.sent_frames.clone() };
+        assert_eq!(sent_frames.len(), 3);
+        assert_eq!(sent_frames[0], encode_frame(b"loop"));
+        assert_eq!(sent_frames[1], encode_frame(b"payload"));
+        assert_eq!(sent_frames[2], vec![0, 0, 0, 0]);
+    }
+
+    #[tokio::test]
+    async fn call_streaming_end_frame_send_error_is_suppressed() {
+        let state = Arc::new(Mutex::new(MockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            guard.send_plan.push_back(Ok(()));
+            guard.send_plan.push_back(Ok(()));
+            guard
+                .send_plan
+                .push_back(Err(RpcError::StreamError("end frame".into())));
+            guard.recv_plan.push_back(Ok(Some(vec![0, 0, 0, 0])));
+        }
+
+        let connection = Box::new(MockConnection::new(state.clone()));
+        let client = RpcClient::with_connection(connection);
+
+        let response_stream = client
+            .call_streaming("end", stream::iter(vec![b"data".to_vec()]))
+            .await
+            .expect("call_streaming should succeed despite final send error");
+        let mut response_stream = Box::pin(response_stream);
+        assert!(response_stream.next().await.is_none());
+
+        wait_for_sent(&state, 3).await;
+        let sent_frames = { state.lock().await.sent_frames.clone() };
+        assert_eq!(sent_frames.len(), 3);
+        assert_eq!(sent_frames[0], encode_frame(b"end"));
+        assert_eq!(sent_frames[1], encode_frame(b"data"));
+        assert_eq!(sent_frames[2], vec![0, 0, 0, 0]);
+    }
+
+    #[tokio::test]
+    async fn call_streaming_zero_length_response_stops_stream() {
+        let state = Arc::new(Mutex::new(MockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            guard.recv_plan.push_back(Ok(Some(vec![0, 0, 0, 0])));
+        }
+
+        let connection = Box::new(MockConnection::new(state));
+        let client = RpcClient::with_connection(connection);
+
+        let response_stream = client
+            .call_streaming("stop", stream::iter(Vec::<Vec<u8>>::new()))
+            .await
+            .expect("call_streaming should succeed");
+        let mut response_stream = Box::pin(response_stream);
+
+        assert!(response_stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn call_streaming_incomplete_response_is_ignored() {
+        let state = Arc::new(Mutex::new(MockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            let mut partial = encode_frame(b"incomplete");
+            partial.truncate(6); // leave less than declared length
+            guard.recv_plan.push_back(Ok(Some(partial)));
+            guard.recv_plan.push_back(Ok(None));
+        }
+
+        let connection = Box::new(MockConnection::new(state));
+        let client = RpcClient::with_connection(connection);
+
+        let response_stream = client
+            .call_streaming("ignore", stream::iter(Vec::<Vec<u8>>::new()))
+            .await
+            .expect("call_streaming should succeed");
+        let mut response_stream = Box::pin(response_stream);
+        assert!(response_stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn call_streaming_receive_error_stops_stream() {
+        let state = Arc::new(Mutex::new(MockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            guard
+                .recv_plan
+                .push_back(Err(RpcError::StreamError("recv".into())));
+        }
+
+        let connection = Box::new(MockConnection::new(state));
+        let client = RpcClient::with_connection(connection);
+
+        let response_stream = client
+            .call_streaming("recv_err", stream::iter(Vec::<Vec<u8>>::new()))
+            .await
+            .expect("call_streaming should succeed");
+        let mut response_stream = Box::pin(response_stream);
+        assert!(response_stream.next().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn call_streaming_open_failure_is_propagated() {
+        let connection = Box::new(MockConnection::with_error(RpcError::StreamError(
+            "open fail".into(),
+        )));
+        let client = RpcClient::with_connection(connection);
+
+        let result = client
+            .call_streaming("open", stream::iter(Vec::<Vec<u8>>::new()))
+            .await;
+
+        assert!(matches!(result, Err(RpcError::StreamError(_))));
+    }
+}
+
+#[cfg(test)]
+mod client_call_helper_tests {
+    use super::{
+        QuicConnectionAdapter, QuicStreamAdapter, RpcClient, RpcError, RpcRequest, RpcResponse,
+    };
+    use async_trait::async_trait;
+    use bytes::Bytes;
+    use std::{collections::VecDeque, sync::Arc, time::Duration};
+    use tokio::sync::Mutex;
+
+    pub(super) struct MockStreamState {
+        pub sent: Vec<Vec<u8>>,
+        pub send_plan: VecDeque<Result<(), RpcError>>,
+        pub recv_plan: VecDeque<Result<Option<Vec<u8>>, RpcError>>,
+    }
+
+    impl MockStreamState {
+        pub(super) fn new() -> Self {
+            Self {
+                sent: Vec::new(),
+                send_plan: VecDeque::new(),
+                recv_plan: VecDeque::new(),
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    pub(super) struct MockStream {
+        state: Arc<Mutex<MockStreamState>>,
+    }
+
+    #[async_trait]
+    impl QuicStreamAdapter for MockStream {
+        async fn send_bytes(&mut self, data: Bytes) -> Result<(), RpcError> {
+            let mut state = self.state.lock().await;
+            state.sent.push(data.to_vec());
+            match state.send_plan.pop_front() {
+                Some(result) => result,
+                None => Ok(()),
+            }
+        }
+
+        async fn receive_bytes(&mut self) -> Result<Option<Bytes>, RpcError> {
+            let mut state = self.state.lock().await;
+            match state.recv_plan.pop_front() {
+                Some(Ok(Some(chunk))) => Ok(Some(Bytes::from(chunk))),
+                Some(Ok(None)) => Ok(None),
+                Some(Err(err)) => Err(err),
+                None => Ok(None),
+            }
+        }
+    }
+
+    pub(super) struct MockConnection {
+        streams: VecDeque<Arc<Mutex<MockStreamState>>>,
+        stream_error: Option<RpcError>,
+    }
+
+    impl MockConnection {
+        pub(super) fn with_state(state: Arc<Mutex<MockStreamState>>) -> Self {
+            let mut streams = VecDeque::new();
+            streams.push_back(state);
+            Self {
+                streams,
+                stream_error: None,
+            }
+        }
+
+        pub(super) fn with_states(states: Vec<Arc<Mutex<MockStreamState>>>) -> Self {
+            Self {
+                streams: states.into(),
+                stream_error: None,
+            }
+        }
+
+        pub(super) fn with_error(error: RpcError) -> Self {
+            Self {
+                streams: VecDeque::new(),
+                stream_error: Some(error),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl QuicConnectionAdapter for MockConnection {
+        async fn open_bidirectional_stream(
+            &mut self,
+        ) -> Result<Box<dyn QuicStreamAdapter + Send>, RpcError> {
+            if let Some(err) = self.stream_error.take() {
+                return Err(err);
+            }
+            let state = self
+                .streams
+                .pop_front()
+                .unwrap_or_else(|| Arc::new(Mutex::new(MockStreamState::new())));
+            Ok(Box::new(MockStream { state }))
+        }
+    }
+
+    pub(super) fn make_client(state: Arc<Mutex<MockStreamState>>) -> RpcClient {
+        RpcClient::with_connection(Box::new(MockConnection::with_state(state)))
+    }
+
+    pub(super) fn make_client_with_connection(connection: MockConnection) -> RpcClient {
+        RpcClient::with_connection(Box::new(connection))
+    }
+
+    pub(super) fn encode_response(response: &RpcResponse) -> Vec<u8> {
+        bincode::serialize(response).expect("serialize response")
+    }
+
+    pub(super) async fn wait_for_sent(state: &Arc<Mutex<MockStreamState>>, expected: usize) {
+        for _ in 0..100 {
+            if state.lock().await.sent.len() >= expected {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        let len = state.lock().await.sent.len();
+        panic!("expected {} frames, saw {}", expected, len);
+    }
+
+    #[tokio::test]
+    async fn call_returns_success_response() {
+        let state = Arc::new(Mutex::new(MockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            let response = RpcResponse::from_result(1, Ok(b"pong".to_vec()));
+            guard
+                .recv_plan
+                .push_back(Ok(Some(encode_response(&response))));
+        }
+
+        let client = make_client(state.clone());
+        let response = client.call("ping", b"data".to_vec()).await.unwrap();
+        assert_eq!(response, b"pong".to_vec());
+
+        wait_for_sent(&state, 1).await;
+        let sent = state.lock().await.sent.clone();
+        assert_eq!(sent.len(), 1);
+        let request: RpcRequest = bincode::deserialize(&sent[0]).unwrap();
+        assert_eq!(request.method(), "ping");
+    }
+
+    #[tokio::test]
+    async fn call_propagates_error_response() {
+        let state = Arc::new(Mutex::new(MockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            let response = RpcResponse::from_result(1, Err(RpcError::StreamError("nope".into())));
+            guard
+                .recv_plan
+                .push_back(Ok(Some(encode_response(&response))));
+        }
+
+        let client = make_client(state);
+        let err = client.call("fails", Vec::new()).await.unwrap_err();
+        match err {
+            RpcError::StreamError(msg) => assert!(msg.contains("nope")),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn call_detects_connection_close_before_response() {
+        let state = Arc::new(Mutex::new(MockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            guard.recv_plan.push_back(Ok(None));
+        }
+
+        let client = make_client(state);
+        let err = client.call("timeout", Vec::new()).await.unwrap_err();
+        assert!(matches!(err, RpcError::ConnectionError(_)));
+    }
+
+    #[tokio::test]
+    async fn call_open_stream_failure_is_propagated() {
+        let client = RpcClient::with_connection(Box::new(MockConnection::with_error(
+            RpcError::StreamError("open".into()),
+        )));
+        let err = client.call("method", Vec::new()).await.unwrap_err();
+        assert!(matches!(err, RpcError::StreamError(_)));
+    }
+}
+
+#[cfg(test)]
+mod server_start_helper_tests {
+    use super::{
+        QuicServerAdapter, QuicServerConnectionAdapter, QuicStreamAdapter, RpcConfig, RpcError,
+        RpcServer,
+    };
+    use async_stream::stream;
+    use async_trait::async_trait;
+    use bytes::Bytes;
+    use futures::StreamExt;
+    use std::{collections::VecDeque, sync::Arc, time::Duration};
+    use tokio::sync::Mutex;
+
+    pub(super) struct MockStreamState {
+        pub read_plan: VecDeque<Result<Option<Vec<u8>>, RpcError>>,
+        pub writes: Vec<Vec<u8>>,
+    }
+
+    impl MockStreamState {
+        pub(super) fn new() -> Self {
+            Self {
+                read_plan: VecDeque::new(),
+                writes: Vec::new(),
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    pub(super) struct MockStream {
+        pub state: Arc<Mutex<MockStreamState>>,
+    }
+
+    #[async_trait]
+    impl QuicStreamAdapter for MockStream {
+        async fn send_bytes(&mut self, data: Bytes) -> Result<(), RpcError> {
+            self.state.lock().await.writes.push(data.to_vec());
+            Ok(())
+        }
+
+        async fn receive_bytes(&mut self) -> Result<Option<Bytes>, RpcError> {
+            let mut state = self.state.lock().await;
+            match state.read_plan.pop_front() {
+                Some(Ok(Some(chunk))) => Ok(Some(Bytes::from(chunk))),
+                Some(Ok(None)) => Ok(None),
+                Some(Err(err)) => Err(err),
+                None => Ok(None),
+            }
+        }
+    }
+
+    pub(super) struct MockServerConnection {
+        streams: VecDeque<Result<Option<MockStream>, RpcError>>,
+    }
+
+    impl MockServerConnection {
+        pub(super) fn new() -> Self {
+            Self {
+                streams: VecDeque::new(),
+            }
+        }
+
+        pub(super) fn push_stream(&mut self, stream: MockStream) {
+            self.streams.push_back(Ok(Some(stream)));
+        }
+
+        pub(super) fn finish(&mut self) {
+            self.streams.push_back(Ok(None));
+        }
+    }
+
+    #[async_trait]
+    impl QuicServerConnectionAdapter for MockServerConnection {
+        async fn accept_bidirectional_stream(
+            &mut self,
+        ) -> Result<Option<Box<dyn QuicStreamAdapter + Send>>, RpcError> {
+            match self.streams.pop_front() {
+                Some(Ok(Some(stream))) => Ok(Some(Box::new(stream))),
+                Some(Ok(None)) => Ok(None),
+                Some(Err(err)) => Err(err),
+                None => Ok(None),
+            }
+        }
+    }
+
+    pub(super) struct MockServerAdapter {
+        connections: VecDeque<Box<dyn QuicServerConnectionAdapter>>,
+    }
+
+    impl MockServerAdapter {
+        pub(super) fn new(connections: Vec<Box<dyn QuicServerConnectionAdapter>>) -> Self {
+            Self {
+                connections: connections.into(),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl QuicServerAdapter for MockServerAdapter {
+        async fn accept(&mut self) -> Option<Box<dyn QuicServerConnectionAdapter>> {
+            self.connections.pop_front()
+        }
+    }
+
+    pub(super) fn test_config() -> RpcConfig {
+        RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0")
+            .with_key_path("certs/test_key.pem")
+            .with_server_name("localhost")
+            .with_keep_alive_interval(Duration::from_millis(50))
+    }
+
+    pub(super) async fn wait_for_writes(state: &Arc<Mutex<MockStreamState>>, expected: usize) {
+        for _ in 0..100 {
+            if state.lock().await.writes.len() >= expected {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        let len = state.lock().await.writes.len();
+        panic!("expected {} writes, saw {}", expected, len);
+    }
+
+    #[tokio::test]
+    async fn start_with_adapter_processes_streaming_request() {
+        let mut server = RpcServer::new(test_config());
+        server
+            .register_streaming("stream_method", |mut requests| async move {
+                stream! {
+                    while let Some(data) = requests.next().await {
+                        let mut upper = data.clone();
+                        upper.make_ascii_uppercase();
+                        yield Ok(upper);
+                    }
+                    yield Ok(b"DONE".to_vec());
+                }
+            })
+            .await;
+
+        let stream_state = Arc::new(Mutex::new(MockStreamState::new()));
+        {
+            let mut guard = stream_state.lock().await;
+            let method = b"stream_method";
+            let mut chunk = Vec::new();
+            chunk.extend_from_slice(&(method.len() as u32).to_le_bytes());
+            chunk.extend_from_slice(method);
+            chunk.extend_from_slice(&(3u32).to_le_bytes());
+            chunk.extend_from_slice(b"one");
+            chunk.extend_from_slice(&(0u32).to_le_bytes());
+            guard.read_plan.push_back(Ok(Some(chunk)));
+            guard.read_plan.push_back(Ok(None));
+        }
+
+        let stream = MockStream {
+            state: stream_state.clone(),
+        };
+        let mut connection = MockServerConnection::new();
+        connection.push_stream(stream.clone());
+        connection.finish();
+
+        let mut adapter = MockServerAdapter::new(vec![Box::new(connection)]);
+        server.start_with_adapter(&mut adapter).await.unwrap();
+
+        wait_for_writes(&stream_state, 3).await;
+        let writes = stream_state.lock().await.writes.clone();
+        assert_eq!(writes.len(), 3);
+        assert_eq!(writes[0][..4], (3u32).to_le_bytes());
+        assert_eq!(&writes[0][4..], b"ONE");
+        assert_eq!(writes[1][..4], (4u32).to_le_bytes());
+        assert_eq!(&writes[1][4..], b"DONE");
+        assert_eq!(writes[2], vec![0, 0, 0, 0]);
+    }
+}
+
+#[cfg(test)]
+mod doc_examples_tests {
+    use super::{
+        client_call_helper_tests::{
+            encode_response as encode_rpc_response, make_client, make_client_with_connection,
+            wait_for_sent as wait_for_sent_frames, MockConnection as CallMockConnection,
+            MockStreamState as CallMockStreamState,
+        },
+        server_register_tests::config as server_test_config,
+        server_start_helper_tests::{
+            wait_for_writes as wait_for_server_writes, MockServerAdapter, MockServerConnection,
+            MockStream as ServerMockStream, MockStreamState as ServerMockStreamState,
+        },
+        RpcRequest, RpcResponse, RpcServer,
+    };
+    use async_stream::stream;
+    use futures::{stream as futures_stream, StreamExt};
+    use std::sync::Arc;
+    use tokio::join;
+    use tokio::sync::Mutex;
+
+    fn encode_frame(payload: &[u8]) -> Vec<u8> {
+        let mut frame = Vec::with_capacity(4 + payload.len());
+        frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        frame.extend_from_slice(payload);
+        frame
+    }
+
+    #[tokio::test]
+    async fn rpc_server_register_doc_example() {
+        let server = RpcServer::new(server_test_config());
+        server
+            .register("add", |params| async move { Ok(params) })
+            .await;
+
+        let handlers = server.handlers.read().await;
+        let handler = handlers.get("add").expect("handler should be registered");
+        let response = handler(vec![1, 2, 3])
+            .await
+            .expect("handler should succeed");
+        assert_eq!(response, vec![1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn rpc_server_register_streaming_doc_example() {
+        let server = RpcServer::new(server_test_config());
+
+        server
+            .register_streaming("echo_stream", |mut request_stream| async move {
+                stream! {
+                    while let Some(data) = request_stream.next().await {
+                        yield Ok(data);
+                    }
+                }
+            })
+            .await;
+
+        let handlers = server.streaming_handlers.read().await;
+        let handler = handlers
+            .get("echo_stream")
+            .expect("streaming handler should be registered");
+
+        let request_stream = Box::pin(futures_stream::iter(vec![b"one".to_vec(), b"two".to_vec()]));
+        let mut responses = handler(request_stream).await;
+
+        let mut collected = Vec::new();
+        while let Some(item) = responses.next().await {
+            collected.push(item.expect("response should be Ok"));
+        }
+
+        assert_eq!(collected, vec![b"one".to_vec(), b"two".to_vec()]);
+    }
+
+    #[tokio::test]
+    async fn rpc_client_call_doc_example() {
+        let state = Arc::new(Mutex::new(CallMockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            let response = RpcResponse::from_result(1, Ok(b"Hello, Server!".to_vec()));
+            guard
+                .recv_plan
+                .push_back(Ok(Some(encode_rpc_response(&response))));
+        }
+
+        let client = make_client(state.clone());
+        let response = client
+            .call("echo", bincode::serialize(&"Hello, Server!").unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response, b"Hello, Server!".to_vec());
+
+        wait_for_sent_frames(&state, 1).await;
+        let sent_requests = state.lock().await.sent.clone();
+        let req: RpcRequest = bincode::deserialize(&sent_requests[0]).unwrap();
+        assert_eq!(req.method(), "echo");
+    }
+
+    #[tokio::test]
+    async fn rpc_client_call_concurrent_doc_example() {
+        let state_one = Arc::new(Mutex::new(CallMockStreamState::new()));
+        {
+            let mut guard = state_one.lock().await;
+            let resp = RpcResponse::from_result(1, Ok(b"result1".to_vec()));
+            guard
+                .recv_plan
+                .push_back(Ok(Some(encode_rpc_response(&resp))));
+        }
+
+        let state_two = Arc::new(Mutex::new(CallMockStreamState::new()));
+        {
+            let mut guard = state_two.lock().await;
+            let resp = RpcResponse::from_result(2, Ok(b"result2".to_vec()));
+            guard
+                .recv_plan
+                .push_back(Ok(Some(encode_rpc_response(&resp))));
+        }
+
+        let connection =
+            CallMockConnection::with_states(vec![state_one.clone(), state_two.clone()]);
+        let client = Arc::new(make_client_with_connection(connection));
+
+        let (res_left, res_right) = join!(
+            {
+                let client = client.clone();
+                async move { client.call("method1", vec![]).await.unwrap() }
+            },
+            {
+                let client = client.clone();
+                async move { client.call("method2", vec![]).await.unwrap() }
+            }
+        );
+
+        assert_eq!(res_left, b"result1".to_vec());
+        assert_eq!(res_right, b"result2".to_vec());
+
+        wait_for_sent_frames(&state_one, 1).await;
+        wait_for_sent_frames(&state_two, 1).await;
+
+        let sent_one = state_one.lock().await.sent.clone();
+        let req_one: RpcRequest = bincode::deserialize(&sent_one[0]).unwrap();
+        assert_eq!(req_one.method(), "method1");
+
+        let sent_two = state_two.lock().await.sent.clone();
+        let req_two: RpcRequest = bincode::deserialize(&sent_two[0]).unwrap();
+        assert_eq!(req_two.method(), "method2");
+    }
+
+    #[tokio::test]
+    async fn rpc_client_call_streaming_doc_example() {
+        let state = Arc::new(Mutex::new(CallMockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            let mut chunk = Vec::new();
+            chunk.extend_from_slice(&encode_frame(b"response1"));
+            chunk.extend_from_slice(&encode_frame(b"response2"));
+            chunk.extend_from_slice(&[0, 0, 0, 0]);
+            guard.recv_plan.push_back(Ok(Some(chunk)));
+        }
+
+        let client = make_client(state.clone());
+        let response_stream = client
+            .call_streaming(
+                "echo_stream",
+                futures_stream::iter(vec![b"request1".to_vec(), b"request2".to_vec()]),
+            )
+            .await
+            .unwrap();
+        let mut response_stream = Box::pin(response_stream);
+
+        let mut collected = Vec::new();
+        while let Some(item) = response_stream.next().await {
+            collected.push(item.unwrap());
+        }
+        assert_eq!(
+            collected,
+            vec![b"response1".to_vec(), b"response2".to_vec()]
+        );
+
+        wait_for_sent_frames(&state, 4).await;
+        let writes = state.lock().await.sent.clone();
+        assert_eq!(writes.len(), 4);
+        assert_eq!(writes[0], encode_frame(b"echo_stream"));
+        assert_eq!(writes[1], encode_frame(b"request1"));
+        assert_eq!(writes[2], encode_frame(b"request2"));
+        assert_eq!(writes[3], vec![0, 0, 0, 0]);
+    }
+
+    #[tokio::test]
+    async fn rpc_client_call_server_streaming_doc_example() {
+        let state = Arc::new(Mutex::new(CallMockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            let mut chunk = Vec::new();
+            chunk.extend_from_slice(&encode_frame(b"entry1"));
+            chunk.extend_from_slice(&encode_frame(b"entry2"));
+            chunk.extend_from_slice(&[0, 0, 0, 0]);
+            guard.recv_plan.push_back(Ok(Some(chunk)));
+        }
+
+        let client = make_client(state);
+        let response_stream = client.call_server_streaming("list", vec![]).await.unwrap();
+        let mut response_stream = Box::pin(response_stream);
+
+        let mut collected = Vec::new();
+        while let Some(item) = response_stream.next().await {
+            collected.push(item.unwrap());
+        }
+        assert_eq!(collected, vec![b"entry1".to_vec(), b"entry2".to_vec()]);
+    }
+
+    #[tokio::test]
+    async fn rpc_client_call_client_streaming_doc_example() {
+        let state = Arc::new(Mutex::new(CallMockStreamState::new()));
+        {
+            let mut guard = state.lock().await;
+            let mut chunk = Vec::new();
+            chunk.extend_from_slice(&encode_frame(b"aggregate"));
+            chunk.extend_from_slice(&[0, 0, 0, 0]);
+            guard.recv_plan.push_back(Ok(Some(chunk)));
+        }
+
+        let client = make_client(state);
+        let result = client
+            .call_client_streaming(
+                "aggregate",
+                futures_stream::iter(vec![b"part1".to_vec(), b"part2".to_vec()]),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result, b"aggregate".to_vec());
+    }
+
+    #[tokio::test]
+    async fn rpc_server_start_doc_example_via_adapter() {
+        let mut server = RpcServer::new(server_test_config());
+        server
+            .register_streaming("stream_method", |mut reqs| async move {
+                stream! {
+                    while let Some(data) = reqs.next().await {
+                        yield Ok(data);
+                    }
+                }
+            })
+            .await;
+
+        let stream_state = Arc::new(Mutex::new(ServerMockStreamState::new()));
+        {
+            let mut guard = stream_state.lock().await;
+            let mut request_buffer = Vec::new();
+            request_buffer.extend_from_slice(&encode_frame(b"stream_method"));
+            request_buffer.extend_from_slice(&encode_frame(b"payload"));
+            request_buffer.extend_from_slice(&[0, 0, 0, 0]);
+            guard.read_plan.push_back(Ok(Some(request_buffer)));
+            guard.read_plan.push_back(Ok(None));
+        }
+
+        let stream = ServerMockStream {
+            state: stream_state.clone(),
+        };
+        let mut connection = MockServerConnection::new();
+        connection.push_stream(stream);
+        connection.finish();
+
+        let mut adapter = MockServerAdapter::new(vec![Box::new(connection)]);
+        server.start_with_adapter(&mut adapter).await.unwrap();
+
+        wait_for_server_writes(&stream_state, 2).await;
+        let writes = stream_state.lock().await.writes.clone();
+        assert_eq!(writes.last().unwrap(), &vec![0, 0, 0, 0]);
     }
 }
 
@@ -2312,7 +2245,6 @@ mod tests {
             .with_keep_alive_interval(Duration::from_secs(30))
     }
 
-    /// Create a real QUIC server on ephemeral port; returns (addr, join_handle)
     async fn start_test_server(
         maybe_server: Option<RpcServer>,
     ) -> Result<(SocketAddr, tokio::task::JoinHandle<Result<(), RpcError>>), RpcError> {
@@ -2789,27 +2721,11 @@ mod tests {
         assert_eq!(config3.cert_path, PathBuf::from("cert.pem"));
     }
 
-    /// Test that the RpcConfig builder pattern works correctly.
-    ///
-    /// ```rust
-    /// use rpcnet::RpcConfig;
-    /// use std::time::Duration;
-    /// use std::path::PathBuf;
-    ///
-    /// let config = RpcConfig::new("cert.pem", "127.0.0.1:8080")
-    ///     .with_key_path("key.pem")
-    ///     .with_server_name("example.com")
-    ///     .with_keep_alive_interval(Duration::from_secs(60));
-    ///
-    /// assert_eq!(config.cert_path, PathBuf::from("cert.pem"));
-    /// assert_eq!(config.bind_address, "127.0.0.1:8080");
-    /// assert_eq!(config.server_name, "example.com");
-    /// ```
     #[test]
     fn test_config_builder_doctest() {
-        use std::time::Duration;
         use std::path::PathBuf;
-        
+        use std::time::Duration;
+
         let config = RpcConfig::new("cert.pem", "127.0.0.1:8080")
             .with_key_path("key.pem")
             .with_server_name("example.com")
@@ -2820,17 +2736,6 @@ mod tests {
         assert_eq!(config.server_name, "example.com");
     }
 
-    /// Test that RpcRequest can be created and accessed correctly.
-    ///
-    /// ```rust
-    /// use rpcnet::RpcRequest;
-    ///
-    /// let request = RpcRequest::new(123, "test_method".to_string(), vec![1, 2, 3]);
-    ///
-    /// assert_eq!(request.id(), 123);
-    /// assert_eq!(request.method(), "test_method");
-    /// assert_eq!(request.params(), &[1, 2, 3]);
-    /// ```
     #[test]
     fn test_request_creation_doctest() {
         let request = RpcRequest::new(123, "test_method".to_string(), vec![1, 2, 3]);
@@ -2840,23 +2745,6 @@ mod tests {
         assert_eq!(request.params(), &[1, 2, 3]);
     }
 
-    /// Test that RpcResponse can be created from both success and error cases.
-    ///
-    /// ```rust
-    /// use rpcnet::{RpcResponse, RpcError};
-    ///
-    /// // Success response
-    /// let success = RpcResponse::new(1, Some(vec![42]), None);
-    /// assert_eq!(success.id(), 1);
-    /// assert_eq!(success.result(), Some(&vec![42]));
-    /// assert!(success.error().is_none());
-    ///
-    /// // Error response
-    /// let error = RpcResponse::new(2, None, Some("Error occurred".to_string()));
-    /// assert_eq!(error.id(), 2);
-    /// assert!(error.result().is_none());
-    /// assert_eq!(error.error(), Some(&"Error occurred".to_string()));
-    /// ```
     #[test]
     fn test_response_creation_doctest() {
         // Success response
@@ -2872,22 +2760,6 @@ mod tests {
         assert_eq!(error_resp.error(), Some(&"Error occurred".to_string()));
     }
 
-    /// Test RpcError display formatting.
-    ///
-    /// ```rust
-    /// use rpcnet::RpcError;
-    ///
-    /// let errors = vec![
-    ///     RpcError::ConnectionError("failed".to_string()),
-    ///     RpcError::StreamError("closed".to_string()),
-    ///     RpcError::Timeout,
-    /// ];
-    ///
-    /// for error in errors {
-    ///     let display = error.to_string();
-    ///     assert!(!display.is_empty());
-    /// }
-    /// ```
     #[test]
     fn test_error_display_doctest() {
         let errors = vec![
@@ -2902,19 +2774,6 @@ mod tests {
         }
     }
 
-    /// Test serialization of RPC types.
-    ///
-    /// ```rust
-    /// use rpcnet::{RpcRequest, RpcResponse};
-    ///
-    /// let request = RpcRequest::new(1, "test".to_string(), vec![1, 2, 3]);
-    /// let serialized = bincode::serialize(&request).unwrap();
-    /// let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
-    ///
-    /// assert_eq!(request.id(), deserialized.id());
-    /// assert_eq!(request.method(), deserialized.method());
-    /// assert_eq!(request.params(), deserialized.params());
-    /// ```
     #[test]
     fn test_serialization_doctest() {
         let request = RpcRequest::new(1, "test".to_string(), vec![1, 2, 3]);

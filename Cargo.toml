@@ -34,6 +34,14 @@ serde_json = "1.0"
 thiserror = "2.0.10"
 tokio = { version = "1.43.0", features = ["full"]}
 
+# Migration dependencies for zero-downtime QUIC connection migration
+aes-gcm = "0.10.3"
+hmac = "0.12.1"
+sha2 = "0.10.8"
+uuid = { version = "1.11.0", features = ["v4", "serde"] }
+hex = "0.4.3"
+flate2 = "1.0.28"
+
 # High-performance memory allocator
 jemallocator = { version = "0.5", optional = true }
 
@@ -58,6 +66,8 @@ assert_matches = "1.5"
 tempfile = "3.8"
 futures = "0.3"
 num_cpus = "1.0"
+assert_cmd = "2.0"
+predicates = "3.1"
 
 [[bench]]
 name = "simple"

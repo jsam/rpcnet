@@ -1,8 +1,9 @@
 // Parser validation tests for code generation module
 // These tests focus on edge cases in service definition parsing
 
-use rpcnet::codegen::parser::{ServiceDefinition, ServiceType};
-use syn::Error;
+#![cfg(feature = "codegen")]
+
+use rpcnet::codegen::{ServiceDefinition, ServiceType};
 
 #[test]
 fn test_parse_empty_file() {
@@ -10,7 +11,7 @@ fn test_parse_empty_file() {
     let content = "";
     let result = ServiceDefinition::parse(content);
     assert!(result.is_err());
-    
+
     let error = result.unwrap_err();
     assert!(error.to_string().contains("No service trait found"));
 }
@@ -55,10 +56,10 @@ fn test_parse_valid_service_trait() {
             ProcessingError,
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content);
     assert!(result.is_ok());
-    
+
     let service = result.unwrap();
     assert_eq!(service.service_name().to_string(), "TestService");
     assert_eq!(service.methods().len(), 1);
@@ -74,15 +75,18 @@ fn test_parse_service_attribute_variants() {
         "#[rpcnet::service]",
         "#[service]", // Assuming use rpcnet::service;
     ];
-    
+
     for attr in variants {
-        let content = format!(r#"
+        let content = format!(
+            r#"
             {}
             pub trait TestService {{
                 async fn test(&self) -> Result<Vec<u8>, String>;
             }}
-        "#, attr);
-        
+        "#,
+            attr
+        );
+
         let result = ServiceDefinition::parse(&content);
         assert!(result.is_ok(), "Failed to parse with attribute: {}", attr);
     }
@@ -102,10 +106,10 @@ fn test_parse_multiple_service_traits() {
             async fn method2(&self) -> Result<Vec<u8>, String>;
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content);
     assert!(result.is_err());
-    
+
     let error = result.unwrap_err();
     assert!(error.to_string().contains("Multiple service traits found"));
 }
@@ -119,10 +123,10 @@ fn test_parse_non_async_methods() {
             fn sync_method(&self) -> Result<Vec<u8>, String>;
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content);
     assert!(result.is_err());
-    
+
     let error = result.unwrap_err();
     assert!(error.to_string().contains("Service methods must be async"));
 }
@@ -136,12 +140,14 @@ fn test_parse_methods_without_self() {
             async fn static_method() -> Result<Vec<u8>, String>;
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content);
     assert!(result.is_err());
-    
+
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("Service methods must have &self as first parameter"));
+    assert!(error
+        .to_string()
+        .contains("Service methods must have &self as first parameter"));
 }
 
 #[test]
@@ -153,12 +159,14 @@ fn test_parse_methods_without_result_return() {
             async fn bad_method(&self) -> Vec<u8>;
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content);
     assert!(result.is_err());
-    
+
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("Service methods must return Result"));
+    assert!(error
+        .to_string()
+        .contains("Service methods must return Result"));
 }
 
 #[test]
@@ -170,12 +178,14 @@ fn test_parse_methods_with_no_return_type() {
             async fn void_method(&self);
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content);
     assert!(result.is_err());
-    
+
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("Service methods must return Result"));
+    assert!(error
+        .to_string()
+        .contains("Service methods must return Result"));
 }
 
 #[test]
@@ -204,10 +214,10 @@ fn test_parse_complex_method_signatures() {
             InvalidInput,
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content);
     assert!(result.is_ok());
-    
+
     let service = result.unwrap();
     assert_eq!(service.methods().len(), 4);
 }
@@ -224,13 +234,16 @@ fn test_parse_trait_with_associated_types() {
             async fn method(&self) -> Result<Self::Response, Self::Error>;
         }
     "#;
-    
+
     // This might be valid depending on implementation
     let result = ServiceDefinition::parse(content);
     // We don't assert success/failure as it depends on implementation requirements
     match result {
         Ok(service) => {
-            assert_eq!(service.service_name().to_string(), "ServiceWithAssociatedTypes");
+            assert_eq!(
+                service.service_name().to_string(),
+                "ServiceWithAssociatedTypes"
+            );
         }
         Err(_) => {
             // Also acceptable if associated types aren't supported
@@ -251,7 +264,7 @@ fn test_parse_trait_with_default_implementations() {
             }
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content);
     if result.is_ok() {
         let service = result.unwrap();
@@ -273,7 +286,7 @@ fn test_parse_unicode_identifiers() {
             pub значение: String,
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content);
     if result.is_ok() {
         let service = result.unwrap();
@@ -286,13 +299,16 @@ fn test_parse_unicode_identifiers() {
 fn test_parse_very_long_identifiers() {
     // Test parsing with very long identifiers
     let long_name = "a".repeat(1000);
-    let content = format!(r#"
+    let content = format!(
+        r#"
         #[rpcnet::service]
         pub trait {} {{
             async fn {}(&self) -> Result<Vec<u8>, Error>;
         }}
-    "#, long_name, long_name);
-    
+    "#,
+        long_name, long_name
+    );
+
     let result = ServiceDefinition::parse(&content);
     if result.is_ok() {
         let service = result.unwrap();
@@ -309,7 +325,7 @@ fn test_parse_deeply_nested_types() {
             async fn method(&self) -> Result<Option<Vec<Result<String, Box<dyn std::error::Error>>>>, Error>;
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content);
     assert!(result.is_ok());
 }
@@ -318,13 +334,13 @@ fn test_parse_deeply_nested_types() {
 fn test_parse_invalid_rust_syntax() {
     // Test parsing with invalid Rust syntax
     let invalid_contents = vec![
-        "trait {", // Incomplete trait
-        "#[rpcnet::service] trait", // Missing trait body
-        "pub trait Test { async fn }", // Incomplete method
+        "trait {",                                                     // Incomplete trait
+        "#[rpcnet::service] trait",                                    // Missing trait body
+        "pub trait Test { async fn }",                                 // Incomplete method
         "pub trait Test { async fn test( -> Result<String, Error>; }", // Missing parameter list
-        "trait Test { fn test(&self -> Result<String, Error>; }", // Missing closing paren
+        "trait Test { fn test(&self -> Result<String, Error>; }",      // Missing closing paren
     ];
-    
+
     for content in invalid_contents {
         let result = ServiceDefinition::parse(content);
         assert!(result.is_err(), "Should fail to parse: {}", content);
@@ -346,10 +362,10 @@ fn test_parse_with_complex_imports() {
             async fn method(&self, data: HashMap<String, String>) -> Result<Response, Error>;
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content);
     assert!(result.is_ok());
-    
+
     let service = result.unwrap();
     assert_eq!(service.imports.len(), 5);
 }
@@ -362,10 +378,10 @@ fn test_parse_empty_trait() {
         pub trait EmptyService {
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content);
     assert!(result.is_ok());
-    
+
     let service = result.unwrap();
     assert_eq!(service.methods().len(), 0);
 }
@@ -384,10 +400,10 @@ fn test_parse_trait_with_attributes() {
             async fn new_method(&self) -> Result<String, Error>;
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content);
     assert!(result.is_ok());
-    
+
     let service = result.unwrap();
     assert_eq!(service.methods().len(), 2);
 }
@@ -410,16 +426,16 @@ fn test_service_type_variants() {
             Variant2(String),
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content).unwrap();
-    
+
     match result.types.get("MyStruct").unwrap() {
-        ServiceType::Struct(_) => {}, // Expected
+        ServiceType::Struct(_) => {} // Expected
         ServiceType::Enum(_) => panic!("MyStruct should be categorized as Struct"),
     }
-    
+
     match result.types.get("MyEnum").unwrap() {
-        ServiceType::Enum(_) => {}, // Expected
+        ServiceType::Enum(_) => {} // Expected
         ServiceType::Struct(_) => panic!("MyEnum should be categorized as Enum"),
     }
 }
@@ -434,10 +450,10 @@ fn test_method_extraction() {
             async fn method2(&self, param: u32) -> Result<u32, Error>;
         }
     "#;
-    
+
     let result = ServiceDefinition::parse(content).unwrap();
     let methods = result.methods();
-    
+
     assert_eq!(methods.len(), 2);
     assert_eq!(methods[0].sig.ident.to_string(), "method1");
     assert_eq!(methods[1].sig.ident.to_string(), "method2");

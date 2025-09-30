@@ -37,7 +37,10 @@ impl FileTransferClient {
         request: FileInfoRequest,
     ) -> Result<FileInfoResponse, RpcError> {
         let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
-        let response_data = self.inner.call("FileTransfer.get_file_info", params).await?;
+        let response_data = self
+            .inner
+            .call("FileTransfer.get_file_info", params)
+            .await?;
         bincode::deserialize::<FileInfoResponse>(&response_data)
             .map_err(RpcError::SerializationError)
     }

@@ -1,0 +1,1362 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RpcNet Guide</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">RpcNet Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+<p>RpcNet is a QUIC-based RPC transport built on top of <code>s2n-quic</code>. The crate provides
+high-level server and client primitives, TLS configuration helpers, and rich support
+for unary and streaming request flows. This book centralises the user-facing
+materials that previously lived in API comments so you can read them in one place
+while keeping the library sources compact.</p>
+<h2 id="key-capabilities"><a class="header" href="#key-capabilities">Key Capabilities</a></h2>
+<ul>
+<li>TLS-first configuration for both client and server components</li>
+<li>Simple registration of request handlers with async closures</li>
+<li>Bidirectional, client-streaming, and server-streaming helpers</li>
+<li>Structured error reporting through <code>RpcError</code></li>
+<li>Test-friendly abstractions that allow mocking QUIC streams and connections</li>
+</ul>
+<h2 id="how-to-read-this-book"><a class="header" href="#how-to-read-this-book">How To Read This Book</a></h2>
+<ol>
+<li><strong>Core Concepts</strong> introduces the configuration model and error types.</li>
+<li><strong>Server Guide</strong> walks through binding, registering methods, and starting the
+accept loop.</li>
+<li><strong>Client Guide</strong> covers connection setup plus simple RPC calls.</li>
+<li><strong>Streaming Patterns</strong> dives into bidirectional and one-way streaming helpers.</li>
+<li><strong>Testing &amp; Coverage</strong> documents the built-in mocks used throughout our test
+suite and in the examples you can run locally.</li>
+<li><strong>Reference Tables</strong> summarise the main APIs, argument expectations, and
+return values at a glance.</li>
+</ol>
+<p>Throughout the chapters you will find executable snippets based on the unit
+and integration tests that accompany the crate.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="concepts"><a class="header" href="#concepts">Concepts</a></h1>
+<p>This chapter collects the fundamental ideas behind RpcNet: the runtime building
+blocks, how servers and clients are constructed, and the streaming patterns that
+sit on top of QUIC.</p>
+<h2 id="runtime-building-blocks"><a class="header" href="#runtime-building-blocks">Runtime Building Blocks</a></h2>
+<h3 id="configuration-rpcconfig"><a class="header" href="#configuration-rpcconfig">Configuration (<code>RpcConfig</code>)</a></h3>
+<p><code>RpcConfig</code> encapsulates the TLS artifacts, socket bindings, and optional
+keep-alive settings shared by clients and servers.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::RpcConfig;
+
+let config = RpcConfig::new("certs/server.pem", "127.0.0.1:0")
+    .with_key_path("certs/server-key.pem")
+    .with_server_name("localhost")
+    .with_keep_alive_interval(std::time::Duration::from_secs(30));
+<span class="boring">}</span></code></pre></pre>
+<p>Keep-alive is optional; when enabled the interval is mirrored on both ends of
+the connection so heartbeats stay in sync.</p>
+<h3 id="error-handling-rpcerror"><a class="header" href="#error-handling-rpcerror">Error Handling (<code>RpcError</code>)</a></h3>
+<p><code>RpcError</code> differentiates between connection, stream, TLS, configuration, IO,
+and serialization failures so callers can branch on the exact condition instead
+of parsing strings:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>match client.call("ping", vec![]).await {
+    Ok(bytes) =&gt; println!("pong: {}", String::from_utf8_lossy(&amp;bytes)),
+    Err(rpcnet::RpcError::Timeout) =&gt; eprintln!("server took too long"),
+    Err(other) =&gt; eprintln!("unhandled rpc error: {other}")
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="serialization-strategy"><a class="header" href="#serialization-strategy">Serialization Strategy</a></h3>
+<p>Requests and responses travel as <code>Vec&lt;u8&gt;</code>. Examples use <code>bincode</code> for compact
+frames, but any serialization format can be layered on top.</p>
+<h3 id="concurrency-model"><a class="header" href="#concurrency-model">Concurrency Model</a></h3>
+<p>Each accepted QUIC connection runs inside its own Tokio task. Within that
+connection, every RPC request is processed on another task so long-running
+handlers never block unrelated work. Clients open a fresh bidirectional stream
+per call while sharing a single connection behind an <code>Arc</code> + <code>RwLock</code>.</p>
+<h2 id="server-essentials"><a class="header" href="#server-essentials">Server Essentials</a></h2>
+<h3 id="creating-the-server"><a class="header" href="#creating-the-server">Creating the Server</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::{RpcServer, RpcConfig};
+
+let config = RpcConfig::new("certs/server.pem", "127.0.0.1:8080")
+    .with_key_path("certs/server-key.pem")
+    .with_server_name("localhost");
+let mut server = RpcServer::new(config);
+<span class="boring">}</span></code></pre></pre>
+<p>Binding to port <code>0</code> lets the OS allocate a free port. Once <code>bind()</code> succeeds the
+chosen address is stored on <code>server.socket_addr</code>.</p>
+<h3 id="registering-unary-handlers"><a class="header" href="#registering-unary-handlers">Registering Unary Handlers</a></h3>
+<p>Handlers receive raw <code>Vec&lt;u8&gt;</code> payloads and return serialized responses. The
+closure executes inside a Tokio task, so async IO is allowed.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::{RpcError, RpcServer};
+
+server.register("add", |params| async move {
+    let (a, b): (i32, i32) = bincode::deserialize(&amp;params)
+        .map_err(RpcError::SerializationError)?;
+    let sum = a + b;
+    Ok(bincode::serialize(&amp;sum)? )
+}).await;
+<span class="boring">}</span></code></pre></pre>
+<p>Registering a method again overwrites the previous handler.</p>
+<h3 id="registering-streaming-handlers"><a class="header" href="#registering-streaming-handlers">Registering Streaming Handlers</a></h3>
+<p>Streaming handlers consume a stream of request payloads and produce a stream of
+<code>Result&lt;Vec&lt;u8&gt;, RpcError&gt;</code> responses. Use <code>async_stream::stream!</code> or
+<code>tokio_stream</code> helpers to build the return value.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use async_stream::stream;
+use futures::StreamExt;
+
+server.register_streaming("echo_stream", |mut reqs| async move {
+    stream! {
+        while let Some(payload) = reqs.next().await {
+            yield Ok(payload); // echo back exactly what we received
+        }
+    }
+}).await;
+<span class="boring">}</span></code></pre></pre>
+<h3 id="binding-and-starting"><a class="header" href="#binding-and-starting">Binding and Starting</a></h3>
+<p>Binding consumes the TLS material supplied in <code>RpcConfig</code> and returns an
+<code>s2n_quic::Server</code> that feeds into <code>start</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let quic_server = server.bind()?;
+println!("listening on {}", server.socket_addr.unwrap());
+server.start(quic_server).await?;
+<span class="boring">}</span></code></pre></pre>
+<p><code>start</code> runs until the QUIC provider stops delivering connections (typically
+when your process shuts down). Every accepted connection and stream is served
+concurrently.</p>
+<h3 id="graceful-shutdown"><a class="header" href="#graceful-shutdown">Graceful Shutdown</a></h3>
+<p>Wrap the <code>start</code> future inside a <code>tokio::select!</code> with your shutdown signal.
+When <code>accept()</code> yields <code>None</code> the loop exits and the server terminates cleanly.</p>
+<h2 id="client-essentials"><a class="header" href="#client-essentials">Client Essentials</a></h2>
+<h3 id="connecting"><a class="header" href="#connecting">Connecting</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::{RpcClient, RpcConfig};
+use std::net::SocketAddr;
+
+let config = RpcConfig::new("certs/ca.pem", "127.0.0.1:0")
+    .with_server_name("localhost");
+let server_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+let client = RpcClient::connect(server_addr, config).await?;
+<span class="boring">}</span></code></pre></pre>
+<p>Client configuration mirrors the server TLS settings, including optional
+keep-alive.</p>
+<h3 id="unary-calls"><a class="header" href="#unary-calls">Unary Calls</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let payload = bincode::serialize(&amp;(21, 21))?;
+let response = client.call("add", payload).await?;
+let result: i32 = bincode::deserialize(&amp;response)?;
+assert_eq!(result, 42);
+<span class="boring">}</span></code></pre></pre>
+<p>Errors surface as <code>RpcError</code> values. Timeouts honour the <code>DEFAULT_TIMEOUT</code>
+constant (30 seconds normally, 2 seconds under <code>cfg(test)</code>).</p>
+<h3 id="concurrent-calls"><a class="header" href="#concurrent-calls">Concurrent Calls</a></h3>
+<p>Clone the client (internally <code>Arc</code>) and issue calls in parallel. Each call opens
+a new bidirectional stream on the shared connection.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::sync::Arc;
+use tokio::join;
+
+let client = Arc::new(client);
+let (a, b) = join!(
+    client.clone().call("first", vec![]),
+    client.clone().call("second", vec![])
+);
+<span class="boring">}</span></code></pre></pre>
+<h3 id="inspecting-request-ids"><a class="header" href="#inspecting-request-ids">Inspecting Request IDs</a></h3>
+<p><code>RpcClient</code> maintains an atomic <code>next_id</code>. Incrementing it per call keeps
+request/response pairs aligned. You rarely need to touch this directly, but it
+aids traffic debugging.</p>
+<h2 id="streaming-patterns"><a class="header" href="#streaming-patterns">Streaming Patterns</a></h2>
+<p>RpcNet exposes three streaming helpers built on top of QUIC bidirectional
+streams. Each frame is length-prefixed followed by the payload bytes.</p>
+<h3 id="bidirectional-call_streaming"><a class="header" href="#bidirectional-call_streaming">Bidirectional (<code>call_streaming</code>)</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use futures::stream;
+use futures::StreamExt;
+
+let requests = stream::iter(vec![
+    b"hello".to_vec(),
+    b"world".to_vec(),
+]);
+
+let responses = client.call_streaming("chat", requests).await?;
+let mut responses = Box::pin(responses);
+while let Some(frame) = responses.next().await {
+    println!("response: {:?}", frame?);
+}
+<span class="boring">}</span></code></pre></pre>
+<p>The client sends the method name first, then each payload, finishing with a <code>0</code>
+length frame to signal completion. Sending continues even as responses arrive;
+upload and download directions are independent.</p>
+<h3 id="server-streaming-call_server_streaming"><a class="header" href="#server-streaming-call_server_streaming">Server Streaming (<code>call_server_streaming</code>)</a></h3>
+<p>Server streaming wraps <code>call_streaming</code> and sends a single request frame before
+yielding the response stream:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use futures::StreamExt;
+
+let stream = client.call_server_streaming("list_items", Vec::new()).await?;
+let mut stream = Box::pin(stream);
+while let Some(frame) = stream.next().await {
+    println!("item: {:?}", frame?);
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="client-streaming-call_client_streaming"><a class="header" href="#client-streaming-call_client_streaming">Client Streaming (<code>call_client_streaming</code>)</a></h3>
+<p>Client streaming uploads many payloads and waits for an aggregated result.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use futures::stream;
+
+let uploads = stream::iter(vec![b"chunk-a".to_vec(), b"chunk-b".to_vec()]);
+let digest = client.call_client_streaming("upload", uploads).await?;
+println!("digest bytes: {digest:?}");
+<span class="boring">}</span></code></pre></pre>
+<h3 id="implementing-streaming-handlers"><a class="header" href="#implementing-streaming-handlers">Implementing Streaming Handlers</a></h3>
+<p>On the server, build a response stream with <code>async_stream::stream!</code> or
+<code>tokio_stream</code> helpers. Returning <code>Err</code> from the response stream maps to a
+generic error frame; encode richer error payloads yourself when necessary.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use async_stream::stream;
+use futures::StreamExt;
+
+server.register_streaming("uppercase", |mut reqs| async move {
+    stream! {
+        while let Some(bytes) = reqs.next().await {
+            let mut owned = bytes.clone();
+            owned.make_ascii_uppercase();
+            yield Ok(owned);
+        }
+    }
+}).await;
+<span class="boring">}</span></code></pre></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h1>
+<p>This tutorial mirrors the <code>examples/basic_greeting</code> sample and shows, step by
+step, how to install RpcNet, run the <code>rpcnet-gen</code> CLI, and integrate the
+generated code into your own project.</p>
+<h2 id="step-0-prerequisites"><a class="header" href="#step-0-prerequisites">Step 0: Prerequisites</a></h2>
+<ul>
+<li>Rust 1.75+ (<code>rustup show</code> to confirm)</li>
+<li><code>cargo</code> on your <code>PATH</code></li>
+<li>macOS or Linux (QUIC/TLS support is bundled through <code>s2n-quic</code>)</li>
+</ul>
+<h2 id="step-1-create-a-new-crate"><a class="header" href="#step-1-create-a-new-crate">Step 1: Create a new crate</a></h2>
+<pre><code class="language-bash">cargo new hello-rpc
+cd hello-rpc
+</code></pre>
+<h2 id="step-2-add-the-rpcnet-runtime-crate"><a class="header" href="#step-2-add-the-rpcnet-runtime-crate">Step 2: Add the RpcNet runtime crate</a></h2>
+<pre><code class="language-bash">cargo add rpcnet
+</code></pre>
+<p>RpcNet enables the high-performance <code>perf</code> feature by default. If you need to
+opt out (e.g. another allocator is already selected), edit <code>Cargo.toml</code>:</p>
+<pre><code class="language-toml">[dependencies]
+rpcnet = { version = "0.2", default-features = false }
+</code></pre>
+<p>You will also want <code>serde</code> for request/response types, just like the example:</p>
+<pre><code class="language-toml">serde = { version = "1", features = ["derive"] }
+</code></pre>
+<h2 id="step-3-install-the-rpcnet-gen-cli"><a class="header" href="#step-3-install-the-rpcnet-gen-cli">Step 3: Install the rpcnet-gen CLI</a></h2>
+<p>Install the generator globally so every project can call it:</p>
+<pre><code class="language-bash">cargo install rpcnet --features codegen --bin rpcnet-gen
+</code></pre>
+<p>Verify the install:</p>
+<pre><code class="language-bash">rpcnet-gen --help
+</code></pre>
+<p>You should see the full usage banner:</p>
+<pre><code>Generate RPC client and server code from service definitions
+
+Usage: rpcnet-gen [OPTIONS] --input &lt;INPUT&gt;
+
+Options:
+  -i, --input &lt;INPUT&gt;    Input .rpc file (Rust source with service trait)
+  -o, --output &lt;OUTPUT&gt;  Output directory for generated code [default: src/generated]
+      --server-only      Generate only server code
+      --client-only      Generate only client code
+      --types-only       Generate only type definitions
+  -h, --help             Print help
+  -V, --version          Print version
+</code></pre>
+<h2 id="step-4-author-a-service-definition"><a class="header" href="#step-4-author-a-service-definition">Step 4: Author a service definition</a></h2>
+<p>Create <code>src/greeting.rpc.rs</code> describing your protocol. The syntax is ordinary
+Rust with a <code>#[rpcnet::service]</code> attribute, so you can leverage the compiler and
+IDE tooling while you design the API:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// src/greeting.rpc.rs
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GreetRequest {
+    pub name: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GreetResponse {
+    pub message: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum GreetingError {
+    EmptyName,
+    InvalidInput(String),
+}
+
+#[rpcnet::service]
+pub trait Greeting {
+    async fn greet(&amp;self, request: GreetRequest) -&gt; Result&lt;GreetResponse, GreetingError&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="step-5-generate-client-and-server-code"><a class="header" href="#step-5-generate-client-and-server-code">Step 5: Generate client and server code</a></h2>
+<p>Point the CLI at the <code>.rpc</code> file and choose an output directory. Here we mirror
+<code>examples/basic_greeting</code> by writing into <code>src/generated</code>:</p>
+<pre><code class="language-bash">rpcnet-gen --input src/greeting.rpc.rs --output src/generated
+</code></pre>
+<p>The CLI confirms what it created:</p>
+<pre><code>📦 Generating code for service: Greeting
+  ✅ Generated server: src/generated/greeting/server.rs
+  ✅ Generated client: src/generated/greeting/client.rs
+  ✅ Generated types: src/generated/greeting/types.rs
+
+✨ Code generation complete!
+
+📝 Add the following to your code to use the generated service:
+    #[path = "generated/greeting/mod.rs"]
+    mod greeting;
+    use greeting::*;
+</code></pre>
+<p>Inspect the directory to see the modules that were created—this matches the
+layout under <code>examples/basic_greeting/generated/</code>:</p>
+<pre><code>src/generated/
+└── greeting/
+    ├── client.rs   # async client wrapper for calling the service
+    ├── mod.rs      # re-exports so `use greeting::*` pulls everything in
+    ├── server.rs   # server harness plus `GreetingHandler` trait
+    └── types.rs    # request/response/error structs cloned from the .rpc file
+</code></pre>
+<p><code>client.rs</code> exposes <code>GreetingClient</code>, <code>server.rs</code> wires your implementation into
+the transport via <code>GreetingServer</code>, and <code>types.rs</code> contains the shared data
+structures.</p>
+<h2 id="step-6-wire-the-generated-code-into-your-project"><a class="header" href="#step-6-wire-the-generated-code-into-your-project">Step 6: Wire the generated code into your project</a></h2>
+<p>Reference the generated module and bring the types into scope. For example,
+in <code>src/main.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[path = "generated/greeting/mod.rs"]
+mod greeting;
+
+use greeting::client::GreetingClient;
+use greeting::server::{GreetingHandler, GreetingServer};
+use greeting::{GreetRequest, GreetResponse, GreetingError};
+use rpcnet::RpcConfig;
+<span class="boring">}</span></code></pre></pre>
+<p>From here there are two pieces to wire up:</p>
+<ol>
+<li>
+<p><strong>Server</strong> – implement the generated <code>GreetingHandler</code> trait and launch the
+harness. This mirrors <code>examples/basic_greeting/server.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust">struct MyGreetingService;
+
+#[async_trait::async_trait]
+impl GreetingHandler for MyGreetingService {
+    async fn greet(&amp;self, request: GreetRequest) -&gt; Result&lt;GreetResponse, GreetingError&gt; {
+        Ok(GreetResponse { message: format!("Hello, {}!", request.name) })
+    }
+}
+
+#[tokio::main]
+async fn main() -&gt; anyhow::Result&lt;()&gt; {
+    let config = RpcConfig::new("certs/test_cert.pem", "127.0.0.1:8080")
+        .with_key_path("certs/test_key.pem")
+        .with_server_name("localhost");
+
+    GreetingServer::new(MyGreetingService, config).serve().await?;
+    Ok(())
+}</code></pre></pre>
+<p><code>GreetingServer::serve</code> handles QUIC I/O, wiring your implementation to the
+generated protocol handlers.</p>
+<p><strong>Tuning worker threads (optional).</strong> By default Tokio uses the number of
+available CPU cores. To override this for RpcNet services, set
+<code>RPCNET_SERVER_THREADS</code> and build your runtime manually:</p>
+<pre><pre class="playground"><code class="language-rust">fn main() -&gt; anyhow::Result&lt;()&gt; {
+    let worker_threads = rpcnet::runtime::server_worker_threads();
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(worker_threads)
+        .enable_all()
+        .build()?;
+
+    runtime.block_on(async {
+        // existing async server logic goes here
+        Ok::&lt;_, anyhow::Error&gt;(())
+    })?;
+
+    Ok(())
+}</code></pre></pre>
+<p>Run the binary with a custom thread count:</p>
+<pre><code class="language-bash">RPCNET_SERVER_THREADS=8 cargo run
+</code></pre>
+<p>Adjust the command if your server lives in a different binary target (for
+example <code>cargo run --bin my-server</code>).</p>
+<p>If you keep using the <code>#[tokio::main]</code> macro, Tokio will also honour the
+upstream <code>TOKIO_WORKER_THREADS</code> environment variable.</p>
+</li>
+<li>
+<p><strong>Client</strong> – construct <code>GreetingClient</code> to invoke the RPC. Compare with
+<code>examples/basic_greeting/client.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust">#[tokio::main]
+async fn main() -&gt; anyhow::Result&lt;()&gt; {
+    let config = RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0")
+        .with_server_name("localhost");
+
+    let server_addr = "127.0.0.1:8080".parse()?;
+    let client = GreetingClient::connect(server_addr, config).await?;
+
+    let response = client.greet(GreetRequest { name: "World".into() }).await?;
+    println!("Server replied: {}", response.message);
+    Ok(())
+}</code></pre></pre>
+</li>
+</ol>
+<p>The generated client takes care of serialization, TLS, and backpressure while
+presenting an async function per RPC method.</p>
+<h2 id="step-7-build-and-run"><a class="header" href="#step-7-build-and-run">Step 7: Build and run</a></h2>
+<p>Compile and execute as usual:</p>
+<pre><code class="language-bash">cargo build
+cargo run
+</code></pre>
+<p>While you experiment, keep the reference example nearby:</p>
+<pre><code class="language-bash">ls examples/basic_greeting
+# client.rs  generated/  greeting.rpc.rs  server.rs
+</code></pre>
+<p>Comparing your project with the example is a quick way to confirm the wiring
+matches what the CLI expects.</p>
+<h2 id="where-to-go-next"><a class="header" href="#where-to-go-next">Where to go next</a></h2>
+<ul>
+<li>Read the <a href="rpcnet-gen.html">rpcnet-gen CLI guide</a> for advanced flags such as
+<code>--server-only</code>, <code>--client-only</code>, and custom output paths.</li>
+<li>Explore the <a href="concepts.html">Concepts</a> chapter for runtime fundamentals,
+server/client wiring, and streaming patterns.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="connection-swapping-for-low-latency-serving"><a class="header" href="#connection-swapping-for-low-latency-serving">Connection Swapping for Low-Latency Serving</a></h1>
+<p>QUIC lets you move an active connection between endpoints without forcing the
+client to reconnect. That property is ideal for latency-sensitive inference
+services where you want developers to talk directly to GPU workers instead of a
+broker, yet still migrate sessions during rollouts or drain events. RpcNet rides
+on QUIC, so once a TLS session is established the client’s streaming RPCs keep
+flowing even if the worker behind the scenes changes.</p>
+<p>To make the idea concrete the repository ships a working reference under
+<code>examples/connection_swap/</code>. It shows how a single process can accept an RpcNet
+connection, hand it from one worker task to another, and keep a streaming client
+online throughout the swap. The same pattern can be extended to multi-process or
+multi-host deployments by exporting the QUIC connection state and sharing it with
+another instance.</p>
+<h2 id="architecture-overview"><a class="header" href="#architecture-overview">Architecture Overview</a></h2>
+<pre><code>                     +------------------------------+
+                     |  Connection Director &amp;       |
+                     |  Manager (RpcNet server)     |
+                     +------+-----------------------+
+                            |
+                            | RpcServer::drive_connection
+                            |
+             +--------------+---------------+
+             |                              |
+        +----v-----+                   +----v-----+
+        | Worker A |                   | Worker B |
+        +----+-----+                   +----+-----+
+             |                              |
+             |            rotates           |
+             +------------------------------+
+
+        (every 15s the manager hands the live connection
+         to the other worker without dropping the client)
+
+Streaming Client ⇄ Connection Director
+</code></pre>
+<ul>
+<li>The <strong>Streaming Client</strong> uses <code>RpcClient::call_server_streaming</code> to fetch
+tokens. It stays connected while the workers change.</li>
+<li>The <strong>Connection Director</strong> listens for incoming connections, drives them via
+<code>RpcServer::drive_connection</code>, and keeps the current owner in a
+<code>ConnectionManager</code> that periodically rotates the session.</li>
+<li><strong>Worker A/B</strong> register normal RpcNet streaming handlers and maintain a shared
+session counter to prove continuity after migration.</li>
+</ul>
+<h2 id="example-layout"><a class="header" href="#example-layout">Example Layout</a></h2>
+<pre><code>examples/connection_swap/
+├── Cargo.toml
+├── src
+│   ├── bin
+│   │   ├── director.rs          # runs the director/manager/worker stack
+│   │   ├── client.rs            # streaming client binary
+│   │   └── demo.rs              # convenience launcher wiring everything up
+│   ├── client_app.rs            # reusable client logic
+│   ├── director.rs              # director + connection manager
+│   ├── manager.rs               # connection manager &amp; automatic rotation
+│   ├── worker.rs                # worker streaming handlers + session state
+│   └── lib.rs                   # constants and helper functions
+</code></pre>
+<h2 id="implementation-highlights"><a class="header" href="#implementation-highlights">Implementation Highlights</a></h2>
+<ul>
+<li><strong><code>RpcServer::drive_connection</code></strong> – the library exposes this helper so you can
+feed an accepted <code>s2n_quic::connection::Connection</code> into a worker and keep
+polling it until either the client disconnects or the manager asks for a
+handoff.</li>
+<li><strong>Connection manager</strong> – once workers register themselves over the
+<code>director.register_worker</code> RPC, the director keeps a rotating list and
+advances every 15 s (or immediately when a worker fails).</li>
+<li><strong>Worker registration</strong> – each worker uses a small RpcNet client to send a
+<code>RegisterWorker</code> message to the director and retries every two seconds until
+the broker is available.</li>
+<li><strong>Session continuity</strong> – workers share a small <code>SessionState</code> counter to prove
+the same context is reused after the handoff. Real deployments would ship KV
+caches or conversation history instead.</li>
+<li><strong>Automatic rotation</strong> – the director repeatedly simulates worker loss without
+the client reopening its QUIC connection.</li>
+</ul>
+<h2 id="running-the-example"><a class="header" href="#running-the-example">Running the Example</a></h2>
+<p>Use four terminals so each component runs as an independent process:</p>
+<pre><code class="language-bash"># Terminal 1 – worker A
+CONNECTION_SWAP_WORKER_ADDR=127.0.0.1:62001 \
+CONNECTION_SWAP_WORKER_LABEL=worker-a \
+cargo run --manifest-path examples/connection_swap/Cargo.toml --bin worker
+
+# Terminal 2 – worker B
+CONNECTION_SWAP_WORKER_ADDR=127.0.0.1:62002 \
+CONNECTION_SWAP_WORKER_LABEL=worker-b \
+cargo run --manifest-path examples/connection_swap/Cargo.toml --bin worker
+
+# Terminal 3 – director (the broker)
+CONNECTION_SWAP_DIRECTOR_ADDR=127.0.0.1:61000 \
+CONNECTION_SWAP_WORKERS=127.0.0.1:62001,127.0.0.1:62002 \
+cargo run --manifest-path examples/connection_swap/Cargo.toml --bin director
+
+# Terminal 4 – streaming client (stays connected to the director)
+CONNECTION_SWAP_DIRECTOR_TARGET=127.0.0.1:61000 \
+cargo run --manifest-path examples/connection_swap/Cargo.toml --bin client
+</code></pre>
+<p>The client prints tokens tagged with the active worker. Every ~15 seconds the
+director rotates to the other worker; the worker that was serving the stream
+simulates a fault by returning an error, and the client immediately restarts the
+same RPC over the existing connection to the director.</p>
+<p>Each worker attempts to register with the director on start-up and keeps
+retrying every few seconds until it succeeds, so you can launch the workers
+before or after the director.</p>
+<h3 id="environment-variables"><a class="header" href="#environment-variables">Environment Variables</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Variable</th><th>Default</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>CONNECTION_SWAP_DIRECTOR_ADDR</code></td><td><code>127.0.0.1:61000</code></td><td>Address the director binds to</td></tr>
+<tr><td><code>CONNECTION_SWAP_DIRECTOR_TARGET</code></td><td>same as bind</td><td>Address the client connects to (for NAT setups)</td></tr>
+<tr><td><code>CONNECTION_SWAP_WORKER_ADDR</code></td><td>—</td><td>Override per worker process (see commands above)</td></tr>
+<tr><td><code>CONNECTION_SWAP_WORKER_LABEL</code></td><td><code>worker</code></td><td>Optional label used in log output</td></tr>
+</tbody></table>
+</div>
+<h3 id="certificates"><a class="header" href="#certificates">Certificates</a></h3>
+<p>All binaries use the shared PEM files under <code>certs/</code>. The paths are canonicalised
+at runtime, so you can launch the example from any working directory as long as
+the repository’s <code>certs/test_cert.pem</code> and <code>certs/test_key.pem</code> are present.</p>
+<h2 id="extending-the-pattern"><a class="header" href="#extending-the-pattern">Extending the Pattern</a></h2>
+<p>The demo keeps everything in one process for simplicity, but the same
+coordination works across processes or hosts:</p>
+<ol>
+<li>Replace the in-process manager with a connection-aware UDP proxy (Envoy,
+<code>s2n-quic-transport</code>, etc.) that forwards packets based on connection IDs.</li>
+<li>Export a connection’s state using the lower level <code>s2n-quic</code> APIs and import
+it on another instance before updating the proxy’s routing table.</li>
+<li>Store session metadata (batch state, KV caches, auth tokens) in an external
+store so the new worker can resume immediately.</li>
+</ol>
+<p>Those additions are orthogonal to the RpcNet changes—the example already shows
+how to pause a worker, hand the <code>Connection</code> to another task, and prove that the
+client never notices.</p>
+<p>With the connection-swapping foundations in place you can now combine the demo
+with the streaming patterns described earlier in the book, or extend the
+rotation logic to plug into your own deployment tooling for true zero-downtime,
+low-latency rollouts.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="streaming-overview"><a class="header" href="#streaming-overview">Streaming Overview</a></h1>
+<p>RpcNet builds streaming on top of QUIC bidirectional streams, letting clients
+and servers exchange sequences of frames concurrently. This chapter explains the
+core terminology, how the helpers map to underlying QUIC behaviour, and which
+features to reach for when designing real-time APIs.</p>
+<h2 id="what-streaming-means-in-rpcnet"><a class="header" href="#what-streaming-means-in-rpcnet">What “streaming” means in RpcNet</a></h2>
+<p>Each streaming RPC opens a fresh QUIC bidirectional stream:</p>
+<ul>
+<li>Frames are transported as length-prefixed <code>Vec&lt;u8&gt;</code> payloads.</li>
+<li>Upload and download directions operate independently; the client can keep
+sending while the server responds, and vice versa.</li>
+<li>Either side sends a zero-length frame to signal end-of-stream.</li>
+</ul>
+<p>RpcNet exposes three convenience helpers that mirror gRPC-style semantics:</p>
+<div class="table-wrapper"><table><thead><tr><th>Pattern</th><th>Helper on <code>RpcClient</code></th><th>Typical use case</th></tr></thead><tbody>
+<tr><td>Bidirectional streaming</td><td><code>call_streaming</code></td><td>Chat, collaborative editing, turn-taking</td></tr>
+<tr><td>Server streaming</td><td><code>call_server_streaming</code></td><td>Live dashboards, subscriptions, long poll</td></tr>
+<tr><td>Client streaming</td><td><code>call_client_streaming</code></td><td>Batched uploads, telemetry aggregation</td></tr>
+</tbody></table>
+</div>
+<p>The server registers a single handler API (<code>register_streaming</code>) for all three
+patterns; the difference lies in how the client constructs the request stream
+and how many responses it expects.</p>
+<h2 id="frame-format"><a class="header" href="#frame-format">Frame format</a></h2>
+<p>RpcNet’s streaming frames follow this layout:</p>
+<pre><code>&lt;u32 payload_length in little endian&gt;&lt;payload bytes&gt;
+</code></pre>
+<ul>
+<li><code>payload_length == 0</code> means “no more frames”.</li>
+<li>Payloads contain arbitrary user-defined bytes; most examples serialize using
+<code>bincode</code> or <code>serde_json</code>.</li>
+<li>The library allocates buffers lazily and only keeps a single frame in memory
+per direction.</li>
+</ul>
+<h2 id="bidirectional-streaming-in-detail"><a class="header" href="#bidirectional-streaming-in-detail">Bidirectional streaming in detail</a></h2>
+<p>Use <code>RpcClient::call_streaming</code> when both sides continuously trade messages:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let responses = client.call_streaming("chat", outbound_frames).await?;
+<span class="boring">}</span></code></pre></pre>
+<p>The client passes an async <code>Stream&lt;Item = Vec&lt;u8&gt;&gt;</code> and receives another stream
+for responses. RpcNet multiplexes both directions on a single QUIC stream. The
+server handler receives an async stream of request frames and must return an
+async stream of <code>Result&lt;Vec&lt;u8&gt;, RpcError&gt;</code> responses.</p>
+<p>Choose this mode when:</p>
+<ul>
+<li>Each request needs a corresponding response (command/reply flow).</li>
+<li>Both parties produce data over time (whiteboard sessions, multiplayer games).</li>
+<li>You want to push updates without closing the upload direction.</li>
+</ul>
+<h2 id="server-streaming"><a class="header" href="#server-streaming">Server streaming</a></h2>
+<p><code>RpcClient::call_server_streaming</code> wraps <code>call_streaming</code> for the common case
+where the client sends <strong>one</strong> request and the server streams many responses:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let stream = client.call_server_streaming("subscribe", request_bytes).await?;
+<span class="boring">}</span></code></pre></pre>
+<p>On the server, the handler still observes a request stream; most implementations
+read the first frame as the subscription and ignore additional frames. Use this
+pattern when the server drives the timeline (market data, notifications,
+progress updates).</p>
+<h2 id="client-streaming"><a class="header" href="#client-streaming">Client streaming</a></h2>
+<p><code>RpcClient::call_client_streaming</code> handles the inverse: the client uploads many
+frames and waits for a single aggregated response.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let response = client.call_client_streaming("upload", outbound_frames).await?;
+<span class="boring">}</span></code></pre></pre>
+<p>The server consumes every inbound frame before yielding exactly one response
+frame. This pattern pairs well with compression or summarisation (log shipping,
+bulk metrics, video chunk ingestion).</p>
+<h2 id="keep-alive-and-flow-control"><a class="header" href="#keep-alive-and-flow-control">Keep-alive and flow control</a></h2>
+<ul>
+<li><code>RpcConfig::with_keep_alive_interval</code> controls heartbeat frames at the QUIC
+layer, keeping otherwise idle streams alive.</li>
+<li>Flow control is managed by s2n-quic; RpcNet reads and writes asynchronously,
+so slow consumers only backpressure their own stream, not the entire
+connection.</li>
+<li>Because each RPC lives on a separate QUIC stream, you can run many streaming
+calls in parallel without head-of-line blocking.</li>
+</ul>
+<h2 id="error-handling-semantics"><a class="header" href="#error-handling-semantics">Error handling semantics</a></h2>
+<ul>
+<li>
+<p>Returning <code>Err(RpcError)</code> from a server response stream sends a generic error
+frame to the client and terminates the stream. Encode domain-specific errors
+inside your payloads when you need richer context.</p>
+</li>
+<li>
+<p>If the client drops its output stream early, the server handler eventually</p>
+<p>sees <code>None</code> from the inbound iterator and can clean up resources.</p>
+</li>
+<li>
+<p>Timeouts follow the same <code>DEFAULT_TIMEOUT</code> as unary calls, so linger only as
+long as your app requires.</p>
+</li>
+</ul>
+<h2 id="choosing-between-streaming-helpers"><a class="header" href="#choosing-between-streaming-helpers">Choosing between streaming helpers</a></h2>
+<p>Ask yourself:</p>
+<ol>
+<li>Does the client expect multiple responses? → Use server streaming.</li>
+<li>Does the server expect multiple requests? → Use client streaming.</li>
+<li>Do both sides talk repeatedly? → Use bidirectional streaming.</li>
+</ol>
+<p>When none of the above apply, stick with unary RPCs—they offer simpler error
+handling and deterministic retry behaviour.</p>
+<h2 id="whats-next"><a class="header" href="#whats-next">What’s next</a></h2>
+<ul>
+<li>Jump to the <a href="streaming-example.html">Streaming Walkthrough</a> for a complete
+telemetry example that covers every helper.</li>
+<li>Revisit <a href="concepts.html#streaming-patterns">Concepts</a> if you need low-level API
+reminders or code snippets.</li>
+</ul>
+<p>Armed with the terminology and behaviour described here, you can design
+streaming endpoints with confidence and implement them using the detailed guide
+in the next chapter.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="streaming-walkthrough"><a class="header" href="#streaming-walkthrough">Streaming Walkthrough</a></h1>
+<p>This end-to-end example builds a telemetry service that exercises every
+streaming mode RpcNet offers: bidirectional chat, server streaming updates, and
+client streaming uploads. Follow along to scaffold the project, implement the
+handlers, and drive the flows from a client binary.</p>
+<h2 id="step-0-prerequisites-1"><a class="header" href="#step-0-prerequisites-1">Step 0: Prerequisites</a></h2>
+<ul>
+<li>Rust 1.75+ (<code>rustup show</code> to confirm)</li>
+<li><code>cargo</code> on your <code>PATH</code></li>
+<li>macOS or Linux (TLS support is bundled via <code>s2n-quic</code>)</li>
+</ul>
+<h2 id="step-1-create-the-project-layout"><a class="header" href="#step-1-create-the-project-layout">Step 1: Create the project layout</a></h2>
+<pre><code class="language-bash">cargo new telemetry-streams --bin
+cd telemetry-streams
+mkdir -p certs src/bin
+rm src/main.rs  # we'll rely on explicit binaries instead of the default main
+</code></pre>
+<p>The example uses two binaries: <code>src/bin/server.rs</code> and <code>src/bin/client.rs</code>.</p>
+<h2 id="step-2-declare-dependencies"><a class="header" href="#step-2-declare-dependencies">Step 2: Declare dependencies</a></h2>
+<p>Edit <code>Cargo.toml</code> to pull in RpcNet and helper crates:</p>
+<pre><code class="language-toml">[package]
+name = "telemetry-streams"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rpcnet = "0.2"
+serde = { version = "1", features = ["derive"] }
+bincode = "1.3"
+async-stream = "0.3"
+futures = "0.3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+</code></pre>
+<ul>
+<li><code>rpcnet</code> provides the client/server runtime.</li>
+<li><code>async-stream</code> and <code>futures</code> help produce response streams on the server.</li>
+<li><code>serde</code>/<code>bincode</code> handle payload serialization.</li>
+<li>Tokio is required because RpcNet is async-first.</li>
+</ul>
+<h2 id="step-3-generate-development-certificates"><a class="header" href="#step-3-generate-development-certificates">Step 3: Generate development certificates</a></h2>
+<p>RpcNet requires TLS material for QUIC. Create a self-signed pair for local
+experiments:</p>
+<pre><code class="language-bash">openssl req -x509 -newkey rsa:4096 \
+  -keyout certs/server-key.pem \
+  -out certs/server-cert.pem \
+  -days 365 -nodes \
+  -subj "/CN=localhost"
+</code></pre>
+<p>The client reuses the public certificate file to trust the server.</p>
+<h2 id="step-4-define-shared-data-types"><a class="header" href="#step-4-define-shared-data-types">Step 4: Define shared data types</a></h2>
+<p>Expose a library module that both binaries can import. Create <code>src/lib.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// src/lib.rs
+pub mod telemetry;
+<span class="boring">}</span></code></pre></pre>
+<p>Now add the telemetry definitions in <code>src/telemetry.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// src/telemetry.rs
+use rpcnet::RpcError;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MetricReading {
+    pub sensor: String,
+    pub value: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LiveUpdate {
+    pub sensor: String,
+    pub rolling_avg: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ChatMessage {
+    pub from: String,
+    pub body: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Ack {
+    pub accepted: usize,
+}
+
+pub fn encode&lt;T: Serialize&gt;(value: &amp;T) -&gt; Result&lt;Vec&lt;u8&gt;, RpcError&gt; {
+    Ok(bincode::serialize(value)?)
+}
+
+pub fn decode&lt;T: for&lt;'de&gt; Deserialize&lt;'de&gt;&gt;(bytes: &amp;[u8]) -&gt; Result&lt;T, RpcError&gt; {
+    Ok(bincode::deserialize(bytes)?)
+}
+<span class="boring">}</span></code></pre></pre>
+<p>These helpers convert structures to and from the <code>Vec&lt;u8&gt;</code> payloads that
+RpcNet transports.</p>
+<h2 id="step-5-implement-the-streaming-server"><a class="header" href="#step-5-implement-the-streaming-server">Step 5: Implement the streaming server</a></h2>
+<p>Create <code>src/bin/server.rs</code> with three handlers—one per streaming pattern:</p>
+<pre><pre class="playground"><code class="language-rust">// src/bin/server.rs
+use async_stream::stream;
+use futures::StreamExt;
+use rpcnet::{RpcConfig, RpcServer};
+use telemetry_streams::telemetry::{self, Ack, ChatMessage, LiveUpdate, MetricReading};
+use tokio::time::{sleep, Duration};
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let config = RpcConfig::new("certs/server-cert.pem", "127.0.0.1:9000")
+        .with_key_path("certs/server-key.pem")
+        .with_server_name("localhost");
+
+    let mut server = RpcServer::new(config);
+
+    // Bidirectional chat: echo each message with a server tag.
+    server
+        .register_streaming("chat", |mut inbound| async move {
+            stream! {
+                while let Some(frame) = inbound.next().await {
+                    let msg: ChatMessage = telemetry::decode(&amp;frame)?;
+                    let reply = ChatMessage {
+                        from: "server".into(),
+                        body: format!("ack: {}", msg.body),
+                    };
+                    yield telemetry::encode(&amp;reply);
+                }
+            }
+        })
+        .await;
+
+    // Server streaming: emit rolling averages for a requested sensor.
+    server
+        .register_streaming("subscribe_metrics", |mut inbound| async move {
+            stream! {
+                if let Some(frame) = inbound.next().await {
+                    let req: MetricReading = telemetry::decode(&amp;frame)?;
+                    let mut window = vec![req.value];
+                    for step in 1..=5 {
+                        sleep(Duration::from_millis(500)).await;
+                        window.push(req.value + step as f64);
+                        let avg = window.iter().copied().sum::&lt;f64&gt;() / window.len() as f64;
+                        let update = LiveUpdate { sensor: req.sensor.clone(), rolling_avg: avg };
+                        yield telemetry::encode(&amp;update);
+                    }
+                }
+            }
+        })
+        .await;
+
+    // Client streaming: collect readings and acknowledge how many we processed.
+    server
+        .register_streaming("upload_batch", |mut inbound| async move {
+            stream! {
+                let mut readings: Vec&lt;MetricReading&gt; = Vec::new();
+                while let Some(frame) = inbound.next().await {
+                    let reading: MetricReading = telemetry::decode(&amp;frame)?;
+                    readings.push(reading);
+                }
+                let ack = Ack { accepted: readings.len() };
+                yield telemetry::encode(&amp;ack);
+            }
+        })
+        .await;
+
+    let quic_server = server.bind()?;
+    println!("Telemetry server listening on 127.0.0.1:9000");
+    server.start(quic_server).await?;
+    Ok(())
+}</code></pre></pre>
+<p>Key points:</p>
+<ul>
+<li><code>register_streaming</code> receives a stream of request frames (<code>Vec&lt;u8&gt;</code>) and must
+return a stream of <code>Result&lt;Vec&lt;u8&gt;, RpcError&gt;</code> responses.</li>
+<li>The bidirectional handler echoes every inbound payload.</li>
+<li>The server-streaming handler reads a single subscription request and then
+pushes periodic updates without further client input.</li>
+<li>The client-streaming handler drains all incoming frames before returning one
+acknowledgement.</li>
+</ul>
+<h2 id="step-6-implement-the-client"><a class="header" href="#step-6-implement-the-client">Step 6: Implement the client</a></h2>
+<p>Create <code>src/bin/client.rs</code> to exercise each streaming helper:</p>
+<pre><pre class="playground"><code class="language-rust">// src/bin/client.rs
+use futures::{stream, StreamExt};
+use rpcnet::{RpcClient, RpcConfig, RpcError};
+use telemetry_streams::telemetry::{self, Ack, ChatMessage, LiveUpdate, MetricReading};
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let config = RpcConfig::new("certs/server-cert.pem", "127.0.0.1:0")
+        .with_server_name("localhost");
+
+    let client = RpcClient::connect("127.0.0.1:9000".parse()?, config).await?;
+
+    chat_demo(&amp;client).await?;
+    server_stream_demo(&amp;client).await?;
+    client_stream_demo(&amp;client).await?;
+
+    Ok(())
+}
+
+async fn chat_demo(client: &amp;RpcClient) -&gt; Result&lt;(), RpcError&gt; {
+    println!("\n--- Bidirectional chat ---");
+    let messages = vec![
+        ChatMessage { from: "operator".into(), body: "ping".into() },
+        ChatMessage { from: "operator".into(), body: "status?".into() },
+    ];
+    let outbound_frames: Vec&lt;Vec&lt;u8&gt;&gt; = messages
+        .into_iter()
+        .map(|msg| telemetry::encode(&amp;msg).expect("serialize chat message"))
+        .collect();
+    let outbound = stream::iter(outbound_frames);
+    let mut inbound = client.call_streaming("chat", outbound).await?;
+    while let Some(frame) = inbound.next().await {
+        let bytes = frame?;
+        let reply: ChatMessage = telemetry::decode(&amp;bytes)?;
+        println!("reply: {}", reply.body);
+    }
+    Ok(())
+}
+
+async fn server_stream_demo(client: &amp;RpcClient) -&gt; Result&lt;(), RpcError&gt; {
+    println!("\n--- Server streaming ---");
+    let request = telemetry::encode(&amp;MetricReading { sensor: "temp".into(), value: 21.0 })?;
+    let mut updates = client
+        .call_server_streaming("subscribe_metrics", request)
+        .await?;
+    while let Some(frame) = updates.next().await {
+        let bytes = frame?;
+        let update: LiveUpdate = telemetry::decode(&amp;bytes)?;
+        println!("rolling avg: {:.2}", update.rolling_avg);
+    }
+    Ok(())
+}
+
+async fn client_stream_demo(client: &amp;RpcClient) -&gt; Result&lt;(), RpcError&gt; {
+    println!("\n--- Client streaming ---");
+    let readings: Vec&lt;Vec&lt;u8&gt;&gt; = vec![
+        MetricReading { sensor: "temp".into(), value: 21.0 },
+        MetricReading { sensor: "temp".into(), value: 21.5 },
+        MetricReading { sensor: "temp".into(), value: 22.0 },
+    ]
+    .into_iter()
+    .map(|reading| telemetry::encode(&amp;reading).expect("serialize reading"))
+    .collect();
+    let outbound = stream::iter(readings);
+    let ack_frame = client
+        .call_client_streaming("upload_batch", outbound)
+        .await?;
+    let ack: Ack = telemetry::decode(&amp;ack_frame)?;
+    println!("server accepted {} readings", ack.accepted);
+    Ok(())
+}</code></pre></pre>
+<p>The client demonstrates:</p>
+<ul>
+<li><code>call_streaming</code> for true bidirectional messaging.</li>
+<li><code>call_server_streaming</code> when only the server produces a stream of frames.</li>
+<li><code>call_client_streaming</code> to upload many frames and receive one response.</li>
+</ul>
+<h2 id="step-7-run-the-scenario"><a class="header" href="#step-7-run-the-scenario">Step 7: Run the scenario</a></h2>
+<p>Terminal 1 – start the server:</p>
+<pre><code class="language-bash">cargo run --bin server
+</code></pre>
+<p>Terminal 2 – launch the client:</p>
+<pre><code class="language-bash">cargo run --bin client
+</code></pre>
+<p>Expected output (trimmed for brevity):</p>
+<pre><code>--- Bidirectional chat ---
+reply: ack: ping
+reply: ack: status?
+
+--- Server streaming ---
+rolling avg: 21.00
+rolling avg: 21.50
+...
+
+--- Client streaming ---
+server accepted 3 readings
+</code></pre>
+<h2 id="where-to-go-next-1"><a class="header" href="#where-to-go-next-1">Where to go next</a></h2>
+<ul>
+<li>Revisit the <a href="concepts.html#streaming-patterns">Concepts</a> chapter for API
+reference material.</li>
+<li>Combine streaming RPCs with code-generated unary services from the
+<a href="getting-started.html">Getting Started</a> tutorial.</li>
+<li>Layer authentication, backpressure, or persistence around these handlers to
+match your production needs.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="rpcnet-gen-cli"><a class="header" href="#rpcnet-gen-cli">rpcnet-gen CLI</a></h1>
+<p>The <code>rpcnet-gen</code> binary turns a Rust service definition (<code>*.rpc.rs</code>) into the
+client, server, and type modules consumed by your application. This chapter
+covers installation, day-to-day usage, and automation patterns.</p>
+<h2 id="installing"><a class="header" href="#installing">Installing</a></h2>
+<p>The CLI ships with the <code>rpcnet</code> crate and is enabled by the <code>codegen</code> feature.
+Install it once and reuse it across workspaces:</p>
+<pre><code class="language-bash">cargo install rpcnet --features codegen --bin rpcnet-gen
+</code></pre>
+<p>Add <code>--locked</code> in CI to guarantee reproducible dependency resolution.</p>
+<h2 id="input-files-at-a-glance"><a class="header" href="#input-files-at-a-glance">Input Files at a Glance</a></h2>
+<p>Service definitions are ordinary Rust modules annotated with <code>#[rpcnet::service]</code>.
+For example:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// src/greeting.rpc.rs
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GreetRequest {
+    pub name: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GreetResponse {
+    pub message: String,
+}
+
+#[rpcnet::service]
+pub trait Greeting {
+    async fn greet(&amp;self, request: GreetRequest) -&gt; Result&lt;GreetResponse, GreetingError&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<p>Every request/response/error type must be <code>Serialize</code>/<code>Deserialize</code>, and all
+trait methods must be <code>async fn</code> returning <code>Result&lt;T, E&gt;</code>.</p>
+<h2 id="basic-invocation"><a class="header" href="#basic-invocation">Basic Invocation</a></h2>
+<p>Run the generator whenever you change a service trait:</p>
+<pre><code class="language-bash">rpcnet-gen --input src/greeting.rpc.rs --output src/generated
+</code></pre>
+<p>A successful run prints the generated paths and writes the following structure:</p>
+<pre><code>src/generated/
+└── greeting/
+    ├── client.rs   # GreetingClient with typed async methods
+    ├── mod.rs      # Module exports and re-exports
+    ├── server.rs   # GreetingServer + GreetingHandler trait
+    └── types.rs    # Request/response/error definitions
+</code></pre>
+<p>Import the module once and re-export whatever you need:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[path = "generated/greeting/mod.rs"]
+mod greeting;
+
+use greeting::{client::GreetingClient, server::{GreetingHandler, GreetingServer}};
+<span class="boring">}</span></code></pre></pre>
+<h2 id="command-line-options"><a class="header" href="#command-line-options">Command-Line Options</a></h2>
+<p><code>rpcnet-gen --help</code> surfaces all switches:</p>
+<pre><code>Generate RPC client and server code from service definitions
+
+Usage: rpcnet-gen [OPTIONS] --input &lt;INPUT&gt;
+
+Options:
+  -i, --input &lt;INPUT&gt;    Input .rpc file (Rust source with service trait)
+  -o, --output &lt;OUTPUT&gt;  Output directory for generated code [default: src/generated]
+      --server-only      Generate only server code
+      --client-only      Generate only client code
+      --types-only       Generate only type definitions
+  -h, --help             Print help
+  -V, --version          Print version
+</code></pre>
+<p>Key behaviours:</p>
+<ul>
+<li>Omit <code>--output</code> to use <code>src/generated</code>. The generator creates a lowercase
+subdirectory named after the service (<code>Greeting</code> → <code>greeting/</code>).</li>
+<li>Combine <code>--server-only</code>, <code>--client-only</code>, and <code>--types-only</code> to tailor the
+outputs. The implicit <code>mod.rs</code> only re-exports files that were produced.</li>
+<li>Passing mutually exclusive flags (e.g. <code>--server-only --client-only</code>) produces
+only the directories you asked for; <code>types.rs</code> is skipped when either flag is
+present.</li>
+</ul>
+<h2 id="regenerating-automatically"><a class="header" href="#regenerating-automatically">Regenerating Automatically</a></h2>
+<h3 id="manual-rebuilds"><a class="header" href="#manual-rebuilds">Manual rebuilds</a></h3>
+<p>Run the command by hand after touching a <code>.rpc.rs</code> file. Consider wiring a
+<code>cargo alias</code> or a shell script so teammates can regenerate with a single
+command.</p>
+<h3 id="with-cargo-watch"><a class="header" href="#with-cargo-watch">With <code>cargo watch</code></a></h3>
+<p>Install <code>cargo-watch</code> and keep generated code up to date during development:</p>
+<pre><code class="language-bash">cargo install cargo-watch
+cargo watch -w src/greeting.rpc.rs -x "run --bin rpcnet-gen -- --input src/greeting.rpc.rs --output src/generated"
+</code></pre>
+<h3 id="through-buildrs"><a class="header" href="#through-buildrs">Through <code>build.rs</code></a></h3>
+<p>For projects that must guarantee generated code exists before compilation,
+invoke the builder API from a build script (requires the <code>codegen</code> feature in
+<code>[build-dependencies]</code>):</p>
+<pre><pre class="playground"><code class="language-rust">// build.rs
+fn main() {
+    println!("cargo:rerun-if-changed=src/greeting.rpc.rs");
+
+    rpcnet::codegen::Builder::new()
+        .input("src/greeting.rpc.rs")
+        .output("src/generated")
+        .build()
+        .expect("Failed to generate RPC code");
+}</code></pre></pre>
+<p>Cargo reruns the script when the <code>.rpc.rs</code> file changes, keeping the generated
+modules in sync.</p>
+<h2 id="working-with-multiple-services"><a class="header" href="#working-with-multiple-services">Working With Multiple Services</a></h2>
+<p>Generate several services in one go by running the CLI multiple times or by
+stacking inputs in the builder:</p>
+<pre><pre class="playground"><code class="language-rust">// build.rs
+fn main() {
+    for service in ["rpc/user.rpc.rs", "rpc/billing.rpc.rs", "rpc/audit.rpc.rs"] {
+        println!("cargo:rerun-if-changed={service}");
+    }
+
+    rpcnet::codegen::Builder::new()
+        .input("rpc/user.rpc.rs")
+        .input("rpc/billing.rpc.rs")
+        .input("rpc/audit.rpc.rs")
+        .output("src/generated")
+        .build()
+        .expect("Failed to generate RPC code");
+}</code></pre></pre>
+<p>Each input produces a sibling directory under <code>src/generated/</code> (<code>user/</code>,
+<code>billing/</code>, <code>audit/</code>).</p>
+<h2 id="version-control-strategy"><a class="header" href="#version-control-strategy">Version-Control Strategy</a></h2>
+<p>Generated code is ordinary Rust and can be committed. Most teams either:</p>
+<ol>
+<li>Commit the <code>src/generated/**</code> tree so downstream crates build without the
+generator, or</li>
+<li>Ignore the directory and require the CLI (or <code>build.rs</code>) to run during CI.</li>
+</ol>
+<p>Pick a single approach and document it for contributors.</p>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<ul>
+<li><strong>Missing input file</strong> – the CLI exits with <code>Error: Input file '…' does not exist</code>. Double-check the path and ensure the file is tracked in git so
+collaborators receive it.</li>
+<li><strong>Invalid trait</strong> – methods must be <code>async fn</code> and return <code>Result</code>. The parser
+reports an error pointing at the offending signature.</li>
+<li><strong>Serialization failures at runtime</strong> – make sure your request/response/error
+types derive <code>Serialize</code> and <code>Deserialize</code> and keep both client and server on
+the same crate version so layouts match.</li>
+</ul>
+<p>With these workflows in place you can treat <code>rpcnet-gen</code> like any other build
+step: edit the <code>.rpc.rs</code> trait, regenerate, and keep building.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+
+    </div>
+    </body>
+</html>
