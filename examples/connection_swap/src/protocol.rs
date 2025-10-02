@@ -63,3 +63,14 @@ pub enum InferenceResponse {
     Error { message: String },
     Done,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeartbeatRequest {
+    pub connection_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeartbeatResponse {
+    pub alive: bool,
+    pub connection_id: String,
+}

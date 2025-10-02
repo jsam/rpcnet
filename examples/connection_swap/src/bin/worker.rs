@@ -69,6 +69,22 @@ async fn main() -> Result<()> {
         }
     }).await;
 
+    // Heartbeat endpoint on USER port
+    user_server.register("heartbeat", move |params: Vec<u8>| {
+        async move {
+            match bincode::deserialize::<HeartbeatRequest>(&params) {
+                Ok(req) => {
+                    let response = HeartbeatResponse {
+                        alive: true,
+                        connection_id: req.connection_id,
+                    };
+                    bincode::serialize(&response).map_err(RpcError::SerializationError)
+                }
+                Err(e) => Err(RpcError::SerializationError(e)),
+            }
+        }
+    }).await;
+
     // Streaming handler for inference requests on USER port
     let label_clone = worker_label.clone();
     let availability_for_streaming = is_available.clone();

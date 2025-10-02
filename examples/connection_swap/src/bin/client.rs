@@ -4,10 +4,12 @@ use rpcnet::{RpcClient, RpcConfig};
 use std::env;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{info, warn, error};
 use uuid::Uuid;
 use futures::StreamExt;
-use tokio::time::Duration;
+use tokio::time::{Duration, interval};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -68,6 +70,103 @@ async fn main() -> Result<()> {
                                     "✅ direct connection established to worker"
                                 );
 
+                                let worker_client = Arc::new(worker_client);
+                                let heartbeat_failed = Arc::new(AtomicBool::new(false));
+                                let heartbeat_failed_clone = heartbeat_failed.clone();
+                                let worker_client_clone = worker_client.clone();
+                                let cid = response.connection_id.clone();
+                                let wl = worker_label.clone();
+
+                                let heartbeat_handle = tokio::spawn(async move {
+                                    let mut heartbeat_interval = interval(Duration::from_secs(5));
+                                    heartbeat_interval.tick().await;
+                                    
+                                    let mut consecutive_failures = 0;
+                                    
+                                    loop {
+                                        heartbeat_interval.tick().await;
+                                        
+                                        let heartbeat_req = HeartbeatRequest {
+                                            connection_id: cid.clone(),
+                                        };
+                                        
+                                        match bincode::serialize(&heartbeat_req) {
+                                            Ok(req_bytes) => {
+                                                match tokio::time::timeout(
+                                                    Duration::from_secs(3),
+                                                    worker_client_clone.call("heartbeat", req_bytes)
+                                                ).await {
+                                                    Ok(Ok(response_bytes)) => {
+                                                        match bincode::deserialize::<HeartbeatResponse>(&response_bytes) {
+                                                            Ok(resp) if resp.alive => {
+                                                                consecutive_failures = 0;
+                                                                info!(
+                                                                    connection.id = %cid,
+                                                                    worker = %wl,
+                                                                    "💓 heartbeat ok"
+                                                                );
+                                                            }
+                                                            Ok(_) => {
+                                                                consecutive_failures += 1;
+                                                                warn!(
+                                                                    connection.id = %cid,
+                                                                    worker = %wl,
+                                                                    failures = consecutive_failures,
+                                                                    "💔 heartbeat returned not alive"
+                                                                );
+                                                            }
+                                                            Err(e) => {
+                                                                consecutive_failures += 1;
+                                                                warn!(
+                                                                    connection.id = %cid,
+                                                                    worker = %wl,
+                                                                    error = %e,
+                                                                    failures = consecutive_failures,
+                                                                    "💔 heartbeat deserialize failed"
+                                                                );
+                                                            }
+                                                        }
+                                                    }
+                                                    Ok(Err(e)) => {
+                                                        consecutive_failures += 1;
+                                                        warn!(
+                                                            connection.id = %cid,
+                                                            worker = %wl,
+                                                            error = %e,
+                                                            failures = consecutive_failures,
+                                                            "💔 heartbeat call failed"
+                                                        );
+                                                    }
+                                                    Err(_) => {
+                                                        consecutive_failures += 1;
+                                                        warn!(
+                                                            connection.id = %cid,
+                                                            worker = %wl,
+                                                            failures = consecutive_failures,
+                                                            "💔 heartbeat timeout"
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                warn!(error = %e, "failed to serialize heartbeat request");
+                                            }
+                                        }
+                                        
+                                        if consecutive_failures >= 2 {
+                                            error!(
+                                                connection.id = %cid,
+                                                worker = %wl,
+                                                failures = consecutive_failures,
+                                                "💀 heartbeat failed {} times - marking worker as failed",
+                                                consecutive_failures
+                                            );
+                                            heartbeat_failed_clone.store(true, Ordering::SeqCst);
+                                            break;
+                                        }
+                                    }
+                                });
+
                                 let inference_req = InferenceRequest {
                                     connection_id: response.connection_id.clone(),
                                     prompt: prompt.clone(),
@@ -102,6 +201,15 @@ async fn main() -> Result<()> {
                                         let mut worker_failed = false;
 
                                         while let Some(response_result) = stream.next().await {
+                                            if heartbeat_failed.load(Ordering::SeqCst) {
+                                                error!(
+                                                    connection.id = %connection_id.as_ref().unwrap(),
+                                                    worker = %worker_label,
+                                                    "💀 heartbeat detected failure - aborting stream"
+                                                );
+                                                worker_failed = true;
+                                                break;
+                                            }
                                             match response_result {
                                                 Ok(response_bytes) => {
                                                     match bincode::deserialize::<InferenceResponse>(&response_bytes) {
@@ -164,6 +272,8 @@ async fn main() -> Result<()> {
                                             }
                                         }
 
+                                        heartbeat_handle.abort();
+                                        
                                         if worker_failed {
                                             info!("🔄 returning to director for new worker assignment");
                                             tokio::time::sleep(Duration::from_secs(1)).await;
@@ -171,6 +281,7 @@ async fn main() -> Result<()> {
                                         }
                                     }
                                     Err(e) => {
+                                        heartbeat_handle.abort();
                                         error!(error = %e, "failed to start streaming with worker");
                                         tokio::time::sleep(Duration::from_secs(1)).await;
                                         continue;
