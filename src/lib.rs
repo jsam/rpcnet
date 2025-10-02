@@ -108,6 +108,15 @@ pub enum RpcError {
 
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
+
+    #[error("Internal error: {0}")]
+    InternalError(String),
+
+    #[error("Invalid migration token")]
+    InvalidToken,
+
+    #[error("Migration rejected")]
+    MigrationRejected,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -910,72 +919,77 @@ impl RpcClient {
             .send_bytes(Bytes::from([&method_len[..], method_data].concat()))
             .await?;
 
-        // Removed artificial delay for better performance
-
-        // Use Arc<tokio::sync::Mutex> to share the stream
-        let stream = std::sync::Arc::new(tokio::sync::Mutex::new(stream));
-        let send_stream = stream.clone();
-
-        // Spawn a task to send requests
+        // Use a single task to handle BOTH send and receive with select! - NO LOCKS!
+        // This enables true concurrent bidirectional streaming without mutex contention
+        // The key insight: use tokio::select! to multiplex send/receive on the same task
+        
+        // Channel to deliver responses back to the caller
+        let (response_tx, mut response_rx) = tokio::sync::mpsc::unbounded_channel::<Result<Vec<u8>, RpcError>>();
+        
+        // Spawn a single task that owns the stream and multiplexes send/receive
         let mut request_stream = Box::pin(request_stream);
         tokio::spawn(async move {
-            let mut _count = 0;
-            while let Some(request_data) = request_stream.next().await {
-                _count += 1;
-                let data_len = (request_data.len() as u32).to_le_bytes();
-                let mut stream_guard = send_stream.lock().await;
-                if let Err(_e) = stream_guard
-                    .send_bytes(Bytes::from([&data_len[..], &request_data].concat()))
-                    .await
-                {
-                    break;
-                }
-                drop(stream_guard); // Release lock
-            }
-            // Send empty frame to signal end of requests
-            let mut stream_guard = send_stream.lock().await;
-            let _ = stream_guard
-                .send_bytes(Bytes::from_static(&[0, 0, 0, 0]))
-                .await;
-        });
-
-        let receive_stream = stream.clone();
-        // Return a stream of responses
-        Ok(async_stream::stream! {
             let mut buffer = BytesMut::with_capacity(8192);
-
+            let mut send_done = false;
+            
             loop {
-                let chunk = {
-                    let mut stream_guard = receive_stream.lock().await;
-                    stream_guard.receive_bytes().await
-                };
-
-                if let Ok(Some(chunk)) = chunk {
-                    buffer.extend_from_slice(&chunk);
-
-                    // Try to parse complete messages
-                    while buffer.len() >= 4 {
-                        let len = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]) as usize;
-
-                        if len == 0 {
-                            // End of stream marker
-                            return;
-                        }
-
-                        if buffer.len() >= 4 + len {
-                            // We have a complete message
-                            let message_data = buffer.split_to(4 + len);
-                            let response_data = message_data[4..].to_vec();
-                            yield Ok(response_data);
-                        } else {
-                            // Need more data
-                            break;
+                tokio::select! {
+                    // Handle sending requests
+                    request_opt = request_stream.next(), if !send_done => {
+                        match request_opt {
+                            Some(request_data) => {
+                                let data_len = (request_data.len() as u32).to_le_bytes();
+                                if let Err(_e) = stream.send_bytes(Bytes::from([&data_len[..], &request_data].concat())).await {
+                                    break;
+                                }
+                            }
+                            None => {
+                                send_done = true;
+                            }
                         }
                     }
-                } else {
-                    // Connection closed or error
-                    break;
+                    
+                    // Handle receiving responses (happens concurrently with sending!)
+                    chunk_result = stream.receive_bytes() => {
+                        match chunk_result {
+                            Ok(Some(chunk)) => {
+                                buffer.extend_from_slice(&chunk);
+                                
+                                // Parse complete messages
+                                while buffer.len() >= 4 {
+                                    let len = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]) as usize;
+                                    
+                                    if len == 0 {
+                                        return;
+                                    }
+                                    
+                                    if buffer.len() >= 4 + len {
+                                        let message_data = buffer.split_to(4 + len);
+                                        let response_data = message_data[4..].to_vec();
+                                        if response_tx.send(Ok(response_data)).is_err() {
+                                            return;
+                                        }
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                            Ok(None) => {
+                                break;
+                            }
+                            Err(_e) => {
+                                break;
+                            }
+                        }
+                    }
                 }
+            }
+        });
+
+        // Return a stream that reads from the response channel
+        Ok(async_stream::stream! {
+            while let Some(response) = response_rx.recv().await {
+                yield response;
             }
         })
     }

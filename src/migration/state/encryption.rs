@@ -167,6 +167,8 @@ pub struct StateEncryption {
     current_key_id: Option<Uuid>,
 }
 
+pub type EncryptionService = StateEncryption;
+
 impl StateEncryption {
     pub fn new(config: EncryptionConfig) -> Self {
         Self {

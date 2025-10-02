@@ -126,6 +126,8 @@ pub struct StateSerializer {
     config: SerializationConfig,
 }
 
+pub type SerializationService = StateSerializer;
+
 impl StateSerializer {
     pub fn new(config: SerializationConfig) -> Self {
         Self { config }

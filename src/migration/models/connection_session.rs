@@ -10,6 +10,8 @@ pub enum ConnectionState {
     Completed,
     Failed,
     RolledBack,
+    Migrated,
+    Closed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,6 +22,7 @@ pub enum MigrationStage {
     Finalizing,
     Completed,
     Failed,
+    Preparing,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,11 +63,29 @@ pub struct ConnectionSession {
 }
 
 impl ConnectionSession {
-    pub fn new(client_id: Uuid, source_server_id: Uuid) -> Self {
+    pub fn new(connection_id: Uuid) -> Self {
         let now = SystemTime::now();
         Self {
             id: Uuid::new_v4(),
-            client_id,
+            client_id: connection_id,
+            connection_state: ConnectionState::Active,
+            migration_stage: None,
+            source_server_id: Uuid::new_v4(),
+            target_server_id: None,
+            created_at: now,
+            last_updated: now,
+            migration_token: None,
+            state_snapshot_id: None,
+            metrics: ConnectionMetrics::default(),
+            metadata: HashMap::new(),
+        }
+    }
+
+    pub fn with_servers(connection_id: Uuid, source_server_id: Uuid) -> Self {
+        let now = SystemTime::now();
+        Self {
+            id: Uuid::new_v4(),
+            client_id: connection_id,
             connection_state: ConnectionState::Active,
             migration_stage: None,
             source_server_id,
@@ -178,6 +199,51 @@ impl ConnectionSession {
     pub fn time_since_last_update(&self) -> Duration {
         SystemTime::now().duration_since(self.last_updated).unwrap_or(Duration::ZERO)
     }
+
+    pub fn session_id(&self) -> Uuid {
+        self.id
+    }
+
+    pub fn connection_id(&self) -> Uuid {
+        self.client_id
+    }
+
+    pub fn state(&self) -> &ConnectionState {
+        &self.connection_state
+    }
+
+    pub fn migration_stage(&self) -> &MigrationStage {
+        self.migration_stage.as_ref().unwrap_or(&MigrationStage::Initiated)
+    }
+
+    pub fn metrics(&self) -> &ConnectionMetrics {
+        &self.metrics
+    }
+
+    pub fn updated_at(&self) -> SystemTime {
+        self.last_updated
+    }
+
+    pub fn retry_count(&self) -> u32 {
+        self.metrics.error_count
+    }
+
+    pub fn with_state(mut self, new_state: ConnectionState) -> Self {
+        self.connection_state = new_state;
+        self.last_updated = SystemTime::now();
+        self
+    }
+
+    pub fn with_migration_stage(mut self, new_stage: MigrationStage) -> Self {
+        self.migration_stage = Some(new_stage);
+        self.last_updated = SystemTime::now();
+        self
+    }
+
+    pub fn with_retry_count(mut self, count: u32) -> Self {
+        self.metrics.error_count = count;
+        self
+    }
 }
 
 #[cfg(test)]
@@ -186,12 +252,10 @@ mod tests {
 
     #[test]
     fn test_new_connection_session() {
-        let client_id = Uuid::new_v4();
-        let server_id = Uuid::new_v4();
-        let session = ConnectionSession::new(client_id, server_id);
+        let connection_id = Uuid::new_v4();
+        let session = ConnectionSession::new(connection_id);
 
-        assert_eq!(session.client_id, client_id);
-        assert_eq!(session.source_server_id, server_id);
+        assert_eq!(session.client_id, connection_id);
         assert_eq!(session.connection_state, ConnectionState::Active);
         assert_eq!(session.migration_stage, None);
         assert!(session.can_migrate());
@@ -199,10 +263,10 @@ mod tests {
 
     #[test]
     fn test_migration_workflow() {
-        let client_id = Uuid::new_v4();
+        let connection_id = Uuid::new_v4();
         let source_id = Uuid::new_v4();
         let target_id = Uuid::new_v4();
-        let mut session = ConnectionSession::new(client_id, source_id);
+        let mut session = ConnectionSession::with_servers(connection_id, source_id);
 
         // Initiate migration
         session.initiate_migration(target_id, "token123".to_string());
@@ -231,10 +295,10 @@ mod tests {
 
     #[test]
     fn test_rollback_migration() {
-        let client_id = Uuid::new_v4();
+        let connection_id = Uuid::new_v4();
         let source_id = Uuid::new_v4();
         let target_id = Uuid::new_v4();
-        let mut session = ConnectionSession::new(client_id, source_id);
+        let mut session = ConnectionSession::with_servers(connection_id, source_id);
 
         session.initiate_migration(target_id, "token123".to_string());
         session.rollback_migration();
@@ -247,9 +311,8 @@ mod tests {
 
     #[test]
     fn test_metrics_update() {
-        let client_id = Uuid::new_v4();
-        let server_id = Uuid::new_v4();
-        let mut session = ConnectionSession::new(client_id, server_id);
+        let connection_id = Uuid::new_v4();
+        let mut session = ConnectionSession::new(connection_id);
 
         session.update_metrics(1024, Duration::from_millis(50));
         assert_eq!(session.metrics.bytes_transferred, 1024);
@@ -267,7 +330,7 @@ mod tests {
         let client_id = Uuid::new_v4();
         let source_id = Uuid::new_v4();
         let target_id = Uuid::new_v4();
-        let mut session = ConnectionSession::new(client_id, source_id);
+        let mut session = ConnectionSession::with_servers(client_id, source_id);
 
         // Start migration
         session.initiate_migration(target_id, "token123".to_string());
@@ -286,7 +349,7 @@ mod tests {
     fn test_increment_error_count() {
         let client_id = Uuid::new_v4();
         let server_id = Uuid::new_v4();
-        let mut session = ConnectionSession::new(client_id, server_id);
+        let mut session = ConnectionSession::with_servers(client_id, server_id);
 
         // Initially no errors
         assert_eq!(session.metrics.error_count, 0);
@@ -307,7 +370,7 @@ mod tests {
     fn test_age() {
         let client_id = Uuid::new_v4();
         let server_id = Uuid::new_v4();
-        let session = ConnectionSession::new(client_id, server_id);
+        let session = ConnectionSession::with_servers(client_id, server_id);
 
         // Age should be very small (just created)
         let age = session.age();
@@ -324,7 +387,7 @@ mod tests {
     fn test_time_since_last_update() {
         let client_id = Uuid::new_v4();
         let server_id = Uuid::new_v4();
-        let mut session = ConnectionSession::new(client_id, server_id);
+        let mut session = ConnectionSession::with_servers(client_id, server_id);
 
         // Initially, last_updated should be very recent
         let initial_time_since_update = session.time_since_last_update();
@@ -348,7 +411,7 @@ mod tests {
         let client_id = Uuid::new_v4();
         let source_id = Uuid::new_v4();
         let target_id = Uuid::new_v4();
-        let mut session = ConnectionSession::new(client_id, source_id);
+        let mut session = ConnectionSession::with_servers(client_id, source_id);
 
         // Test failing from confirmed stage
         session.initiate_migration(target_id, "token123".to_string());
@@ -360,7 +423,7 @@ mod tests {
         assert_eq!(session.migration_stage, Some(MigrationStage::Failed));
 
         // Reset for next test
-        let mut session2 = ConnectionSession::new(client_id, source_id);
+        let mut session2 = ConnectionSession::with_servers(client_id, source_id);
         
         // Test failing from state transfer stage
         session2.initiate_migration(target_id, "token456".to_string());
@@ -378,7 +441,7 @@ mod tests {
     fn test_age_and_time_since_update_precision() {
         let client_id = Uuid::new_v4();
         let server_id = Uuid::new_v4();
-        let mut session = ConnectionSession::new(client_id, server_id);
+        let mut session = ConnectionSession::with_servers(client_id, server_id);
 
         // Both age and time_since_last_update should be approximately equal initially
         let age1 = session.age();
