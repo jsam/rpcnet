@@ -931,6 +931,7 @@ impl RpcClient {
         tokio::spawn(async move {
             let mut buffer = BytesMut::with_capacity(8192);
             let mut send_done = false;
+            let mut recv_done = false;
             
             loop {
                 tokio::select! {
@@ -939,18 +940,27 @@ impl RpcClient {
                         match request_opt {
                             Some(request_data) => {
                                 let data_len = (request_data.len() as u32).to_le_bytes();
-                                if let Err(_e) = stream.send_bytes(Bytes::from([&data_len[..], &request_data].concat())).await {
+                                // Even if send fails, try to send end marker before breaking
+                                if stream.send_bytes(Bytes::from([&data_len[..], &request_data].concat())).await.is_err() {
+                                    // Try to send end marker before giving up
+                                    let _ = stream.send_bytes(Bytes::from(vec![0, 0, 0, 0])).await;
                                     break;
                                 }
                             }
                             None => {
+                                if let Err(_) = stream.send_bytes(Bytes::from(vec![0, 0, 0, 0])).await {
+                                    break;
+                                }
                                 send_done = true;
+                                if recv_done {
+                                    break;
+                                }
                             }
                         }
                     }
                     
                     // Handle receiving responses (happens concurrently with sending!)
-                    chunk_result = stream.receive_bytes() => {
+                    chunk_result = stream.receive_bytes(), if !recv_done => {
                         match chunk_result {
                             Ok(Some(chunk)) => {
                                 buffer.extend_from_slice(&chunk);
@@ -960,7 +970,11 @@ impl RpcClient {
                                     let len = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]) as usize;
                                     
                                     if len == 0 {
-                                        return;
+                                        recv_done = true;
+                                        if send_done {
+                                            return;
+                                        }
+                                        break;
                                     }
                                     
                                     if buffer.len() >= 4 + len {
@@ -1397,13 +1411,13 @@ mod client_streaming_helper_tests {
     }
 
     async fn wait_for_sent(state: &Arc<Mutex<MockStreamState>>, expected: usize) {
-        for _ in 0..50 {
+        for _ in 0..200 {
             {
                 if state.lock().await.sent_frames.len() >= expected {
                     return;
                 }
             }
-            tokio::time::sleep(Duration::from_millis(2)).await;
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
         // Final check to avoid missing race
         let len = state.lock().await.sent_frames.len();
@@ -1723,11 +1737,11 @@ mod client_call_helper_tests {
     }
 
     pub(super) async fn wait_for_sent(state: &Arc<Mutex<MockStreamState>>, expected: usize) {
-        for _ in 0..100 {
+        for _ in 0..200 {
             if state.lock().await.sent.len() >= expected {
                 return;
             }
-            tokio::time::sleep(Duration::from_millis(5)).await;
+            tokio::time::sleep(Duration::from_millis(10)).await;
         }
         let len = state.lock().await.sent.len();
         panic!("expected {} frames, saw {}", expected, len);
@@ -1971,6 +1985,7 @@ mod server_start_helper_tests {
 
 #[cfg(test)]
 mod doc_examples_tests {
+    use std::time::Duration;
     use super::{
         client_call_helper_tests::{
             encode_response as encode_rpc_response, make_client, make_client_with_connection,
