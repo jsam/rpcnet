@@ -168,17 +168,50 @@ See [IMPLEMENTED.md](./IMPLEMENTED.md) for the full migration library documentat
 4. **Connection Migration** - Maintaining connection identity across workers
 5. **Multi-Process Coordination** - Director/worker architecture
 
-## 🔮 Next Steps
+## ✅ Current Features
 
-Extend this example:
+- **Heartbeat-based Failure Detection** - Client detects worker failures via periodic heartbeats (5s interval, 3s timeout)
+- **Automatic Reconnection** - Client automatically requests new worker from director on failure
+- **Worker Availability Management** - Workers mark themselves unavailable during recovery and reject new connections
+- **Randomized Failure Timing** - Workers fail at random intervals (10-25s jitter) to test system resilience
+- **Auto-healing System** - All components recover automatically, even when both workers fail simultaneously
 
-1. **Health Checks** - Proactive migration before failures
-2. **Load Balancing** - Weighted or capacity-based assignment
-3. **Metrics** - Monitor migration frequency and latency
-4. **Multiple Clients** - Concurrent requests with fairness
-5. **Graceful Shutdown** - Migrate connections before worker exit
+## 🔮 Planned Features
 
-The migration primitives are production-ready!
+### High Priority
+1. **Graceful Connection Migration** - Migrate active connections mid-stream instead of dropping and reconnecting
+   - Director sends "migrate" signal with new worker address
+   - Seamless handoff without client intervention
+   - No token loss during migration
+
+2. **Connection State Persistence** - Track connection_id → client mapping in director
+   - Resume connections after director restart
+   - Durable connection tracking
+
+### Medium Priority
+3. **Gossip-based Worker Discovery** - Decentralized peer discovery on management port
+   - Workers discover each other via gossip protocol
+   - Peer health monitoring without director
+   - Distributed load balancing decisions
+   - Worker-to-worker connection handoff
+
+4. **Load-aware Routing** - Smart worker assignment based on actual load
+   - Track active connections per worker
+   - Consider CPU/memory metrics
+   - Capacity-based assignment (not just round-robin)
+
+5. **Metrics & Observability** - Production-grade monitoring
+   - Connection counts, failure rates, migration frequency
+   - Latency percentiles (p50, p95, p99)
+   - Worker health dashboards
+
+### Nice to Have
+6. **Backpressure Handling** - Prevent slow clients from blocking workers
+7. **Multi-director HA** - Director high availability with leader election
+8. **Configurable Failure Simulation** - ENV vars for jitter ranges, recovery times, failure modes
+9. **Graceful Shutdown** - Drain connections before worker exit
+
+The migration primitives are production-ready - these features build on the solid foundation!
 
 ## 📝 License
 
