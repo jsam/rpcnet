@@ -176,42 +176,17 @@ See [IMPLEMENTED.md](./IMPLEMENTED.md) for the full migration library documentat
 - **Randomized Failure Timing** - Workers fail at random intervals (10-25s jitter) to test system resilience
 - **Auto-healing System** - All components recover automatically, even when both workers fail simultaneously
 
-## 🔮 Planned Features
+## 🔮 Potential Future Enhancements
 
-### High Priority
-1. **Graceful Connection Migration** - Migrate active connections mid-stream instead of dropping and reconnecting
-   - Director sends "migrate" signal with new worker address
-   - Seamless handoff without client intervention
-   - No token loss during migration
+If this example were to evolve further, here are some possibilities:
 
-2. **Connection State Persistence** - Track connection_id → client mapping in director
-   - Resume connections after director restart
-   - Durable connection tracking
+1. **Gossip-based Worker Discovery** - Decentralized peer discovery on management port
+2. **Load-aware Routing** - Smart worker assignment based on actual load
+3. **Metrics & Observability** - Production-grade monitoring with Prometheus/Grafana
+4. **Configurable Failure Simulation** - ENV vars for jitter ranges, recovery times
+5. **Multi-director HA** - Director high availability with leader election
 
-### Medium Priority
-3. **Gossip-based Worker Discovery** - Decentralized peer discovery on management port
-   - Workers discover each other via gossip protocol
-   - Peer health monitoring without director
-   - Distributed load balancing decisions
-   - Worker-to-worker connection handoff
-
-4. **Load-aware Routing** - Smart worker assignment based on actual load
-   - Track active connections per worker
-   - Consider CPU/memory metrics
-   - Capacity-based assignment (not just round-robin)
-
-5. **Metrics & Observability** - Production-grade monitoring
-   - Connection counts, failure rates, migration frequency
-   - Latency percentiles (p50, p95, p99)
-   - Worker health dashboards
-
-### Nice to Have
-6. **Backpressure Handling** - Prevent slow clients from blocking workers
-7. **Multi-director HA** - Director high availability with leader election
-8. **Configurable Failure Simulation** - ENV vars for jitter ranges, recovery times, failure modes
-9. **Graceful Shutdown** - Drain connections before worker exit
-
-The migration primitives are production-ready - these features build on the solid foundation!
+The current implementation demonstrates the core resilience patterns effectively!
 
 ## 📝 License
 
