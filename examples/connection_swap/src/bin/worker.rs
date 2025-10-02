@@ -10,6 +10,7 @@ use tokio::sync::RwLock;
 use tokio::time::{sleep, Instant};
 use tracing::{info, warn, error};
 use futures::StreamExt;
+use rand::Rng;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -94,6 +95,18 @@ async fn main() -> Result<()> {
         async move {
             info!(worker = %label, "🎬 streaming handler invoked");
             async_stream::stream! {
+                let available = *availability.read().await;
+                if !available {
+                    warn!(worker = %label, "🚫 worker not available - rejecting connection");
+                    let error_response = InferenceResponse::Error {
+                        message: format!("{} is not available", label),
+                    };
+                    if let Ok(bytes) = bincode::serialize(&error_response) {
+                        yield Ok(bytes);
+                    }
+                    return;
+                }
+                
                 let mut request_stream = Box::pin(request_stream);
                 info!(worker = %label, "⏳ waiting for request bytes from stream");
                 if let Some(request_bytes) = request_stream.next().await {
@@ -119,7 +132,8 @@ async fn main() -> Result<()> {
                             }
 
                             let start_time = Instant::now();
-                            let failure_after = Duration::from_secs(15);
+                            let jitter_secs = rand::thread_rng().gen_range(10..=25);
+                            let failure_after = Duration::from_secs(jitter_secs);
                             let token_interval = Duration::from_millis(500);
                             let mut sequence = 0u64;
 

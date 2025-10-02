@@ -285,6 +285,7 @@ dependencies = [
  "async-stream",
  "bincode",
  "futures",
+ "rand 0.8.5",
  "rpcnet",
  "serde",
  "serde_json",
