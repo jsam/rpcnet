@@ -22,6 +22,7 @@ use tokio::{
     sync::{oneshot, RwLock},
     task::JoinHandle,
 };
+use tracing::{debug, info};
 
 pub mod runtime {
     //! Helpers for configuring Tokio runtimes.
@@ -72,10 +73,10 @@ pub mod runtime {
     }
 }
 
-// Code generation module
+pub mod cluster;
+
 #[cfg(feature = "codegen")]
 pub mod codegen;
-pub mod migration;
 
 #[cfg(not(test))]
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -243,6 +244,8 @@ pub struct RpcServer {
     pub socket_addr: Option<SocketAddr>,
 
     pub config: RpcConfig,
+
+    cluster: Arc<RwLock<Option<Arc<cluster::ClusterMembership>>>>,
 }
 
 #[derive(Debug)]
@@ -381,6 +384,7 @@ impl RpcServer {
             streaming_handlers: Arc::new(RwLock::new(HashMap::new())),
             socket_addr: None,
             config,
+            cluster: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -430,14 +434,16 @@ impl RpcServer {
         while let Some(mut connection) = server.accept().await {
             let handlers = self.handlers.clone();
             let streaming_handlers = self.streaming_handlers.clone();
+            let cluster = self.cluster.clone();
 
             tokio::spawn(async move {
                 // For each accepted connection, keep accepting streams:
                 while let Ok(Some(stream)) = connection.accept_bidirectional_stream().await {
                     let handlers = handlers.clone();
                     let streaming_handlers = streaming_handlers.clone();
+                    let cluster = cluster.clone();
 
-                    tokio::spawn(Self::handle_stream(handlers, streaming_handlers, stream));
+                    tokio::spawn(Self::handle_stream(handlers, streaming_handlers, cluster, stream));
                 }
             });
         }
@@ -448,6 +454,7 @@ impl RpcServer {
     async fn handle_stream(
         handlers: Arc<RwLock<HashMap<String, AsyncHandlerFn>>>,
         streaming_handlers: Arc<RwLock<HashMap<String, AsyncStreamingHandlerFn>>>,
+        cluster: Arc<RwLock<Option<Arc<cluster::ClusterMembership>>>>,
         stream: Box<dyn QuicStreamAdapter + Send>,
     ) {
         let stream = Arc::new(tokio::sync::Mutex::new(stream));
@@ -460,14 +467,42 @@ impl RpcServer {
             };
 
             let chunk = match chunk {
-                Ok(Some(bytes)) => bytes,
-                _ => break,
+                Ok(Some(bytes)) => {
+                    debug!("📦 Received {} bytes on stream", bytes.len());
+                    bytes
+                },
+                Ok(None) => {
+                    debug!("🔚 Stream closed");
+                    break;
+                },
+                Err(e) => {
+                    debug!("❌ Stream error: {:?}", e);
+                    break;
+                }
             };
 
             request_data.extend_from_slice(&chunk);
+            debug!("📊 Total request_data size: {} bytes", request_data.len());
 
-            // First, try to parse as regular RPC request (original behavior)
+            // First, try to parse as SWIM gossip message
+            match cluster::gossip::SwimMessage::deserialize(&request_data) {
+                Ok(swim_msg) => {
+                    debug!("✅ Successfully deserialized SWIM message!");
+                    if let Some(cluster_membership) = cluster.read().await.as_ref() {
+                        Self::handle_swim_message(cluster_membership, swim_msg, &stream).await;
+                    } else {
+                        debug!("⚠️  Received SWIM message but cluster not enabled");
+                    }
+                    break;
+                },
+                Err(e) => {
+                    debug!("⚠️  Not a SWIM message (tried {} bytes): {:?}", request_data.len(), e);
+                }
+            }
+
+            // Then try to parse as regular RPC request (original behavior)
             if let Ok(request) = bincode::deserialize::<RpcRequest>(&request_data) {
+                debug!("📨 Received RPC request: {}", request.method);
                 let handlers = handlers.read().await;
                 let response = match handlers.get(request.method()) {
                     Some(handler) => {
@@ -525,6 +560,70 @@ impl RpcServer {
         }
     }
 
+    async fn handle_swim_message(
+        cluster: &Arc<cluster::ClusterMembership>,
+        msg: cluster::gossip::SwimMessage,
+        stream: &Arc<tokio::sync::Mutex<Box<dyn QuicStreamAdapter + Send>>>,
+    ) {
+        use cluster::gossip::{NodeUpdate, SwimMessage};
+        use cluster::incarnation::NodeStatus;
+        use cluster::node_registry::NodeRegistry;
+        use std::time::Instant;
+
+        debug!("🔔 [SWIM] Received message: {:?}", msg);
+        let update_count = msg.updates().len();
+        debug!("🔔 [SWIM] Processing {} node updates", update_count);
+
+        for update in msg.updates() {
+            debug!("🔔 [SWIM] Update: node_id={:?}, addr={}, state={:?}, tags={:?}", 
+                  update.node_id, update.addr, update.state, update.tags);
+            let node_status = NodeStatus {
+                node_id: update.node_id.clone(),
+                addr: update.addr,
+                incarnation: update.incarnation,
+                state: update.state.clone(),
+                last_seen: Instant::now(),
+                tags: update.tags.clone(),
+            };
+            cluster.registry().insert(node_status.clone());
+            debug!("✅ [SWIM] Inserted {:?} into registry with tags: {:?}", 
+                  node_status.node_id, node_status.tags);
+        }
+
+        let self_status = cluster.registry().get(cluster.node_id());
+        let my_updates = if let Some(status) = self_status {
+            vec![NodeUpdate {
+                node_id: status.node_id,
+                addr: status.addr,
+                incarnation: status.incarnation,
+                state: status.state,
+                tags: status.tags,
+            }]
+        } else {
+            vec![]
+        };
+
+        let response = match msg {
+            SwimMessage::Ping { from, seq, .. } => SwimMessage::Ack {
+                from: cluster.node_id().clone(),
+                to: from,
+                updates: my_updates,
+                seq,
+            },
+            SwimMessage::PingReq { .. } => {
+                return;
+            }
+            SwimMessage::Ack { .. } => {
+                return;
+            }
+        };
+
+        if let Ok(response_bytes) = response.serialize() {
+            let mut stream_guard = stream.lock().await;
+            let _ = stream_guard.send_bytes(Bytes::from(response_bytes)).await;
+        }
+    }
+
     /// Drives an existing QUIC connection until it is either closed by the client
     /// or a shutdown signal requests that it be handed off to another worker.
     pub async fn drive_connection(
@@ -534,6 +633,7 @@ impl RpcServer {
     ) -> Result<ConnectionDriveOutcome, RpcError> {
         let handlers = self.handlers.clone();
         let streaming_handlers = self.streaming_handlers.clone();
+        let cluster = self.cluster.clone();
         let mut stream_tasks: Vec<JoinHandle<()>> = Vec::new();
 
         loop {
@@ -549,9 +649,11 @@ impl RpcServer {
                         Ok(Some(stream)) => {
                             let handlers = handlers.clone();
                             let streaming_handlers = streaming_handlers.clone();
+                            let cluster = cluster.clone();
                             let task = tokio::spawn(Self::handle_stream(
                                 handlers,
                                 streaming_handlers,
+                                cluster,
                                 Box::new(stream) as Box<dyn QuicStreamAdapter + Send>,
                             ));
                             stream_tasks.push(task);
@@ -758,6 +860,42 @@ impl RpcServer {
         self.socket_addr = Some(local_addr);
         println!("RPC server listening on {local_addr}");
         Ok(server)
+    }
+
+    pub async fn enable_cluster(
+        &self,
+        config: cluster::ClusterConfig,
+        seeds: Vec<SocketAddr>,
+        quic_client: Arc<Client>,
+    ) -> Result<(), cluster::ClusterError> {
+        let addr = self
+            .socket_addr
+            .ok_or_else(|| cluster::ClusterError::BootstrapTimeout(Duration::from_secs(0)))?;
+
+        let membership = Arc::new(cluster::ClusterMembership::new(addr, config, quic_client).await?);
+        membership.join(seeds).await?;
+
+        let mut cluster_guard = self.cluster.write().await;
+        *cluster_guard = Some(membership);
+
+        Ok(())
+    }
+
+    pub async fn cluster(&self) -> Option<Arc<cluster::ClusterMembership>> {
+        self.cluster.read().await.clone()
+    }
+
+    pub async fn update_tag(&self, key: String, value: String) -> Result<(), RpcError> {
+        if let Some(cluster) = self.cluster().await {
+            cluster.update_tag(key, value).await;
+            Ok(())
+        } else {
+            Err(RpcError::ConfigError("Cluster not enabled".to_string()))
+        }
+    }
+
+    pub async fn cluster_events(&self) -> Option<cluster::ClusterEventReceiver> {
+        self.cluster().await.map(|c| c.subscribe())
     }
 }
 

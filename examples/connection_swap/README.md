@@ -1,6 +1,6 @@
 # Connection Swap Example
 
-**Seamless QUIC connection migration between workers** - A complete demonstration of zero-downtime connection migration using rpcnet's migration infrastructure.
+**Worker failover with client-side reconnection** - A complete demonstration of automatic worker reassignment using rpcnet's streaming RPC infrastructure.
 
 ## 🚀 Quick Start
 
@@ -9,44 +9,43 @@ cd examples/connection_swap
 ./run_demo.sh
 ```
 
-Watch as a client maintains an uninterrupted data stream while the director automatically migrates the connection from a failing worker to a healthy one!
+Watch as a client maintains its streaming session while the director automatically reassigns it from a failing worker to a healthy one!
 
 ## 📖 Documentation
 
 - **[QUICKSTART.md](./QUICKSTART.md)** - Complete setup and usage guide
-- **[IMPLEMENTED.md](./IMPLEMENTED.md)** - Deep dive into the migration infrastructure
-- **[simple_demo.rs](./simple_demo.rs)** - Simple demonstration of migration APIs
+- **[ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md)** - Configuration options
 
 ## 🎯 What This Demonstrates
 
 This example shows a **fully functional** multi-process system demonstrating:
 
-1. **Director Process** - Manages worker pool and routes connections
+1. **Director Process** - Manages worker pool and assigns workers to clients
 2. **Worker Processes** - Handle streaming requests, simulate failures  
-3. **Client Process** - Issues long-running requests, observes seamless failover
-4. **Zero-Downtime Migration** - Connection ID remains constant across workers
+3. **Client Process** - Issues long-running requests, reconnects on failure
+4. **Automatic Failover** - Client detects failures and requests new worker assignment
 
-### Key Innovation
+### Key Pattern
 
-The same QUIC connection serves the entire request despite worker changes:
+The client maintains a logical session across multiple QUIC connections:
 
 ```
-connection.id=conn-1234 worker=worker-a  ← Initial assignment
-connection.id=conn-1234 worker=worker-b  ← After migration (same ID!)
+connection_id=conn-1234 worker=worker-a  ← Initial assignment (new QUIC connection)
+connection_id=conn-1234 worker=worker-b  ← After failover (new QUIC connection to different worker)
 ```
 
-This proves the connection was **migrated**, not recreated.
+The `connection_id` represents the **logical session**, while the underlying QUIC connections are created fresh for each worker assignment.
 
 ## 🏗️ Architecture
 
 ```
 ┌─────────┐
-│ Client  │ ← Single uninterrupted stream
+│ Client  │ ← Creates new QUIC connection on each reassignment
 └────┬────┘
      │
-     ↓ QUIC Connection (USER port 61000)
+     ↓ Asks for worker assignment
 ┌──────────────────┐     
-│    Director      │←─── Worker-a (fails at 15s) 
+│    Director      │←─── Worker-a (fails after 10-25s) 
 │ USER:  61000     │      USER:  62001, MGMT: 63001
 │ MGMT:  61001     │
 └──────────────────┘←─── Worker-b (takes over)
@@ -57,74 +56,87 @@ This proves the connection was **migrated**, not recreated.
 
 Each component runs two servers:
 - **USER Port**: RPC endpoints for business logic (client requests, streaming)
-- **MGMT Port**: Control plane for health checks, worker registration, migration coordination
+- **MGMT Port**: Control plane for health checks, worker registration
 
 ### Flow
 
-1. Client connects to director and requests streaming data
-2. Director assigns worker-a
-3. Worker-a serves for ~15 seconds, generating tokens
-4. Worker-a simulates failure
-5. Director detects error and assigns worker-b  
-6. Worker-b continues generating tokens
-7. Client receives uninterrupted stream
+1. Client connects to director and requests worker assignment
+2. Director assigns worker-a and returns its address
+3. Client establishes direct QUIC connection to worker-a
+4. Worker-a serves for 10-25s (random), generating tokens
+5. Worker-a simulates failure
+6. Client detects failure via heartbeat (5s interval, 3s timeout)
+7. Client goes back to director for new assignment
+8. Director assigns worker-b
+9. Client establishes new QUIC connection to worker-b
+10. Worker-b continues generating tokens
+11. Client receives uninterrupted logical session
 
 ## 🔧 Components
 
 ### Director (`src/bin/director.rs`)
-- **USER Port (61000)**: Client streaming requests (`generate`)
+- **USER Port (61000)**: Worker assignment requests (`get_worker`)
 - **MGMT Port (61001)**: Worker registration, health checks
 - Worker pool management with round-robin assignment
-- Automatic connection migration on worker failure
-- Maintains connection_id throughout migration
+- Tracks worker availability (alive/recovering)
+- Filters out unavailable workers from assignment
 
 ### Worker (`src/bin/worker.rs`)
-- **USER Port (62001/62002)**: Streaming inference endpoint (`generate`)
+- **USER Port (62001/62002)**: Streaming inference endpoint (`generate`), heartbeat
 - **MGMT Port (63001/63002)**: Health check endpoint
 - Registers with director's MGMT port on startup (heartbeats every 5s)
 - Generates tokens at 500ms intervals
-- Simulates failure after 15 seconds
+- Simulates failure after random interval (10-25s jitter)
+- Marks self as unavailable during recovery (10s cooldown)
+- Rejects new connections while unavailable
 
 ### Client (`src/bin/client.rs`)
-- Connects to director via RpcClient
+- Connects to director to request worker assignment
+- Establishes direct QUIC connection to assigned worker
 - Issues streaming `generate` request
-- Logs all tokens with connection_id and worker labels
-- Demonstrates seamless migration
+- Runs heartbeat task (5s interval, 3s timeout, 2 consecutive failures trigger reconnect)
+- Detects worker failures and returns to director for reassignment
+- Maintains `connection_id` across worker changes for session continuity
 
 ## 📊 Expected Output
 
 ### Initial Connection (Worker-a)
 ```
-INFO connection.id=conn-abc123 worker=worker-a stream.id=1: 🔄 worker assigned
+INFO connection.id=conn-abc123 worker=worker-a: 🔄 worker confirmed connection
 INFO connection.id=conn-abc123 worker=worker-a sequence=1: 📦 received token
 INFO connection.id=conn-abc123 worker=worker-a sequence=2: 📦 received token
 ...
-INFO connection.id=conn-abc123 worker=worker-a sequence=29: 📦 received token
+INFO connection.id=conn-abc123 worker=worker-a: 💓 heartbeat ok
 ```
 
-### Migration Event (~15s)
+### Failure Event (~10-25s)
 ```
 Worker-a:
 WARN worker=worker-a connection.id=conn-abc123: ⚠️  simulating failure after 15s
-
-Director:
-WARN stream.id=1 connection.id=conn-abc123 worker=worker-a: ⚠️  worker failed - initiating connection migration
-INFO stream.id=1 connection.id=conn-abc123 from_worker=worker-a to_worker=worker-b: 🔀 migrating connection to new worker
+INFO worker=worker-a: 💤 worker entering recovery mode (10s cooldown) - marked as unavailable
 
 Client:
-INFO connection.id=conn-abc123 worker=worker-a: ⚠️  worker error received
-INFO connection.id=conn-abc123 from_worker=worker-a to_worker=worker-b: 🔀 CONNECTION MIGRATION: switching workers
+WARN connection.id=conn-abc123 worker=worker-a: 💔 heartbeat timeout
+ERROR connection.id=conn-abc123 worker=worker-a: 💀 heartbeat failed 2 times - marking worker as failed
+INFO 🔄 returning to director for new worker assignment
 ```
 
 ### Automatic Failover (Worker-b)
 ```
-INFO connection.id=conn-abc123 worker=worker-b stream.id=1: 🔄 worker assigned
+Client:
+INFO 🔍 asking director for worker assignment
+INFO connection.id=conn-abc123 worker=worker-b: 🔀 director assigned worker - establishing direct connection
+INFO connection.id=conn-abc123 worker=worker-b: ✅ direct connection established to worker
+
+Worker-b:
+INFO connection.id=conn-abc123 worker=worker-b: ✅ received inference request from client (direct connection)
+INFO connection.id=conn-abc123 worker=worker-b: 🔄 worker confirmed connection
 INFO connection.id=conn-abc123 worker=worker-b sequence=1: 📦 received token
 INFO connection.id=conn-abc123 worker=worker-b sequence=2: 📦 received token
 ...
 ```
 
-Notice the **connection.id remains constant** and **migration is clearly logged** - that's seamless migration in action!
+Notice the **connection_id remains constant** - that's the logical session maintained across different workers and different QUIC connections!
 
 ## 🧪 Testing
 
@@ -146,28 +158,6 @@ Or use the automated demo:
 ./run_demo.sh
 ```
 
-## 🏗️ Built On
-
-This example uses the **complete migration infrastructure** from `src/migration/`:
-
-- ✅ **MigrationStateMachine** - 12-state FSM with 11 tests
-- ✅ **ConnectionSessionManager** - Session lifecycle with 10 tests  
-- ✅ **MigrationServiceImpl** - Complete service with 3 tests
-- ✅ **Token-based authentication** - 18 tests
-- ✅ **State transfer services** - 33 tests
-
-**Total: 166 passing tests**
-
-See [IMPLEMENTED.md](./IMPLEMENTED.md) for the full migration library documentation.
-
-## 🎓 What You Learn
-
-1. **Streaming RPC Patterns** - Using `register_streaming` and `call_streaming`
-2. **Worker Pool Management** - Round-robin assignment and failover
-3. **Error Handling** - Graceful degradation and automatic retry
-4. **Connection Migration** - Maintaining connection identity across workers
-5. **Multi-Process Coordination** - Director/worker architecture
-
 ## ✅ Current Features
 
 - **Heartbeat-based Failure Detection** - Client detects worker failures via periodic heartbeats (5s interval, 3s timeout)
@@ -175,18 +165,29 @@ See [IMPLEMENTED.md](./IMPLEMENTED.md) for the full migration library documentat
 - **Worker Availability Management** - Workers mark themselves unavailable during recovery and reject new connections
 - **Randomized Failure Timing** - Workers fail at random intervals (10-25s jitter) to test system resilience
 - **Auto-healing System** - All components recover automatically, even when both workers fail simultaneously
+- **Round-robin Load Balancing** - Director assigns workers in round-robin fashion
+- **Session Continuity** - Connection ID maintained across worker reassignments
 
 ## 🔮 Potential Future Enhancements
 
 If this example were to evolve further, here are some possibilities:
 
-1. **Gossip-based Worker Discovery** - Decentralized peer discovery on management port
-2. **Load-aware Routing** - Smart worker assignment based on actual load
+1. **Cluster Framework Integration** - Use SWIM gossip protocol for worker discovery (see CLUSTER_DESIGN.md)
+2. **Load-aware Routing** - Smart worker assignment based on actual load metrics
 3. **Metrics & Observability** - Production-grade monitoring with Prometheus/Grafana
 4. **Configurable Failure Simulation** - ENV vars for jitter ranges, recovery times
 5. **Multi-director HA** - Director high availability with leader election
 
 The current implementation demonstrates the core resilience patterns effectively!
+
+## 🎓 What You Learn
+
+1. **Streaming RPC Patterns** - Using `register_streaming` and `call_streaming`
+2. **Worker Pool Management** - Round-robin assignment and failover
+3. **Error Handling** - Graceful degradation and automatic retry
+4. **Heartbeat-based Failure Detection** - Client-side health monitoring
+5. **Multi-Process Coordination** - Director/worker architecture
+6. **Session Continuity** - Maintaining logical sessions across physical connections
 
 ## 📝 License
 

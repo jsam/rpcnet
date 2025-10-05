@@ -1,604 +1,724 @@
-# Cluster Framework Implementation Tasks
+# Cluster Implementation Tasks
 
-Tasks organized by linear dependency - each layer depends on completion of previous layers.
+**Task organization**: Dependency-based layers. Each layer can be implemented in parallel, but must complete before the next layer begins.
 
 ---
 
-## Layer 1: Foundation (No Dependencies)
+## Layer 1: Foundation Components (No Dependencies)
 
-### 1.1: Create cluster module structure
-Create `/src/cluster/mod.rs` with submodules:
-- `config.rs` - Cluster configuration
-- `node.rs` - Node representation
-- `error.rs` - Cluster-specific errors
-- `gossip/` - SWIM gossip protocol
-- `health/` - Health checking
-- `discovery/` - Service discovery
+### Task 1.1: Connection Pool Infrastructure
 
-**Acceptance Criteria:**
-- Module structure exists and compiles
-- Public exports defined in `mod.rs`
+**Dependencies**: None
 
-### 1.2: Implement ClusterError
-Create `/src/cluster/error.rs` with error types:
+**Files**:
+- Create `src/cluster/connection_pool.rs`
+- Create `src/cluster/connection_pool/config.rs`
+- Create `src/cluster/connection_pool/error.rs`
+
+**Trait Boundary**:
 ```rust
-pub enum ClusterError {
-    NodeNotFound(NodeId),
-    NetworkError(String),
-    SerializationError(bincode::Error),
-    HealthCheckTimeout,
-    InvalidConfiguration(String),
+pub trait ConnectionPool: Send + Sync {
+    async fn get_or_create(&self, addr: SocketAddr) -> Result<PooledConnection, PoolError>;
+    fn release(&self, addr: &SocketAddr);
+    async fn run_idle_cleanup(&self);
+    fn stats(&self) -> PoolStats;
+}
+
+pub struct PooledConnection {
+    pub(crate) connection: s2n_quic::Connection,
+    pub(crate) addr: SocketAddr,
+    pub(crate) last_used: Instant,
 }
 ```
 
-**Acceptance Criteria:**
-- All error variants defined
-- Implements `std::error::Error` and `Display`
-- Converts from underlying errors (bincode, io::Error)
+**Acceptance Criteria**:
+- DashMap-based pool with max 50 connections
+- Per-peer limit (default 1)
+- Idle connections evicted after 60s
+- Connection reuse working
+- Health check loop runs every 30s
+- Tests: reuse, eviction, max bounds, concurrent access
 
-### 1.3: Implement NodeId and ClusterNode
-Create `/src/cluster/node.rs`:
+---
+
+### Task 1.2: Incarnation Number System
+
+**Dependencies**: None
+
+**Files**:
+- Create `src/cluster/incarnation.rs`
+
+**Trait Boundary**:
 ```rust
-pub struct NodeId(Uuid);
-pub struct ClusterNode {
-    id: NodeId,
-    addr: SocketAddr,
-    tags: HashMap<String, String>,
-    state: NodeState,
-    incarnation: u64,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Incarnation(u64);
+
+impl Incarnation {
+    pub fn initial() -> Self;
+    pub fn increment(&mut self);
+    pub fn compare(&self, other: &Incarnation) -> Ordering;
 }
-pub enum NodeState { Alive, Suspect, Dead }
+
+pub trait IncarnationResolver {
+    fn resolve_conflict<'a>(&self, a: &'a NodeStatus, b: &'a NodeStatus) -> &'a NodeStatus;
+}
 ```
 
-**Acceptance Criteria:**
-- NodeId is unique, serializable, hashable
-- ClusterNode tracks all required fields
-- NodeState transitions defined
+**Acceptance Criteria**:
+- Timestamp-based initial incarnation
+- Wraparound-safe comparison (handles u64 overflow)
+- NodeId tiebreaker for equal incarnations
+- Refutation increments by 1
+- Tests: wraparound edge cases, tiebreaker determinism, concurrent increments
 
-### 1.4: Implement ClusterConfig
-Create `/src/cluster/config.rs`:
+---
+
+### Task 1.3: Gossip Message Size Bounds
+
+**Dependencies**: None
+
+**Files**:
+- Create `src/cluster/gossip/message.rs`
+- Create `src/cluster/gossip/queue.rs`
+
+**Trait Boundary**:
 ```rust
+pub trait GossipQueue: Send + Sync {
+    fn enqueue(&mut self, update: NodeUpdate, priority: Priority);
+    fn select_updates(&mut self) -> Vec<NodeUpdate>;
+    fn mark_sent(&mut self, node_id: &NodeId);
+    fn should_stop_gossiping(&self, node_id: &NodeId) -> bool;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Priority {
+    Critical,
+    High,
+    Medium,
+    Low,
+}
+
+const MAX_UPDATES_PER_MESSAGE: usize = 20;
+const MAX_MESSAGE_SIZE: usize = 4096;
+```
+
+**Acceptance Criteria**:
+- BTreeMap-based priority queue
+- Max 20 updates per message
+- Hard 4KB message size check
+- Stop gossiping after log(N) * 3 rounds
+- Priority-based selection (critical first)
+- Tests: size bounds enforced, priority ordering, redundancy elimination
+
+---
+
+### Task 1.4: Phi Accrual Failure Detector
+
+**Dependencies**: None
+
+**Files**:
+- Create `src/cluster/failure_detection/phi_accrual.rs`
+- Add `statrs = "0.17"` to Cargo.toml
+
+**Trait Boundary**:
+```rust
+pub trait FailureDetector: Send + Sync {
+    fn heartbeat(&mut self);
+    fn phi(&self) -> f64;
+    fn is_available(&self, threshold: f64) -> bool;
+    fn clear(&mut self);
+}
+
+pub struct PhiAccrualDetector {
+    history: VecDeque<f64>,
+    max_samples: usize,
+    threshold: f64,
+    last_heartbeat: Instant,
+    min_samples: usize,
+}
+```
+
+**Acceptance Criteria**:
+- Correct CDF calculation using statrs::Normal
+- Min 5 samples before reporting phi
+- VecDeque window (max 100 samples)
+- Correct phi = -log10(P) formula
+- Tests: phi increases with time, normal distribution edge cases, min samples requirement
+
+---
+
+### Task 1.5: Partition Detector
+
+**Dependencies**: None
+
+**Files**:
+- Create `src/cluster/partition_detector.rs`
+
+**Trait Boundary**:
+```rust
+pub trait PartitionDetector: Send + Sync {
+    async fn check_partition(&self, current_size: usize) -> PartitionStatus;
+    fn update_expected_size(&self, size: usize);
+    fn config(&self) -> &PartitionConfig;
+}
+
+pub enum PartitionStatus {
+    Unknown,
+    Healthy { current_size: usize, expected_size: usize },
+    Suspect { current_size: usize, expected_size: usize, grace_remaining: Duration },
+    Partitioned { current_size: usize, expected_size: usize, minority: bool },
+}
+
+pub struct PartitionConfig {
+    pub threshold: f64,
+    pub grace_period: Duration,
+    pub read_only_on_partition: bool,
+}
+```
+
+**Acceptance Criteria**:
+- Quorum threshold (default 50%)
+- Grace period (default 30s)
+- Suspect state before confirmed partition
+- AtomicUsize for expected size
+- Tests: quorum scenarios (49%, 50%, 51%), grace period timing, minority detection
+
+---
+
+### Task 1.6: Event Channel with Backpressure Tracking
+
+**Dependencies**: None
+
+**Files**:
+- Create `src/cluster/events.rs`
+
+**Trait Boundary**:
+```rust
+pub struct ClusterEventBroadcaster {
+    tx: broadcast::Sender<ClusterEvent>,
+    drops: Arc<AtomicU64>,
+}
+
+pub struct ClusterEventReceiver {
+    inner: broadcast::Receiver<ClusterEvent>,
+    drops: Arc<AtomicU64>,
+}
+
+pub enum RecvError {
+    Lagged(u64),
+    Closed,
+}
+
+impl ClusterEventReceiver {
+    pub async fn recv(&mut self) -> Result<ClusterEvent, RecvError>;
+    pub fn dropped_count(&self) -> u64;
+}
+
+pub enum ClusterEvent {
+    NodeJoined(ClusterNode),
+    NodeLeft(NodeId),
+    NodeFailed(NodeId),
+    NodeRecovered(NodeId),
+    NodeTagsUpdated { node_id: NodeId, tags: HashMap<String, String> },
+    PartitionDetected { status: PartitionStatus },
+    EventsDropped { count: u64 },
+}
+
+const EVENT_CHANNEL_CAPACITY: usize = 1000;
+```
+
+**Acceptance Criteria**:
+- Bounded broadcast channel (1000 capacity)
+- Track dropped events in AtomicU64
+- Emit EventsDropped event when consumer lags
+- RecvError::Lagged contains drop count
+- Tests: backpressure behavior, drop tracking, multiple subscribers
+
+---
+
+## Layer 2: Core Cluster Components (Depends on Layer 1)
+
+### Task 2.1: Node Registry with Shared Ownership
+
+**Dependencies**: 
+- Task 1.2 (Incarnation)
+
+**Files**:
+- Create `src/cluster/node_registry.rs`
+
+**Trait Boundary**:
+```rust
+pub trait NodeRegistry: Send + Sync {
+    fn insert(&self, status: NodeStatus);
+    fn get(&self, node_id: &NodeId) -> Option<NodeStatus>;
+    fn remove(&self, node_id: &NodeId) -> Option<NodeStatus>;
+    fn all_nodes(&self) -> Vec<NodeStatus>;
+    fn alive_nodes(&self) -> Vec<NodeStatus>;
+    fn len(&self) -> usize;
+}
+
+pub struct SharedNodeRegistry {
+    inner: Arc<RwLock<HashMap<NodeId, NodeStatus>>>,
+}
+
+pub struct NodeStatus {
+    pub node: ClusterNode,
+    pub state: NodeState,
+    pub incarnation: Incarnation,
+    pub last_seen: Instant,
+}
+
+pub enum NodeState {
+    Alive,
+    Suspect,
+    Failed,
+    Left,
+}
+```
+
+**Acceptance Criteria**:
+- Arc<RwLock<HashMap>> for shared access
+- Incarnation-based conflict resolution
+- State transitions (Alive → Suspect → Failed)
+- Clone is cheap (Arc clone)
+- Tests: concurrent access, conflict resolution, state transitions
+
+---
+
+### Task 2.2: Gossip Protocol Core
+
+**Dependencies**:
+- Task 1.1 (Connection Pool)
+- Task 1.2 (Incarnation)
+- Task 1.3 (Message Bounds)
+- Task 2.1 (Node Registry)
+
+**Files**:
+- Create `src/cluster/gossip/protocol.rs`
+- Create `src/cluster/gossip/ping.rs`
+- Create `src/cluster/gossip/ack.rs`
+
+**Trait Boundary**:
+```rust
+pub trait GossipProtocol: Send + Sync {
+    async fn start(&self) -> Result<(), GossipError>;
+    async fn stop(&self);
+    async fn broadcast(&self, update: NodeUpdate, priority: Priority);
+    fn select_random_nodes(&self, count: usize) -> Vec<ClusterNode>;
+}
+
+pub struct GossipConfig {
+    pub protocol_period: Duration,
+    pub indirect_ping_count: usize,
+    pub ack_timeout: Duration,
+    pub indirect_timeout: Duration,
+}
+```
+
+**Acceptance Criteria**:
+- Direct ping/ack cycle
+- Indirect ping (K=3 intermediaries)
+- Connection pool reuse
+- Gossip queue integration (20 updates/msg, 4KB max)
+- Incarnation conflict resolution
+- Tests: direct ping, indirect ping, message bounds, connection reuse
+
+---
+
+### Task 2.3: Health Checker with Phi Accrual
+
+**Dependencies**:
+- Task 1.4 (Phi Accrual)
+- Task 2.1 (Node Registry)
+
+**Files**:
+- Create `src/cluster/health_checker.rs`
+- Create `src/cluster/health_check/trait.rs`
+
+**Trait Boundary**:
+```rust
+pub trait HealthChecker: Send + Sync {
+    async fn start(&self);
+    async fn stop(&self);
+    fn register_check(&mut self, check: Box<dyn HealthCheck>);
+    fn status(&self) -> HealthStatus;
+}
+
+pub trait HealthCheck: Send + Sync {
+    async fn check(&self) -> HealthCheckResult;
+    fn name(&self) -> &str;
+}
+
+pub struct HealthStatus {
+    pub overall: CheckStatus,
+    pub checks: Vec<(String, CheckStatus)>,
+}
+
+pub enum CheckStatus {
+    Healthy,
+    Degraded,
+    Unhealthy,
+}
+```
+
+**Acceptance Criteria**:
+- Shared reference to node registry (not owned)
+- Run checks every N seconds (configurable)
+- Emit HealthCheckFailed events
+- Update node states (Alive → Suspect)
+- Phi accrual per-node tracking
+- Tests: phi threshold triggering, event emission, shared registry access
+
+---
+
+### Task 2.4: Graceful Shutdown Protocol
+
+**Dependencies**:
+- Task 2.2 (Gossip Protocol)
+- Task 2.3 (Health Checker)
+
+**Files**:
+- Modify `src/cluster/membership.rs` (create if needed)
+
+**Trait Boundary**:
+```rust
+pub trait Lifecycle: Send + Sync {
+    async fn leave(&mut self) -> Result<(), ClusterError>;
+    async fn shutdown_immediate(&mut self);
+}
+
+impl ClusterMembership {
+    pub async fn leave(&mut self) -> Result<(), ClusterError>;
+}
+```
+
+**Acceptance Criteria**:
+- Phase 1: Broadcast Leave (max 5s timeout)
+- Phase 2: Stop gossip loop
+- Phase 3: Stop health checker
+- Phase 4: Close QUIC connections (max 2s timeout)
+- Phase 5: Clear node registry
+- Phase 6: Close event channel
+- Drop impl sends shutdown signal
+- Tests: all phases complete, timeouts enforced, force shutdown works
+
+---
+
+## Layer 3: Tag System and Service Discovery (Depends on Layer 2)
+
+### Task 3.1: Tag-Based Node Discovery
+
+**Dependencies**:
+- Task 2.1 (Node Registry)
+- Task 2.2 (Gossip Protocol)
+
+**Files**:
+- Create `src/cluster/tags.rs`
+- Modify `src/cluster/membership.rs`
+
+**Trait Boundary**:
+```rust
+pub trait ServiceDiscovery: Send + Sync {
+    async fn update_tag(&self, key: String, value: String);
+    async fn remove_tag(&self, key: &str);
+    async fn nodes_with_tag(&self, key: &str, value: &str) -> Vec<ClusterNode>;
+    async fn nodes_with_all_tags(&self, tags: &HashMap<String, String>) -> Vec<ClusterNode>;
+}
+
+impl ClusterMembership {
+    pub async fn update_tag(&self, key: String, value: String);
+    pub async fn nodes_with_tag(&self, key: &str, value: &str) -> Vec<ClusterNode>;
+}
+```
+
+**Acceptance Criteria**:
+- Eventual consistency model (no synchronous guarantees)
+- Tags stored in ClusterNode
+- Broadcast tag updates with High priority
+- Emit NodeTagsUpdated event
+- Local cache for fast queries
+- Tests: tag propagation, query results, eventual consistency
+
+---
+
+### Task 3.2: Director Worker Assignment with Retry
+
+**Dependencies**:
+- Task 3.1 (Tag Discovery)
+
+**Files**:
+- Create example in `examples/director_with_cluster/director.rs`
+
+**Trait Boundary**:
+```rust
+pub trait WorkerAssigner: Send + Sync {
+    async fn assign_worker(&self) -> Option<WorkerAssignment>;
+}
+
+pub struct WorkerAssignment {
+    pub addr: SocketAddr,
+    pub node_id: NodeId,
+}
+```
+
+**Acceptance Criteria**:
+- Query nodes with tag role=worker
+- Filter by available=true
+- Retry up to 3 times with 500ms delay
+- Return None if no workers available
+- Round-robin selection
+- Tests: retry logic, filtering, no-workers scenario
+
+---
+
+## Layer 4: RpcServer Integration (Depends on Layer 3)
+
+### Task 4.1: Cluster Module in RpcServer
+
+**Dependencies**:
+- Task 2.1 (Node Registry)
+- Task 2.2 (Gossip Protocol)
+- Task 2.3 (Health Checker)
+- Task 2.4 (Shutdown Protocol)
+- Task 3.1 (Tag Discovery)
+
+**Files**:
+- Modify `src/server.rs`
+- Create `src/cluster/mod.rs` (if not exists)
+
+**Trait Boundary**:
+```rust
+impl RpcServer {
+    pub fn enable_cluster(
+        &mut self,
+        config: ClusterConfig,
+        seeds: Vec<SocketAddr>,
+    ) -> Result<(), ClusterError>;
+    
+    pub fn cluster(&self) -> Option<&ClusterMembership>;
+    
+    pub async fn update_tag(&self, key: String, value: String) -> Result<(), ClusterError>;
+    
+    pub fn cluster_events(&self) -> Option<ClusterEventReceiver>;
+}
+
 pub struct ClusterConfig {
     pub node_id: Option<NodeId>,
-    pub cluster_addr: SocketAddr,
-    pub seed_nodes: Vec<SocketAddr>,
-    pub tags: HashMap<String, String>,
-    pub gossip_interval: Duration,
-    pub suspicion_timeout: Duration,
-    pub phi_threshold: f64,
+    pub gossip: GossipConfig,
+    pub health: HealthConfig,
+    pub partition: PartitionConfig,
 }
 ```
 
-**Acceptance Criteria:**
-- Config has sensible defaults
-- Builder pattern for optional fields
-- Validates config on build
+**Acceptance Criteria**:
+- ClusterMembership as Option<Arc<>> in RpcServer
+- Auto-join on enable_cluster()
+- Auto-leave on server drop
+- Health checker starts automatically
+- Event receiver cloneable
+- Tests: enable/disable, auto-join, auto-leave
 
 ---
 
-## Layer 2: Core Types (Depends on Layer 1)
+### Task 4.2: Bootstrap with Seed Retry
 
-### 2.1: Define gossip message types
-Create `/src/cluster/gossip/messages.rs`:
+**Dependencies**:
+- Task 4.1 (RpcServer Integration)
+
+**Files**:
+- Modify `src/cluster/membership.rs`
+- Add `rand = "0.8"` to Cargo.toml
+
+**Trait Boundary**:
 ```rust
-pub enum GossipMessage {
-    Ping { from: NodeId, incarnation: u64 },
-    Ack { from: NodeId },
-    IndirectPing { target: NodeId, requestor: NodeId },
-    StateUpdate { nodes: Vec<NodeStateUpdate> },
-}
-pub struct NodeStateUpdate {
-    node_id: NodeId,
-    state: NodeState,
-    incarnation: u64,
-}
-```
-
-**Acceptance Criteria:**
-- All SWIM protocol messages defined
-- Implements Serialize/Deserialize
-- Message size is reasonable (<1KB typical)
-
-### 2.2: Implement NodeRegistry
-Create `/src/cluster/gossip/registry.rs`:
-```rust
-pub struct NodeRegistry {
-    nodes: RwLock<HashMap<NodeId, ClusterNode>>,
-}
-impl NodeRegistry {
-    pub fn add_node(&self, node: ClusterNode);
-    pub fn update_state(&self, id: NodeId, state: NodeState, incarnation: u64);
-    pub fn get_alive_nodes(&self) -> Vec<ClusterNode>;
-    pub fn get_nodes_by_tag(&self, key: &str, value: &str) -> Vec<ClusterNode>;
-}
-```
-
-**Acceptance Criteria:**
-- Thread-safe node storage
-- Efficient tag-based queries
-- Handles state transitions correctly
-- Unit tests for concurrent access
-
-### 2.3: Define HealthCheck trait
-Create `/src/cluster/health/mod.rs`:
-```rust
-#[async_trait]
-pub trait HealthCheck: Send + Sync {
-    async fn check(&self) -> HealthStatus;
-}
-pub struct HealthStatus {
-    pub healthy: bool,
-    pub message: Option<String>,
-    pub metadata: HashMap<String, String>,
-}
-```
-
-**Acceptance Criteria:**
-- Trait is async and thread-safe
-- HealthStatus carries sufficient info
-- Default implementation for "always healthy"
-
----
-
-## Layer 3: Detection & Monitoring (Depends on Layer 2)
-
-### 3.1: Implement Phi Accrual Failure Detector
-Create `/src/cluster/gossip/phi_detector.rs`:
-```rust
-pub struct PhiAccrualDetector {
-    window_size: usize,
-    phi_threshold: f64,
-    arrivals: VecDeque<Instant>,
-}
-impl PhiAccrualDetector {
-    pub fn heartbeat(&mut self);
-    pub fn phi(&self) -> f64;
-    pub fn is_available(&self) -> bool;
-}
-```
-
-**Acceptance Criteria:**
-- Implements phi calculation from SWIM paper
-- Maintains sliding window of heartbeat arrivals
-- Returns suspicion level as continuous value
-- Unit tests verify phi increases over time without heartbeats
-- Unit tests verify phi resets on heartbeat
-
-### 3.2: Implement HealthCheckService
-Create `/src/cluster/health/service.rs`:
-```rust
-pub struct HealthCheckService {
-    checks: Vec<Box<dyn HealthCheck>>,
-    interval: Duration,
-}
-impl HealthCheckService {
-    pub fn add_check(&mut self, check: Box<dyn HealthCheck>);
-    pub async fn run_checks(&self) -> HealthStatus;
-    pub fn start_monitoring(&self) -> JoinHandle<()>;
-}
-```
-
-**Acceptance Criteria:**
-- Runs all registered checks in parallel
-- Aggregates results (healthy only if all pass)
-- Background task runs checks periodically
-- Can be stopped gracefully
-
----
-
-## Layer 4: Gossip Protocol (Depends on Layer 3)
-
-### 4.1: Implement GossipTransport
-Create `/src/cluster/gossip/transport.rs`:
-```rust
-pub struct GossipTransport {
-    socket: Arc<UdpSocket>,
-}
-impl GossipTransport {
-    pub async fn send(&self, addr: SocketAddr, msg: GossipMessage) -> Result<()>;
-    pub async fn recv(&self) -> Result<(SocketAddr, GossipMessage)>;
-}
-```
-
-**Acceptance Criteria:**
-- UDP-based message transport
-- Serializes/deserializes messages with bincode
-- Handles network errors gracefully
-- Logs send/recv at DEBUG level
-
-### 4.2: Implement SWIM ping/ack logic
-Create `/src/cluster/gossip/swim.rs`:
-```rust
-pub struct SwimProtocol {
-    registry: Arc<NodeRegistry>,
-    transport: Arc<GossipTransport>,
-    local_node: ClusterNode,
-    phi_detectors: RwLock<HashMap<NodeId, PhiAccrualDetector>>,
-}
-impl SwimProtocol {
-    async fn direct_ping(&self, target: &ClusterNode) -> Result<Duration>;
-    async fn indirect_ping(&self, target: &ClusterNode) -> Result<()>;
-    async fn handle_ping(&self, from: NodeId, incarnation: u64);
-    async fn handle_ack(&self, from: NodeId);
-}
-```
-
-**Acceptance Criteria:**
-- Direct ping with timeout (1s)
-- Indirect ping through K random nodes (K=3)
-- Updates phi detector on successful ping
-- Marks node as suspect after ping failures
-- Unit tests for ping/ack roundtrip
-- Unit tests for indirect ping fallback
-
-### 4.3: Implement state dissemination
-Add to `/src/cluster/gossip/swim.rs`:
-```rust
-impl SwimProtocol {
-    fn piggyback_state(&self, target: &ClusterNode) -> Vec<NodeStateUpdate>;
-    async fn handle_state_update(&self, updates: Vec<NodeStateUpdate>);
-}
-```
-
-**Acceptance Criteria:**
-- Piggybacks up to 10 state updates on each ping
-- Prioritizes recent state changes
-- Applies updates with incarnation number checks
-- Tracks propagation count to limit gossip
-- Unit tests verify state convergence
-
----
-
-## Layer 5: Gossip Service (Depends on Layer 4)
-
-### 5.1: Implement GossipService
-Create `/src/cluster/gossip/service.rs`:
-```rust
-pub struct GossipService {
-    swim: Arc<SwimProtocol>,
-    config: ClusterConfig,
-    shutdown: Arc<AtomicBool>,
-}
-impl GossipService {
-    pub async fn start(&self) -> Result<()>;
-    pub async fn stop(&self);
-    async fn gossip_loop(&self);
-    async fn receive_loop(&self);
-    async fn probe_loop(&self);
-}
-```
-
-**Acceptance Criteria:**
-- Three background tasks: gossip, receive, probe
-- Gossip loop picks random node every interval
-- Receive loop handles incoming messages
-- Probe loop runs failure detection
-- Graceful shutdown on stop()
-- Integration test with 3 nodes forming cluster
-
----
-
-## Layer 6: RpcServer Integration (Depends on Layer 5)
-
-### 6.1: Add cluster field to RpcServer
-Modify `/src/server.rs`:
-```rust
-pub struct RpcServer {
-    // existing fields...
-    cluster: Option<Arc<Cluster>>,
-}
-impl RpcServer {
-    pub fn with_cluster(mut self, config: ClusterConfig) -> Self {
-        self.cluster = Some(Arc::new(Cluster::new(config)));
-        self
-    }
-}
-```
-
-**Acceptance Criteria:**
-- RpcServer stores optional Cluster
-- No behavioral change when cluster is None
-- Cluster is initialized but not started yet
-
-### 6.2: Implement Cluster struct
-Create `/src/cluster/cluster.rs`:
-```rust
-pub struct Cluster {
-    config: ClusterConfig,
-    registry: Arc<NodeRegistry>,
-    gossip: Arc<GossipService>,
-    health: Arc<HealthCheckService>,
-}
-impl Cluster {
-    pub fn new(config: ClusterConfig) -> Self;
-    pub async fn start(&self) -> Result<()>;
-    pub async fn stop(&self);
-    pub fn local_node(&self) -> &ClusterNode;
-    pub fn get_nodes_by_tag(&self, key: &str, value: &str) -> Vec<ClusterNode>;
-}
-```
-
-**Acceptance Criteria:**
-- Owns all cluster components
-- start() launches gossip and health services
-- stop() gracefully shuts down all services
-- Exposes query methods for service discovery
-
-### 6.3: Start cluster on RpcServer::start()
-Modify `/src/server.rs`:
-```rust
-impl RpcServer {
-    pub async fn start(&mut self, quic: Endpoint) -> Result<()> {
-        if let Some(cluster) = &self.cluster {
-            cluster.start().await?;
-            info!("cluster started on {}", cluster.config().cluster_addr);
-        }
-        // existing server logic...
-    }
-}
-```
-
-**Acceptance Criteria:**
-- Cluster starts before RPC server
-- Cluster port is separate from RPC port
-- Errors propagate correctly
-- Integration test: RpcServer with cluster enabled
-
-### 6.4: Stop cluster on RpcServer shutdown
-Modify `/src/server.rs` shutdown logic:
-```rust
-impl RpcServer {
-    async fn shutdown(&self) {
-        if let Some(cluster) = &self.cluster {
-            cluster.stop().await;
-            info!("cluster stopped");
-        }
-        // existing shutdown logic...
-    }
-}
-```
-
-**Acceptance Criteria:**
-- Cluster stops gracefully
-- No panics on shutdown
-- Integration test: start and stop multiple times
-
----
-
-## Layer 7: Service Discovery API (Depends on Layer 6)
-
-### 7.1: Add query methods to RpcServer
-Modify `/src/server.rs`:
-```rust
-impl RpcServer {
-    pub fn cluster(&self) -> Option<&Cluster> {
-        self.cluster.as_deref()
-    }
+impl ClusterMembership {
+    pub async fn join(
+        config: ClusterConfig,
+        seeds: Vec<SocketAddr>,
+    ) -> Result<Self, ClusterError>;
     
-    pub fn discover_nodes(&self, tags: &[(&str, &str)]) -> Vec<ClusterNode> {
-        self.cluster
-            .as_ref()
-            .map(|c| c.query_by_tags(tags))
-            .unwrap_or_default()
-    }
+    async fn join_with_retry(
+        gossip: &Arc<GossipProtocol>,
+        seeds: &[SocketAddr],
+    ) -> Result<(), ClusterError>;
+}
+
+pub enum ClusterError {
+    NoSeedsReachable,
+    JoinTimeout,
 }
 ```
 
-**Acceptance Criteria:**
-- Can query nodes from RpcServer
-- Returns empty vec when cluster disabled
-- Integration test: discover nodes by tag
-
-### 7.2: Implement ClusterNode::connect()
-Add to `/src/cluster/node.rs`:
-```rust
-impl ClusterNode {
-    pub async fn connect(&self, config: RpcConfig) -> Result<RpcClient> {
-        RpcClient::connect(self.addr, config).await
-    }
-}
-```
-
-**Acceptance Criteria:**
-- Creates RpcClient to node's RPC address
-- Uses provided TLS config
-- Returns connection errors
-- Integration test: discover and connect
+**Acceptance Criteria**:
+- Max 10 retry attempts
+- Exponential backoff (100ms → 10s)
+- Random jitter (±25%)
+- Try all seeds per attempt
+- Return error after max attempts
+- Tests: retry logic, backoff timing, jitter randomness, success on N-th attempt
 
 ---
 
-## Layer 8: Connection Swap Migration (Depends on Layer 7)
+## Layer 5: End-to-End Examples and Testing (Depends on Layer 4)
 
-### 8.1: Simplify director registration logic
-Modify `examples/connection_swap/src/bin/director.rs`:
-```rust
-let config = RpcConfig::new("../../certs/test_cert.pem", user_addr)
-    .with_key_path("../../certs/test_key.pem")
-    .with_cluster(ClusterConfig::new(mgmt_addr)
-        .with_tags([("role", "director")]));
+### Task 5.1: Connection Swap with Cluster Discovery
 
-let mut server = RpcServer::new(config);
-```
+**Dependencies**:
+- Task 4.1 (RpcServer Integration)
+- Task 4.2 (Seed Bootstrap)
+- Task 3.2 (Director Assignment)
 
-**Acceptance Criteria:**
-- Remove manual MGMT port server
-- Remove register_worker RPC endpoint
-- Director uses cluster for worker discovery
-- Integration test: director discovers workers
+**Files**:
+- Modify `examples/connection_swap/director.rs`
+- Modify `examples/connection_swap/worker.rs`
+- Modify `examples/connection_swap/client.rs`
 
-### 8.2: Simplify worker registration logic
-Modify `examples/connection_swap/src/bin/worker.rs`:
-```rust
-let config = RpcConfig::new("../../certs/test_cert.pem", user_addr)
-    .with_key_path("../../certs/test_key.pem")
-    .with_cluster(ClusterConfig::new(mgmt_addr)
-        .with_tags([
-            ("role", "worker"),
-            ("label", &worker_label),
-        ])
-        .with_seed_nodes(vec![director_mgmt_addr]));
+**Trait Boundary**:
+No new traits (uses existing ServiceDiscovery)
 
-let mut server = RpcServer::new(config);
-server.cluster().unwrap().add_health_check(Box::new(AvailabilityCheck::new(is_available)));
-```
-
-**Acceptance Criteria:**
-- Remove manual MGMT port server
-- Remove registration loop
-- Worker joins cluster via seed nodes
-- Custom health check reflects availability
-- Integration test: worker joins and leaves cluster
-
-### 8.3: Update director worker assignment
-Modify `examples/connection_swap/src/bin/director.rs`:
-```rust
-async fn assign_worker(&self, server: &RpcServer) -> Option<ClusterNode> {
-    let workers = server.discover_nodes(&[
-        ("role", "worker"),
-        ("healthy", "true"),
-    ]);
-    
-    if workers.is_empty() {
-        return None;
-    }
-    
-    let idx = self.next_worker_idx.fetch_add(1, Ordering::SeqCst);
-    Some(workers[idx % workers.len()].clone())
-}
-```
-
-**Acceptance Criteria:**
-- Discovers workers via cluster API
-- Only assigns to healthy workers
-- Round-robin still works
-- Integration test: director load-balances across workers
-
-### 8.4: Update director migration logic
-Modify `examples/connection_swap/src/bin/director.rs`:
-```rust
-async fn handle_worker_error(&self, server: &RpcServer, failed_worker: &str) -> Option<ClusterNode> {
-    warn!(worker = failed_worker, "worker failed - finding replacement");
-    
-    let workers = server.discover_nodes(&[
-        ("role", "worker"),
-        ("healthy", "true"),
-    ]);
-    
-    workers.into_iter()
-        .find(|w| w.tags.get("label") != Some(&failed_worker.to_string()))
-}
-```
-
-**Acceptance Criteria:**
-- Finds replacement worker via cluster
-- Excludes failed worker
-- Returns None if no healthy workers
-- Integration test: director migrates on worker failure
-
-### 8.5: Remove manual health check code
-Cleanup in both director and worker:
-- Remove WorkerInfo struct
-- Remove RegisterWorkerRequest/Response
-- Remove health_check RPC endpoint
-- Remove manual heartbeat loops
-
-**Acceptance Criteria:**
-- All manual clustering code removed
-- Example only uses cluster framework
-- All tests still pass
-- run_demo.sh works end-to-end
+**Acceptance Criteria**:
+- Director uses cluster for worker discovery (remove static registry)
+- Workers register via cluster tags (role=worker, available=true/false)
+- Client queries director → director queries cluster
+- Failover still works (worker marks available=false on failure)
+- Worker recovery updates available=true
+- Tests: end-to-end failover, tag propagation delay handling
 
 ---
 
-## Layer 9: Documentation & Testing (Depends on Layer 8)
+### Task 5.2: Chaos Testing Suite
 
-### 9.1: Add cluster framework documentation
-Create `/src/cluster/README.md`:
-- Overview of cluster framework
-- SWIM protocol explanation
-- Usage examples with RpcServer
-- Configuration options
-- Performance characteristics
+**Dependencies**:
+- Task 5.1 (Connection Swap)
 
-**Acceptance Criteria:**
-- Clear examples of cluster usage
-- Explains tag-based discovery
-- Documents health check integration
+**Files**:
+- Create `tests/chaos/mod.rs`
+- Create `tests/chaos/network_partition.rs`
+- Create `tests/chaos/cascading_failures.rs`
+- Create `tests/chaos/message_loss.rs`
 
-### 9.2: Add cluster framework tests
-Create `/src/cluster/tests/`:
-- `test_node_registry.rs` - concurrent access, state transitions
-- `test_phi_detector.rs` - phi calculation, thresholds
-- `test_swim.rs` - ping/ack, indirect ping, state dissemination
-- `test_service_discovery.rs` - tag queries, filtering
+**Trait Boundary**:
+```rust
+pub trait ChaosScenario {
+    fn name(&self) -> &str;
+    async fn setup(&mut self) -> Result<TestCluster, ChaosError>;
+    async fn inject_chaos(&mut self, cluster: &mut TestCluster);
+    async fn verify(&self, cluster: &TestCluster) -> Result<(), ChaosError>;
+}
 
-**Acceptance Criteria:**
-- All edge cases covered
-- Tests are deterministic
-- No flaky timing issues
-- All tests pass in CI
+pub struct TestCluster {
+    pub nodes: Vec<RpcServer>,
+    pub control: ClusterControl,
+}
 
-### 9.3: Add integration tests
-Create `/tests/cluster_integration.rs`:
-- 3-node cluster formation
-- Node failure detection
-- State convergence
-- Split brain scenario
-- Graceful shutdown
+pub struct ClusterControl {
+    pub partition: PartitionControl,
+    pub message_loss: MessageLossControl,
+}
+```
 
-**Acceptance Criteria:**
-- Tests use real UDP sockets
-- Tests verify convergence times
-- Tests clean up resources
-- All tests pass reliably
+**Acceptance Criteria**:
+- Network partition test (split 5-node cluster 3-2)
+- Cascading failure test (3/5 nodes fail simultaneously)
+- Message loss test (20% gossip messages dropped)
+- Seed unreachable test (all seeds fail → backoff → retry)
+- Tag update race test (concurrent tag updates)
+- Each scenario has assertions for expected behavior
+- Tests run in CI
 
-### 9.4: Update connection_swap documentation
-Update `examples/connection_swap/README.md`:
-- Remove references to manual MGMT port
-- Document cluster framework integration
-- Update architecture diagram
-- Update expected output
-- Mark "gossip support" as completed
+---
 
-**Acceptance Criteria:**
-- README matches new implementation
-- Architecture diagram shows cluster framework
-- Quick start still works
+### Task 5.3: Performance Benchmarks
 
-### 9.5: Add migration guide
-Create `/docs/CLUSTER_MIGRATION.md`:
-- How to migrate from manual management ports
-- Before/after code examples
-- Configuration migration
-- Health check integration patterns
+**Dependencies**:
+- Task 5.1 (Connection Swap)
 
-**Acceptance Criteria:**
-- Step-by-step migration guide
-- Real code examples
-- Covers common patterns
+**Files**:
+- Create `benches/cluster.rs`
+
+**Trait Boundary**:
+No new traits (uses Criterion)
+
+**Acceptance Criteria**:
+- Benchmark gossip throughput (updates/sec)
+- Benchmark tag query latency (P50, P95, P99)
+- Benchmark connection pool reuse (vs new connections)
+- Benchmark failure detection time (phi threshold trigger)
+- Benchmark cluster size scalability (10, 50, 100, 500 nodes)
+- Results documented in CLUSTER_DESIGN_V2.md
+
+---
+
+## Layer 6: Documentation and Polish
+
+### Task 6.1: Update Documentation
+
+**Dependencies**:
+- All previous tasks
+
+**Files**:
+- Modify `README.md`
+- Modify `CLUSTER_DESIGN_V2.md` (add benchmark results)
+- Create `examples/cluster_basic/README.md`
+
+**Acceptance Criteria**:
+- README has cluster section with quick start
+- CLUSTER_DESIGN_V2.md has actual benchmark data
+- Basic cluster example with commented code
+- Migration guide from connection_swap v1 → v2
+- Architecture diagram (ASCII art)
+
+---
+
+### Task 6.2: API Cleanup and Stabilization
+
+**Dependencies**:
+- Task 6.1 (Documentation)
+
+**Files**:
+- Review all `pub` items in `src/cluster/`
+
+**Acceptance Criteria**:
+- Only essential types are public
+- Internal types use `pub(crate)`
+- No `pub` fields on structs (use methods)
+- All public APIs have docs
+- No compiler warnings
+- Clippy passes
 
 ---
 
 ## Summary
 
-**Total Tasks: 35**
+**Total Layers**: 6  
+**Total Tasks**: 20
 
-**Dependency Layers:**
-- Layer 1: 4 tasks (foundation)
-- Layer 2: 3 tasks (core types)
-- Layer 3: 2 tasks (detection)
-- Layer 4: 3 tasks (gossip protocol)
-- Layer 5: 1 task (gossip service)
-- Layer 6: 4 tasks (server integration)
-- Layer 7: 2 tasks (service discovery)
-- Layer 8: 5 tasks (connection_swap migration)
-- Layer 9: 5 tasks (docs & tests)
+**Layer Dependencies**:
+- Layer 1 → Layer 2 → Layer 3 → Layer 4 → Layer 5 → Layer 6
 
-**Critical Path:**
-1.1 → 1.2 → 1.3 → 1.4 → 2.1 → 2.2 → 2.3 → 3.1 → 3.2 → 4.1 → 4.2 → 4.3 → 5.1 → 6.1 → 6.2 → 6.3 → 6.4 → 7.1 → 7.2 → 8.1 → 8.2 → 8.3 → 8.4 → 8.5 → 9.4
+**Parallel Opportunities**:
+- Within Layer 1: All 6 tasks can run in parallel
+- Within Layer 2: Tasks 2.1, 2.2, 2.3 can run in parallel (2.4 needs 2.2 and 2.3)
+- Within Layer 3: Task 3.2 needs 3.1
+- Within Layer 5: All 3 tasks can run in parallel after Layer 4
 
-**Parallelization Opportunities:**
-- Layer 1 tasks can run in parallel
-- Layer 2 tasks can run in parallel
-- Layer 9 tasks can run in parallel
-- Tests (9.2, 9.3) can run while docs (9.1, 9.4, 9.5) are written
+**Critical Path** (longest dependency chain):
+1. Task 1.1 (Connection Pool)
+2. Task 2.2 (Gossip Protocol)
+3. Task 2.4 (Shutdown Protocol)
+4. Task 4.1 (RpcServer Integration)
+5. Task 4.2 (Bootstrap Retry)
+6. Task 5.1 (Connection Swap)
+7. Task 5.2 (Chaos Tests)
+
+**Files Created/Modified**:
+- ~25 new files in `src/cluster/`
+- ~8 modified files in `src/`
+- ~6 test files in `tests/chaos/`
+- ~3 benchmark files in `benches/`
+- ~4 example files modified
+
+**External Dependencies Added**:
+- `dashmap = "6"` (Task 1.1)
+- `statrs = "0.17"` (Task 1.4)
+- `rand = "0.8"` (Task 4.2)
