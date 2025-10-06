@@ -1,7 +1,7 @@
 # rpcnet
 
+[![PR Checks](https://github.com/jsam/rpcnet/workflows/PR%20Checks/badge.svg)](https://github.com/jsam/rpcnet/actions/workflows/pr-checks.yml)
 [![Coverage](https://codecov.io/gh/jsam/rpcnet/branch/main/graph/badge.svg)](https://codecov.io/gh/jsam/rpcnet)
-[![CI](https://github.com/jsam/rpcnet/workflows/CI/badge.svg)](https://github.com/jsam/rpcnet/actions)
 [![Crates.io](https://img.shields.io/crates/v/rpcnet.svg)](https://crates.io/crates/rpcnet)
 [![Documentation](https://docs.rs/rpcnet/badge.svg)](https://docs.rs/rpcnet)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/jsam/rpcnet#license)

@@ -1,10 +1,12 @@
-name: Coverage
+name: Coverage Report
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  schedule:
+    # Run coverage daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -32,22 +34,27 @@ jobs:
         sudo apt-get install -y jq bc
     
     - name: Cache cargo registry
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/registry
         key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
     
     - name: Cache cargo index
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/git
         key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
     
     - name: Cache target directory
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: target
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Generate test certificates
+      run: |
+        mkdir -p certs
+        openssl req -x509 -newkey rsa:4096 -keyout certs/test_key.pem -out certs/test_cert.pem -days 365 -nodes -subj "/CN=localhost"
     
     - name: Run coverage analysis
       run: make coverage-check
@@ -60,24 +67,27 @@ jobs:
         ./scripts/analyze-coverage.sh >> $GITHUB_STEP_SUMMARY || true
     
     - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
-        file: target/coverage/tarpaulin-report.xml
+        files: target/coverage/tarpaulin-report.xml
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     
     - name: Archive coverage results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: coverage-report
         path: |
           target/coverage/tarpaulin-report.html
           target/coverage/tarpaulin-report.json
+        retention-days: 30
     
     - name: Comment coverage report on PR
       if: github.event_name == 'pull_request'
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           const fs = require('fs');
