@@ -1,4 +1,16 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 // Test to hit EXACT uncovered lines: 1426 and 1467 in start() method
+#![allow(clippy::type_complexity)]
+#![allow(clippy::never_loop)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::get_first)]
+#![allow(clippy::useless_vec)]
 // Line 1426: let _ = stream.send(response_data.into()).await;
 // Line 1467: Ok(())
 

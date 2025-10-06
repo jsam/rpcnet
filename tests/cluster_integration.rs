@@ -1,6 +1,10 @@
-use rpcnet::cluster::{
-    ClusterConfig, ClusterMembership, NodeRegistry,
-};
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
+use rpcnet::cluster::{ClusterConfig, ClusterMembership, NodeRegistry};
 use s2n_quic::Client as QuicClient;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -36,9 +40,21 @@ async fn test_three_node_cluster_formation() {
     let config2 = ClusterConfig::default();
     let config3 = ClusterConfig::default();
 
-    let node1 = Arc::new(ClusterMembership::new(addr1, config1, client1).await.unwrap());
-    let node2 = Arc::new(ClusterMembership::new(addr2, config2, client2).await.unwrap());
-    let node3 = Arc::new(ClusterMembership::new(addr3, config3, client3).await.unwrap());
+    let node1 = Arc::new(
+        ClusterMembership::new(addr1, config1, client1)
+            .await
+            .unwrap(),
+    );
+    let node2 = Arc::new(
+        ClusterMembership::new(addr2, config2, client2)
+            .await
+            .unwrap(),
+    );
+    let node3 = Arc::new(
+        ClusterMembership::new(addr3, config3, client3)
+            .await
+            .unwrap(),
+    );
 
     node1.join(vec![]).await.unwrap();
 
@@ -61,14 +77,26 @@ async fn test_tag_based_service_discovery() {
     let config1 = ClusterConfig::default();
     let config2 = ClusterConfig::default();
 
-    let node1 = Arc::new(ClusterMembership::new(addr1, config1, client1).await.unwrap());
-    let node2 = Arc::new(ClusterMembership::new(addr2, config2, client2).await.unwrap());
+    let node1 = Arc::new(
+        ClusterMembership::new(addr1, config1, client1)
+            .await
+            .unwrap(),
+    );
+    let node2 = Arc::new(
+        ClusterMembership::new(addr2, config2, client2)
+            .await
+            .unwrap(),
+    );
 
     node1.join(vec![]).await.unwrap();
     node2.join(vec![]).await.unwrap();
 
-    node1.update_tag("role".to_string(), "worker".to_string()).await;
-    node2.update_tag("role".to_string(), "director".to_string()).await;
+    node1
+        .update_tag("role".to_string(), "worker".to_string())
+        .await;
+    node2
+        .update_tag("role".to_string(), "director".to_string())
+        .await;
 
     sleep(Duration::from_millis(100)).await;
 
@@ -107,9 +135,12 @@ async fn test_multiple_tags_query() {
 
     node.join(vec![]).await.unwrap();
 
-    node.update_tag("role".to_string(), "worker".to_string()).await;
-    node.update_tag("zone".to_string(), "us-east".to_string()).await;
-    node.update_tag("version".to_string(), "1.0.0".to_string()).await;
+    node.update_tag("role".to_string(), "worker".to_string())
+        .await;
+    node.update_tag("zone".to_string(), "us-east".to_string())
+        .await;
+    node.update_tag("version".to_string(), "1.0.0".to_string())
+        .await;
 
     sleep(Duration::from_millis(100)).await;
 
@@ -132,7 +163,8 @@ async fn test_tag_removal() {
 
     node.join(vec![]).await.unwrap();
 
-    node.update_tag("temporary".to_string(), "value".to_string()).await;
+    node.update_tag("temporary".to_string(), "value".to_string())
+        .await;
 
     sleep(Duration::from_millis(50)).await;
 
@@ -179,14 +211,12 @@ async fn test_event_subscription() {
 
     node.join(vec![]).await.unwrap();
 
-    node.update_tag("test".to_string(), "value".to_string()).await;
+    node.update_tag("test".to_string(), "value".to_string())
+        .await;
 
     sleep(Duration::from_millis(50)).await;
 
-    let event_result = tokio::time::timeout(
-        Duration::from_millis(100),
-        receiver.recv()
-    ).await;
+    let event_result = tokio::time::timeout(Duration::from_millis(100), receiver.recv()).await;
 
     assert!(event_result.is_ok());
 }

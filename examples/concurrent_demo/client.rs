@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 //! Concurrent demo client using generated code.
 
 #[path = "generated/concurrentdemo/mod.rs"]

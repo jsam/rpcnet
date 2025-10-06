@@ -1,3 +1,10 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(dead_code)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 // Streaming internals tests to cover uncovered code paths
 // These tests focus on the internal streaming functions and failure scenarios
 

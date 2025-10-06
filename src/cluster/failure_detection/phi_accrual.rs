@@ -51,16 +51,18 @@ impl PhiAccrualDetector {
 
         let mean = self.history.iter().sum::<f64>() / self.history.len() as f64;
 
-        let variance = self
-            .history
-            .iter()
-            .map(|x| (x - mean).powi(2))
-            .sum::<f64>()
+        let variance = self.history.iter().map(|x| (x - mean).powi(2)).sum::<f64>()
             / self.history.len() as f64;
 
         if variance < 1e-10 {
-            return if elapsed > mean * 2.0 {
-                f64::INFINITY
+            // When variance is near zero (all intervals are identical),
+            // we can't use normal distribution. Instead, use a simple heuristic:
+            // - If elapsed is significantly larger than the mean interval, suspect failure
+            // - Otherwise, assume healthy
+            // Use a finite phi value instead of INFINITY for better handling
+            let threshold_multiple = 3.0;
+            return if elapsed > mean * threshold_multiple && mean > 0.0 {
+                self.threshold * 2.0 // High phi but finite
             } else {
                 0.0
             };
@@ -71,8 +73,10 @@ impl PhiAccrualDetector {
         let normal = match Normal::new(mean, std_dev) {
             Ok(n) => n,
             Err(_) => {
-                return if elapsed > mean * 2.0 {
-                    f64::INFINITY
+                // If we can't create a normal distribution, use simple heuristic
+                let threshold_multiple = 3.0;
+                return if elapsed > mean * threshold_multiple && mean > 0.0 {
+                    self.threshold * 2.0 // High phi but finite
                 } else {
                     0.0
                 };
@@ -244,6 +248,9 @@ mod tests {
         }
 
         let phi = detector.phi();
-        assert!(phi.is_finite(), "Phi should handle zero variance gracefully");
+        assert!(
+            phi.is_finite(),
+            "Phi should handle zero variance gracefully"
+        );
     }
 }

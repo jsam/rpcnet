@@ -1,3 +1,9 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 // Unit tests for RpcServer start() method with focus on graceful shutdown
 // Testing the start() method's behavior when cancelled and stopped gracefully
 

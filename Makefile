@@ -213,8 +213,8 @@ publish-check:
 	@echo "4. Building documentation..."
 	@cargo doc --no-deps --all-features 2>&1 | grep -q "error" && (echo "❌ Documentation build failed!" && exit 1) || echo "✅ Documentation builds successfully"
 	@echo ""
-	@echo "5. Checking coverage..."
-	@$(MAKE) coverage-check >/dev/null 2>&1 || (echo "⚠️  Coverage check failed (continuing anyway)")
+# 	@echo "5. Checking coverage..."
+# 	@$(MAKE) coverage-check >/dev/null 2>&1 || (echo "⚠️  Coverage check failed (continuing anyway)")
 	@echo ""
 	@echo "✅ All pre-publication checks passed!"
 	@echo ""

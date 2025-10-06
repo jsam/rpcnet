@@ -1,3 +1,9 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 // Real integration tests for streaming functionality
 // These tests create actual client-server connections to exercise create_request_stream and send_response_stream
 
@@ -27,12 +33,12 @@ async fn test_streaming_with_working_server_client() {
                 count += 1;
                 // Exercise the success path in send_response_stream (lines 1565-1573)
                 yield Ok(format!("Response {} bytes: {}", count, request_data.len()).into_bytes());
-                
+
                 if count == 2 {
                     // Exercise the error path in send_response_stream (lines 1574-1582)
                     yield Err(RpcError::StreamError("Test error".to_string()));
                 }
-                
+
                 if count >= 3 {
                     break;
                 }

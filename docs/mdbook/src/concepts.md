@@ -247,3 +247,100 @@ server.register_streaming("uppercase", |mut reqs| async move {
     }
 }).await;
 ```
+
+## Cluster Management (v0.2.0+)
+
+RpcNet provides built-in distributed systems support for building scalable clusters with automatic discovery and failover.
+
+### Architecture Components
+
+#### NodeRegistry
+
+Tracks all nodes in the cluster with their metadata (address, tags, status). Filters nodes by tags for heterogeneous worker pools (e.g., GPU workers, CPU workers).
+
+```rust
+use rpcnet::cluster::NodeRegistry;
+
+let registry = NodeRegistry::new(cluster);
+let gpu_workers = registry.nodes_with_tag("gpu").await;
+```
+
+#### WorkerRegistry
+
+Automatically discovers workers via gossip and provides load-balanced worker selection.
+
+```rust
+use rpcnet::cluster::{WorkerRegistry, LoadBalancingStrategy};
+
+let registry = WorkerRegistry::new(
+    cluster,
+    LoadBalancingStrategy::LeastConnections
+);
+registry.start().await;
+
+let worker = registry.select_worker(Some("role=worker")).await?;
+```
+
+#### Load Balancing Strategies
+
+- **Round Robin**: Even distribution across workers
+- **Random**: Random selection for stateless workloads  
+- **Least Connections**: Routes to least-loaded worker (recommended)
+
+#### Health Checking
+
+Phi Accrual failure detector provides accurate, adaptive health monitoring:
+
+```rust
+use rpcnet::cluster::HealthChecker;
+
+let health = HealthChecker::new(cluster, config);
+health.start().await;
+
+// Automatically marks nodes as failed/recovered
+```
+
+#### Connection Pooling
+
+Efficient connection reuse with configurable pool sizes:
+
+```rust
+use rpcnet::cluster::{ConnectionPool, PoolConfig};
+
+let pool = ConnectionPool::new(PoolConfig {
+    max_connections: 100,
+    idle_timeout: Duration::from_secs(60),
+    ..Default::default()
+});
+```
+
+### Gossip Protocol
+
+RpcNet uses SWIM (Scalable Weakly-consistent Infection-style Process Group Membership Protocol) for:
+- Automatic node discovery
+- Failure detection propagation
+- Cluster state synchronization
+- Network partition detection
+
+### ClusterClient
+
+High-level client that combines worker discovery and load balancing:
+
+```rust
+use rpcnet::cluster::{ClusterClient, WorkerRegistry, LoadBalancingStrategy};
+
+let registry = Arc::new(WorkerRegistry::new(
+    cluster,
+    LoadBalancingStrategy::LeastConnections
+));
+registry.start().await;
+
+let client = Arc::new(ClusterClient::new(registry, config));
+
+// Call any worker in the pool
+let result = client.call_worker("compute", data, Some("role=worker")).await?;
+```
+
+### Complete Example
+
+See the [Cluster Example](cluster-example.md) chapter for a complete walkthrough of building a distributed worker pool with automatic discovery, load balancing, and failover.

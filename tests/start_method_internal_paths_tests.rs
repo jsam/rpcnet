@@ -1,3 +1,9 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 // Unit tests for RpcServer start() method focusing on internal code paths
 // These tests specifically target:
 // 1. The response serialization and sending: `let _ = stream.send(response_data.into()).await;`

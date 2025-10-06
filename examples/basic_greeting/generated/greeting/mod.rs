@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 //! Generated code for Greeting service.
 //!
 //! This module contains auto-generated code from rpcnet-gen.

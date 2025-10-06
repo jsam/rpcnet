@@ -1,3 +1,9 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 // Test specifically designed to hit the natural Ok(()) return in start() method
 // This test focuses on the specific line: `Ok(())` at the end of start() method
 

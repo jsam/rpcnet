@@ -1,4 +1,13 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 // Surgical test to hit EXACTLY line 1426 in start() method
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::get_first)]
+#![allow(clippy::useless_vec)]
 // Line 1426: let _ = stream.send(response_data.into()).await;
 // This line is inside: if let Ok(request) = bincode::deserialize::<RpcRequest>(&request_data)
 

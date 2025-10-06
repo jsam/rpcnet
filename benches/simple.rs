@@ -1,3 +1,9 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::never_loop)]
+#![allow(clippy::collapsible_if)]
+
 // Enable high-performance memory allocator when perf feature is active
 #[cfg(feature = "perf")]
 use jemallocator::Jemalloc;

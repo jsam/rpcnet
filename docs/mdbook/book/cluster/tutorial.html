@@ -1,0 +1,760 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Tutorial - RpcNet Guide</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">RpcNet Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="cluster-tutorial"><a class="header" href="#cluster-tutorial">Cluster Tutorial</a></h1>
+<p>This hands-on tutorial guides you through building a complete distributed RPC cluster from scratch. You'll create a coordinator (director) that manages a pool of worker nodes, with automatic discovery, load balancing, and failure handling.</p>
+<h2 id="what-youll-build"><a class="header" href="#what-youll-build">What You'll Build</a></h2>
+<p>By the end of this tutorial, you'll have:</p>
+<ul>
+<li><strong>Director</strong>: Coordinator node that manages worker discovery and routes client requests</li>
+<li><strong>Workers</strong>: Processing nodes that join automatically and handle compute tasks</li>
+<li><strong>Client</strong>: Application that connects through the director and handles failover</li>
+<li><strong>Failure Testing</strong>: Simulate worker failures and observe automatic recovery</li>
+</ul>
+<p><strong>Time</strong>: ~30 minutes<br />
+<strong>Difficulty</strong>: Intermediate</p>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<h3 id="1-install-rpcnet"><a class="header" href="#1-install-rpcnet">1. Install RpcNet</a></h3>
+<pre><code class="language-bash">cargo install rpcnet
+</code></pre>
+<p>This installs both the library and the <code>rpcnet-gen</code> CLI tool.</p>
+<h3 id="2-create-test-certificates"><a class="header" href="#2-create-test-certificates">2. Create Test Certificates</a></h3>
+<p>RpcNet requires TLS certificates. For development:</p>
+<pre><code class="language-bash">mkdir certs
+cd certs
+
+# Generate self-signed certificate
+openssl req -x509 -newkey rsa:4096 -nodes \
+  -keyout test_key.pem -out test_cert.pem \
+  -days 365 -subj "/CN=localhost"
+
+cd ..
+</code></pre>
+<h3 id="3-create-project-structure"><a class="header" href="#3-create-project-structure">3. Create Project Structure</a></h3>
+<pre><code class="language-bash">cargo new --bin cluster_tutorial
+cd cluster_tutorial
+
+# Add RpcNet dependency
+cargo add rpcnet --features cluster
+cargo add tokio --features full
+cargo add anyhow
+</code></pre>
+<p>Your <code>Cargo.toml</code> should include:</p>
+<pre><code class="language-toml">[dependencies]
+rpcnet = { version = "0.2", features = ["cluster"] }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+</code></pre>
+<h2 id="step-1-define-the-rpc-interface"><a class="header" href="#step-1-define-the-rpc-interface">Step 1: Define the RPC Interface</a></h2>
+<p>Create <code>compute.rpc.rs</code> to define the worker interface:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::prelude::*;
+
+#[rpc_trait]
+pub trait ComputeService {
+    async fn process_task(&amp;self, task_id: String, data: Vec&lt;u8&gt;) -&gt; Result&lt;ComputeResult&gt;;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComputeResult {
+    pub task_id: String,
+    pub result: Vec&lt;u8&gt;,
+    pub worker_label: String,
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Generate code</strong>:</p>
+<pre><code class="language-bash">rpcnet-gen --input compute.rpc.rs --output src/generated
+</code></pre>
+<p>This creates <code>src/generated/compute_service.rs</code> with client and server stubs.</p>
+<h2 id="step-2-implement-the-worker"><a class="header" href="#step-2-implement-the-worker">Step 2: Implement the Worker</a></h2>
+<p>Create <code>src/bin/worker.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust">use anyhow::Result;
+use rpcnet::prelude::*;
+use rpcnet::cluster::{ClusterMembership, ClusterConfig};
+use std::sync::Arc;
+use std::env;
+
+mod generated;
+use generated::compute_service::*;
+
+struct WorkerHandler {
+    label: String,
+}
+
+#[rpc_impl]
+impl ComputeService for WorkerHandler {
+    async fn process_task(&amp;self, task_id: String, data: Vec&lt;u8&gt;) -&gt; Result&lt;ComputeResult&gt; {
+        println!("📋 [{}] Processing task: {}", self.label, task_id);
+        
+        // Simulate work
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        
+        // Return result with worker identity
+        Ok(ComputeResult {
+            task_id,
+            result: data, // Echo data for demo
+            worker_label: self.label.clone(),
+        })
+    }
+}
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;()&gt; {
+    env_logger::init();
+    
+    // Get configuration from environment
+    let worker_label = env::var("WORKER_LABEL").unwrap_or_else(|_| "worker-1".to_string());
+    let worker_addr = env::var("WORKER_ADDR").unwrap_or_else(|_| "127.0.0.1:62001".to_string());
+    let director_addr = env::var("DIRECTOR_ADDR").unwrap_or_else(|_| "127.0.0.1:61000".to_string());
+    
+    println!("👷 Starting Worker '{}' at {}", worker_label, worker_addr);
+    
+    // Load certificates
+    let cert = std::fs::read("certs/test_cert.pem")?;
+    let key = std::fs::read("certs/test_key.pem")?;
+    
+    // Create RPC server
+    let config = ServerConfig::builder()
+        .with_cert_and_key(cert, key)?
+        .build();
+    
+    let mut server = Server::new(config);
+    
+    // Register compute handler
+    let handler = Arc::new(WorkerHandler {
+        label: worker_label.clone(),
+    });
+    server.register_service(handler);
+    
+    // Bind server
+    println!("🔌 Binding server to {}...", worker_addr);
+    server.bind(&amp;worker_addr).await?;
+    println!("✅ Server bound successfully");
+    
+    // Enable cluster and join
+    println!("🌐 Enabling cluster, connecting to director at {}...", director_addr);
+    let cluster_config = ClusterConfig::default()
+        .with_bind_addr(worker_addr.parse()?);
+    
+    let cluster = server.enable_cluster(cluster_config).await?;
+    cluster.join(vec![director_addr.parse()?]).await?;
+    println!("✅ Cluster enabled, connected to director");
+    
+    // Tag worker for discovery
+    println!("🏷️  Tagging worker with role=worker and label={}...", worker_label);
+    cluster.set_tag("role", "worker");
+    cluster.set_tag("label", &amp;worker_label);
+    println!("✅ Worker '{}' joined cluster with role=worker", worker_label);
+    
+    println!("🚀 Worker '{}' is running and ready to handle requests", worker_label);
+    
+    // Run server
+    server.run().await?;
+    
+    Ok(())
+}</code></pre></pre>
+<h2 id="step-3-implement-the-director"><a class="header" href="#step-3-implement-the-director">Step 3: Implement the Director</a></h2>
+<p>Create <code>src/bin/director.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust">use anyhow::Result;
+use rpcnet::prelude::*;
+use rpcnet::cluster::{
+    ClusterMembership, ClusterConfig, WorkerRegistry, 
+    LoadBalancingStrategy, ClusterClient, ClusterClientConfig
+};
+use std::sync::Arc;
+use std::env;
+
+mod generated;
+use generated::compute_service::*;
+
+#[rpc_trait]
+pub trait DirectorService {
+    async fn get_worker(&amp;self) -&gt; Result&lt;String&gt;;
+}
+
+struct DirectorHandler {
+    registry: Arc&lt;WorkerRegistry&gt;,
+}
+
+#[rpc_impl]
+impl DirectorService for DirectorHandler {
+    async fn get_worker(&amp;self) -&gt; Result&lt;String&gt; {
+        println!("📨 Client requesting worker assignment");
+        
+        // Select worker using registry
+        let worker = self.registry
+            .select_worker(Some("role=worker"))
+            .await
+            .map_err(|e| anyhow::anyhow!("No workers available: {}", e))?;
+        
+        println!("✅ Assigned worker: {} at {}", worker.label, worker.addr);
+        Ok(worker.addr.to_string())
+    }
+}
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;()&gt; {
+    env_logger::init();
+    
+    let director_addr = env::var("DIRECTOR_ADDR")
+        .unwrap_or_else(|_| "127.0.0.1:61000".to_string());
+    
+    println!("🎯 Starting Director at {}", director_addr);
+    
+    // Load certificates
+    println!("📁 Loading certificates from certs/");
+    let cert = std::fs::read("certs/test_cert.pem")?;
+    let key = std::fs::read("certs/test_key.pem")?;
+    
+    // Create server
+    let config = ServerConfig::builder()
+        .with_cert_and_key(cert, key)?
+        .build();
+    
+    let mut server = Server::new(config);
+    
+    // Enable cluster first
+    let cluster_config = ClusterConfig::default()
+        .with_bind_addr(director_addr.parse()?);
+    
+    let cluster = server.enable_cluster(cluster_config).await?;
+    println!("✅ Director registered itself in cluster");
+    println!("✅ Cluster enabled - Director is now discoverable");
+    
+    // Create worker registry with load balancing
+    let registry = Arc::new(WorkerRegistry::new(
+        cluster,
+        LoadBalancingStrategy::LeastConnections
+    ));
+    registry.start().await;
+    
+    println!("🔄 Load balancing strategy: LeastConnections");
+    
+    // Register director service
+    let handler = Arc::new(DirectorHandler {
+        registry: registry.clone(),
+    });
+    server.register_service(handler);
+    
+    // Bind and run
+    server.bind(&amp;director_addr).await?;
+    
+    // Monitor worker pool
+    tokio::spawn({
+        let registry = registry.clone();
+        async move {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                let workers = registry.workers().await;
+                println!("📊 Worker pool status: {} workers available", workers.len());
+                for worker in workers {
+                    println!("   - {} at {} ({} connections)", 
+                        worker.label, worker.addr, worker.active_connections);
+                }
+            }
+        }
+    });
+    
+    println!("🚀 Director ready - listening on {}", director_addr);
+    
+    server.run().await?;
+    
+    Ok(())
+}</code></pre></pre>
+<h2 id="step-4-implement-the-client"><a class="header" href="#step-4-implement-the-client">Step 4: Implement the Client</a></h2>
+<p>Create <code>src/bin/client.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust">use anyhow::Result;
+use rpcnet::prelude::*;
+use std::env;
+
+mod generated;
+use generated::compute_service::*;
+use generated::director_service::*;
+
+#[tokio::main]
+async fn main() -&gt; Result&lt;()&gt; {
+    env_logger::init();
+    
+    let director_addr = env::var("DIRECTOR_ADDR")
+        .unwrap_or_else(|_| "127.0.0.1:61000".to_string());
+    
+    println!("📡 Starting Client - connecting to director at {}", director_addr);
+    
+    // Load certificate for TLS
+    let cert = std::fs::read("certs/test_cert.pem")?;
+    
+    let config = ClientConfig::builder()
+        .with_server_cert(cert)?
+        .build();
+    
+    // Connect to director
+    let director_client = DirectorClient::connect(&amp;director_addr, config.clone()).await?;
+    println!("✅ Connected to director");
+    
+    // Main loop: get worker, process tasks, handle failures
+    let mut task_counter = 0;
+    loop {
+        // Get worker assignment from director
+        println!("🔍 Asking director for worker assignment");
+        let worker_addr = match director_client.get_worker().await {
+            Ok(addr) =&gt; {
+                println!("🔀 Director assigned worker at {}", addr);
+                addr
+            }
+            Err(e) =&gt; {
+                println!("❌ Failed to get worker: {}", e);
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                continue;
+            }
+        };
+        
+        // Connect to worker directly
+        println!("✅ Establishing direct connection to worker");
+        let worker_client = match ComputeClient::connect(&amp;worker_addr, config.clone()).await {
+            Ok(client) =&gt; {
+                println!("✅ Direct connection established");
+                client
+            }
+            Err(e) =&gt; {
+                println!("❌ Failed to connect to worker: {}", e);
+                continue;
+            }
+        };
+        
+        // Process tasks until worker fails
+        loop {
+            task_counter += 1;
+            let task_id = format!("task-{}", task_counter);
+            let data = format!("data-{}", task_counter).into_bytes();
+            
+            println!("📤 Sending task: {}", task_id);
+            
+            match worker_client.process_task(task_id.clone(), data).await {
+                Ok(result) =&gt; {
+                    println!("✅ Task {} completed by worker: {}", 
+                        result.task_id, result.worker_label);
+                    
+                    // Wait before next task
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+                Err(e) =&gt; {
+                    println!("⚠️  Worker failed: {} - returning to director", e);
+                    break; // Get new worker from director
+                }
+            }
+        }
+    }
+}</code></pre></pre>
+<h2 id="step-5-update-cargotoml"><a class="header" href="#step-5-update-cargotoml">Step 5: Update Cargo.toml</a></h2>
+<p>Add the binary definitions to <code>Cargo.toml</code>:</p>
+<pre><code class="language-toml">[[bin]]
+name = "director"
+path = "src/bin/director.rs"
+
+[[bin]]
+name = "worker"
+path = "src/bin/worker.rs"
+
+[[bin]]
+name = "client"
+path = "src/bin/client.rs"
+</code></pre>
+<p>Also add the generated module to <code>src/lib.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub mod generated;
+<span class="boring">}</span></code></pre></pre>
+<h2 id="step-6-run-the-cluster"><a class="header" href="#step-6-run-the-cluster">Step 6: Run the Cluster</a></h2>
+<p>Open <strong>four terminals</strong> and run each component:</p>
+<h3 id="terminal-1-start-director"><a class="header" href="#terminal-1-start-director">Terminal 1: Start Director</a></h3>
+<pre><code class="language-bash">DIRECTOR_ADDR=127.0.0.1:61000 \
+  RUST_LOG=info \
+  cargo run --bin director
+</code></pre>
+<p>Wait for: <code>🚀 Director ready - listening on 127.0.0.1:61000</code></p>
+<h3 id="terminal-2-start-worker-a"><a class="header" href="#terminal-2-start-worker-a">Terminal 2: Start Worker A</a></h3>
+<pre><code class="language-bash">WORKER_LABEL=worker-a \
+  WORKER_ADDR=127.0.0.1:62001 \
+  DIRECTOR_ADDR=127.0.0.1:61000 \
+  RUST_LOG=info \
+  cargo run --bin worker
+</code></pre>
+<p>Wait for: <code>🚀 Worker 'worker-a' is running and ready to handle requests</code></p>
+<h3 id="terminal-3-start-worker-b"><a class="header" href="#terminal-3-start-worker-b">Terminal 3: Start Worker B</a></h3>
+<pre><code class="language-bash">WORKER_LABEL=worker-b \
+  WORKER_ADDR=127.0.0.1:62002 \
+  DIRECTOR_ADDR=127.0.0.1:61000 \
+  RUST_LOG=info \
+  cargo run --bin worker
+</code></pre>
+<p>Wait for: <code>🚀 Worker 'worker-b' is running and ready to handle requests</code></p>
+<h3 id="terminal-4-run-client"><a class="header" href="#terminal-4-run-client">Terminal 4: Run Client</a></h3>
+<pre><code class="language-bash">DIRECTOR_ADDR=127.0.0.1:61000 \
+  RUST_LOG=info \
+  cargo run --bin client
+</code></pre>
+<h2 id="step-7-observe-the-system"><a class="header" href="#step-7-observe-the-system">Step 7: Observe the System</a></h2>
+<h3 id="director-output"><a class="header" href="#director-output">Director Output</a></h3>
+<pre><code>🎯 Starting Director at 127.0.0.1:61000
+📁 Loading certificates from certs/
+✅ Director registered itself in cluster
+✅ Cluster enabled - Director is now discoverable
+🔄 Load balancing strategy: LeastConnections
+🚀 Director ready - listening on 127.0.0.1:61000
+📊 Worker pool status: 2 workers available
+   - worker-a at 127.0.0.1:62001 (0 connections)
+   - worker-b at 127.0.0.1:62002 (0 connections)
+📨 Client requesting worker assignment
+✅ Assigned worker: worker-a at 127.0.0.1:62001
+</code></pre>
+<h3 id="worker-output"><a class="header" href="#worker-output">Worker Output</a></h3>
+<pre><code>👷 Starting Worker 'worker-a' at 127.0.0.1:62001
+🔌 Binding server to 127.0.0.1:62001...
+✅ Server bound successfully
+🌐 Enabling cluster, connecting to director at 127.0.0.1:61000...
+✅ Cluster enabled, connected to director
+🏷️  Tagging worker with role=worker and label=worker-a...
+✅ Worker 'worker-a' joined cluster with role=worker
+🚀 Worker 'worker-a' is running and ready to handle requests
+📋 [worker-a] Processing task: task-1
+📋 [worker-a] Processing task: task-2
+</code></pre>
+<h3 id="client-output"><a class="header" href="#client-output">Client Output</a></h3>
+<pre><code>📡 Starting Client - connecting to director at 127.0.0.1:61000
+✅ Connected to director
+🔍 Asking director for worker assignment
+🔀 Director assigned worker at 127.0.0.1:62001
+✅ Establishing direct connection to worker
+✅ Direct connection established
+📤 Sending task: task-1
+✅ Task task-1 completed by worker: worker-a
+📤 Sending task: task-2
+✅ Task task-2 completed by worker: worker-a
+</code></pre>
+<h2 id="step-8-test-failure-handling"><a class="header" href="#step-8-test-failure-handling">Step 8: Test Failure Handling</a></h2>
+<h3 id="scenario-1-kill-a-worker"><a class="header" href="#scenario-1-kill-a-worker">Scenario 1: Kill a Worker</a></h3>
+<p>In Worker A terminal, press <strong>Ctrl+C</strong> to kill it.</p>
+<p><strong>Observe</strong>:</p>
+<ul>
+<li>Director detects failure via gossip: <code>Node worker-a failed</code></li>
+<li>Director updates worker pool: <code>📊 Worker pool status: 1 workers available</code></li>
+<li>Client detects error: <code>⚠️ Worker failed - returning to director</code></li>
+<li>Client gets new worker: <code>🔀 Director assigned worker at 127.0.0.1:62002</code></li>
+<li>Tasks continue on Worker B with no data loss</li>
+</ul>
+<h3 id="scenario-2-restart-worker"><a class="header" href="#scenario-2-restart-worker">Scenario 2: Restart Worker</a></h3>
+<p>Restart Worker A:</p>
+<pre><code class="language-bash">WORKER_LABEL=worker-a \
+  WORKER_ADDR=127.0.0.1:62001 \
+  DIRECTOR_ADDR=127.0.0.1:61000 \
+  RUST_LOG=info \
+  cargo run --bin worker
+</code></pre>
+<p><strong>Observe</strong>:</p>
+<ul>
+<li>Worker rejoins automatically</li>
+<li>Gossip spreads availability</li>
+<li>Director adds back to pool: <code>📊 Worker pool status: 2 workers available</code></li>
+<li>Future client requests can use either worker</li>
+</ul>
+<h2 id="what-you-learned"><a class="header" href="#what-you-learned">What You Learned</a></h2>
+<p>Congratulations! You've built a complete distributed RPC cluster. You now understand:</p>
+<p>✅ <strong>Automatic Discovery</strong>: Workers join via gossip, no manual registration<br />
+✅ <strong>Load Balancing</strong>: Director uses LeastConnections strategy automatically<br />
+✅ <strong>Failure Detection</strong>: Gossip protocol detects and handles node failures<br />
+✅ <strong>Client Failover</strong>: Clients handle worker failures gracefully<br />
+✅ <strong>Tag-Based Routing</strong>: Filter workers by role (<code>role=worker</code>)</p>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<h3 id="add-more-workers"><a class="header" href="#add-more-workers">Add More Workers</a></h3>
+<p>Scale up by adding more workers with different labels:</p>
+<pre><code class="language-bash">WORKER_LABEL=worker-c \
+  WORKER_ADDR=127.0.0.1:62003 \
+  DIRECTOR_ADDR=127.0.0.1:61000 \
+  cargo run --bin worker
+</code></pre>
+<h3 id="try-different-load-balancing"><a class="header" href="#try-different-load-balancing">Try Different Load Balancing</a></h3>
+<p>Change the strategy in <code>director.rs</code>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>LoadBalancingStrategy::RoundRobin       // Even distribution
+LoadBalancingStrategy::Random           // Random selection
+LoadBalancingStrategy::LeastConnections // Pick least loaded (default)
+<span class="boring">}</span></code></pre></pre>
+<h3 id="add-custom-tags"><a class="header" href="#add-custom-tags">Add Custom Tags</a></h3>
+<p>Tag workers by capability:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>cluster.set_tag("gpu", "true");
+cluster.set_tag("zone", "us-west");
+<span class="boring">}</span></code></pre></pre>
+<p>Then filter in client:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>registry.select_worker(Some("gpu=true")).await?;
+<span class="boring">}</span></code></pre></pre>
+<h3 id="monitor-cluster-events"><a class="header" href="#monitor-cluster-events">Monitor Cluster Events</a></h3>
+<p>Subscribe to events in director or workers:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let mut events = cluster.subscribe();
+while let Some(event) = events.recv().await {
+    match event {
+        ClusterEvent::NodeJoined(node) =&gt; println!("Node joined: {:?}", node),
+        ClusterEvent::NodeLeft(node) =&gt; println!("Node left: {:?}", node),
+        ClusterEvent::NodeFailed(node) =&gt; println!("Node failed: {:?}", node),
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="further-reading"><a class="header" href="#further-reading">Further Reading</a></h2>
+<ul>
+<li><strong><a href="discovery.html">Discovery</a></strong> - Learn how SWIM gossip protocol works</li>
+<li><strong><a href="load-balancing.html">Load Balancing</a></strong> - Deep dive into strategies</li>
+<li><strong><a href="health.html">Health Checking</a></strong> - Understand Phi Accrual algorithm</li>
+<li><strong><a href="pooling.html">Connection Pooling</a></strong> - Optimize connection reuse</li>
+<li><strong><a href="failures.html">Failure Handling</a></strong> - Advanced partition detection</li>
+</ul>
+<p>Or explore the <strong><a href="../cluster-example.html">Complete Cluster Example</a></strong> with streaming and advanced features.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../cluster/overview.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../cluster-example.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../cluster/overview.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../cluster-example.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

@@ -11,15 +11,19 @@ pub mod partition_detector;
 pub mod worker_registry;
 
 pub use client::ClusterClient;
-pub use connection_pool::{ConnectionPool, ConnectionPoolImpl, PoolConfig, PoolError, PoolStats, PooledConnection};
+pub use connection_pool::{
+    ConnectionPool, ConnectionPoolImpl, PoolConfig, PoolError, PoolStats, PooledConnection,
+};
 pub use events::{
     ClusterEvent, ClusterEventBroadcaster, ClusterEventReceiver, ClusterNode, RecvError,
     EVENT_CHANNEL_CAPACITY,
 };
 pub use failure_detection::PhiAccrualDetector;
+pub use gossip::{
+    GossipConfig, GossipError, GossipMessage, GossipQueue, NodeId, NodeState, NodeUpdate, Priority,
+};
 pub use health_checker::{HealthCheckConfig, HealthChecker};
-pub use gossip::{GossipConfig, GossipError, GossipMessage, GossipQueue, NodeId, NodeState, NodeUpdate, Priority};
-pub use incarnation::{Incarnation, NodeStatus, resolve_conflict};
+pub use incarnation::{resolve_conflict, Incarnation, NodeStatus};
 pub use membership::{ClusterConfig, ClusterError, ClusterMembership, ClusterStats};
 pub use node_registry::{NodeRegistry, SharedNodeRegistry};
 pub use partition_detector::{PartitionConfig, PartitionDetector, PartitionStatus};

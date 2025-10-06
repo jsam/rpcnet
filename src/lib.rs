@@ -423,15 +423,15 @@ impl RpcServer {
         self.register(method, move |params: Vec<u8>| {
             let handler = handler.clone();
             async move {
-                let request: Req = bincode::deserialize(&params)
-                    .map_err(|e| RpcError::SerializationError(e))?;
-                
+                let request: Req =
+                    bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+
                 let response = handler(request).await?;
-                
-                bincode::serialize(&response)
-                    .map_err(|e| RpcError::SerializationError(e))
+
+                bincode::serialize(&response).map_err(RpcError::SerializationError)
             }
-        }).await;
+        })
+        .await;
     }
 
     pub async fn register_streaming<F, Fut, S>(&self, method: &str, handler: F)
@@ -475,7 +475,12 @@ impl RpcServer {
                     let streaming_handlers = streaming_handlers.clone();
                     let cluster = cluster.clone();
 
-                    tokio::spawn(Self::handle_stream(handlers, streaming_handlers, cluster, stream));
+                    tokio::spawn(Self::handle_stream(
+                        handlers,
+                        streaming_handlers,
+                        cluster,
+                        stream,
+                    ));
                 }
             });
         }
@@ -502,11 +507,11 @@ impl RpcServer {
                 Ok(Some(bytes)) => {
                     debug!("📦 Received {} bytes on stream", bytes.len());
                     bytes
-                },
+                }
                 Ok(None) => {
                     debug!("🔚 Stream closed");
                     break;
-                },
+                }
                 Err(e) => {
                     debug!("❌ Stream error: {:?}", e);
                     break;
@@ -526,9 +531,13 @@ impl RpcServer {
                         debug!("⚠️  Received SWIM message but cluster not enabled");
                     }
                     break;
-                },
+                }
                 Err(e) => {
-                    debug!("⚠️  Not a SWIM message (tried {} bytes): {:?}", request_data.len(), e);
+                    debug!(
+                        "⚠️  Not a SWIM message (tried {} bytes): {:?}",
+                        request_data.len(),
+                        e
+                    );
                 }
             }
 
@@ -607,19 +616,23 @@ impl RpcServer {
         debug!("🔔 [SWIM] Processing {} node updates", update_count);
 
         for update in msg.updates() {
-            debug!("🔔 [SWIM] Update: node_id={:?}, addr={}, state={:?}, tags={:?}", 
-                  update.node_id, update.addr, update.state, update.tags);
+            debug!(
+                "🔔 [SWIM] Update: node_id={:?}, addr={}, state={:?}, tags={:?}",
+                update.node_id, update.addr, update.state, update.tags
+            );
             let node_status = NodeStatus {
                 node_id: update.node_id.clone(),
                 addr: update.addr,
                 incarnation: update.incarnation,
-                state: update.state.clone(),
+                state: update.state,
                 last_seen: Instant::now(),
                 tags: update.tags.clone(),
             };
             cluster.registry().insert(node_status.clone());
-            debug!("✅ [SWIM] Inserted {:?} into registry with tags: {:?}", 
-                  node_status.node_id, node_status.tags);
+            debug!(
+                "✅ [SWIM] Inserted {:?} into registry with tags: {:?}",
+                node_status.node_id, node_status.tags
+            );
         }
 
         if cluster.should_block_swim_acks() {
@@ -759,6 +772,7 @@ impl RpcServer {
         })
     }
 
+    #[allow(dead_code)]
     fn create_request_stream<S>(
         stream: Arc<tokio::sync::Mutex<S>>,
     ) -> Pin<Box<dyn Stream<Item = Vec<u8>> + Send>>
@@ -909,7 +923,8 @@ impl RpcServer {
             .socket_addr
             .ok_or_else(|| cluster::ClusterError::BootstrapTimeout(Duration::from_secs(0)))?;
 
-        let membership = Arc::new(cluster::ClusterMembership::new(addr, config, quic_client).await?);
+        let membership =
+            Arc::new(cluster::ClusterMembership::new(addr, config, quic_client).await?);
         membership.join(seeds).await?;
 
         let mut cluster_guard = self.cluster.write().await;
@@ -1099,17 +1114,18 @@ impl RpcClient {
         // Use a single task to handle BOTH send and receive with select! - NO LOCKS!
         // This enables true concurrent bidirectional streaming without mutex contention
         // The key insight: use tokio::select! to multiplex send/receive on the same task
-        
+
         // Channel to deliver responses back to the caller
-        let (response_tx, mut response_rx) = tokio::sync::mpsc::unbounded_channel::<Result<Vec<u8>, RpcError>>();
-        
+        let (response_tx, mut response_rx) =
+            tokio::sync::mpsc::unbounded_channel::<Result<Vec<u8>, RpcError>>();
+
         // Spawn a single task that owns the stream and multiplexes send/receive
         let mut request_stream = Box::pin(request_stream);
         tokio::spawn(async move {
             let mut buffer = BytesMut::with_capacity(8192);
             let mut send_done = false;
             let mut recv_done = false;
-            
+
             loop {
                 tokio::select! {
                     // Handle sending requests
@@ -1125,6 +1141,7 @@ impl RpcClient {
                                 }
                             }
                             None => {
+                                #[allow(clippy::redundant_pattern_matching)]
                                 if let Err(_) = stream.send_bytes(Bytes::from(vec![0, 0, 0, 0])).await {
                                     break;
                                 }
@@ -1135,17 +1152,17 @@ impl RpcClient {
                             }
                         }
                     }
-                    
+
                     // Handle receiving responses (happens concurrently with sending!)
                     chunk_result = stream.receive_bytes(), if !recv_done => {
                         match chunk_result {
                             Ok(Some(chunk)) => {
                                 buffer.extend_from_slice(&chunk);
-                                
+
                                 // Parse complete messages
                                 while buffer.len() >= 4 {
                                     let len = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]) as usize;
-                                    
+
                                     if len == 0 {
                                         recv_done = true;
                                         if send_done {
@@ -1153,7 +1170,7 @@ impl RpcClient {
                                         }
                                         break;
                                     }
-                                    
+
                                     if buffer.len() >= 4 + len {
                                         let message_data = buffer.split_to(4 + len);
                                         let response_data = message_data[4..].to_vec();
@@ -1185,14 +1202,18 @@ impl RpcClient {
         };
 
         // Wrap with timeout stream using config's default timeout
-        Ok(streaming::TimeoutStream::new(base_stream, self.config.default_stream_timeout))
+        Ok(streaming::TimeoutStream::new(
+            base_stream,
+            self.config.default_stream_timeout,
+        ))
     }
 
     pub async fn call_server_streaming(
         &self,
         method: &str,
         request: Vec<u8>,
-    ) -> Result<streaming::TimeoutStream<impl Stream<Item = Result<Vec<u8>, RpcError>>>, RpcError> {
+    ) -> Result<streaming::TimeoutStream<impl Stream<Item = Result<Vec<u8>, RpcError>>>, RpcError>
+    {
         use futures::stream;
 
         // Create a single-item stream for the request
@@ -2169,7 +2190,7 @@ mod server_start_helper_tests {
 
 #[cfg(test)]
 mod doc_examples_tests {
-    
+
     use super::{
         client_call_helper_tests::{
             encode_response as encode_rpc_response, make_client, make_client_with_connection,

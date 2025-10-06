@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 //! Type definitions for the service.
 use serde::{Deserialize, Serialize};
 /// Response from downloading a file chunk.

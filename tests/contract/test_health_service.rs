@@ -1,3 +1,7 @@
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 use rpcnet::migration::{HealthService, HealthStatus, MigrationMetrics, ServerInstance};
 use rpcnet::RpcError;
 
@@ -24,7 +28,7 @@ async fn test_health_check_contract() {
 
     let result = service.health_check(server_id).await;
     assert!(result.is_ok(), "health_check should return server health status");
-    
+
     let health = result.unwrap();
     assert!(health.cpu_usage >= 0.0 && health.cpu_usage <= 100.0, "CPU usage should be valid percentage");
     assert!(health.memory_usage >= 0.0 && health.memory_usage <= 100.0, "Memory usage should be valid percentage");
@@ -38,7 +42,7 @@ async fn test_get_migration_metrics_contract() {
 
     let result = service.get_migration_metrics(server_id).await;
     assert!(result.is_ok(), "get_migration_metrics should return migration metrics");
-    
+
     let metrics = result.unwrap();
     assert!(metrics.total_migrations >= 0, "Total migrations should be non-negative");
     assert!(metrics.successful_migrations >= 0, "Successful migrations should be non-negative");

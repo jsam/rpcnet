@@ -1,7 +1,7 @@
 use super::message::{NodeId, NodeUpdate, Priority, MAX_UPDATES_PER_MESSAGE};
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+use std::sync::{Arc, RwLock};
 
 pub struct GossipQueue {
     updates: Arc<RwLock<BTreeMap<(Priority, NodeId), NodeUpdate>>>,
@@ -20,14 +20,17 @@ impl GossipQueue {
 
     pub fn enqueue(&self, update: NodeUpdate, priority: Priority) {
         let node_id = update.node_id.clone();
-        self.updates.write().unwrap().insert((priority, node_id), update);
+        self.updates
+            .write()
+            .unwrap()
+            .insert((priority, node_id), update);
     }
 
     pub fn select_updates(&self) -> Vec<NodeUpdate> {
         let cluster_size = self.cluster_size.load(AtomicOrdering::Acquire);
         let max_rounds = (cluster_size as f64).log2().ceil() as usize * 3;
         let seen_counts = self.seen_count.read().unwrap().clone();
-        
+
         let mut selected = Vec::new();
         let mut to_remove = Vec::new();
 
@@ -68,7 +71,8 @@ impl GossipQueue {
     }
 
     pub fn update_cluster_size(&self, size: usize) {
-        self.cluster_size.store(size.max(1), AtomicOrdering::Release);
+        self.cluster_size
+            .store(size.max(1), AtomicOrdering::Release);
     }
 
     pub fn len(&self) -> usize {
@@ -97,8 +101,8 @@ impl Clone for GossipQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cluster::incarnation::Incarnation;
     use crate::cluster::gossip::message::NodeState;
+    use crate::cluster::incarnation::Incarnation;
     use std::collections::HashMap as StdHashMap;
 
     fn create_test_update(id: &str) -> NodeUpdate {
@@ -203,10 +207,28 @@ mod tests {
             queue.mark_sent(&node_id);
         }
 
-        assert_eq!(queue.seen_count.read().unwrap().get(&node_id).copied().unwrap(), 5);
+        assert_eq!(
+            queue
+                .seen_count
+                .read()
+                .unwrap()
+                .get(&node_id)
+                .copied()
+                .unwrap(),
+            5
+        );
 
         queue.clear_seen_counts();
-        assert_eq!(queue.seen_count.read().unwrap().get(&node_id).copied().unwrap_or(0), 0);
+        assert_eq!(
+            queue
+                .seen_count
+                .read()
+                .unwrap()
+                .get(&node_id)
+                .copied()
+                .unwrap_or(0),
+            0
+        );
     }
 
     #[test]

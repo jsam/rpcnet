@@ -52,7 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let generator = rpcnet::codegen::CodeGenerator::new(definition);
 
     // Create output directory
-    let service_dir = cli.output.join(&service_name.to_lowercase());
+    let service_dir = cli.output.join(service_name.to_lowercase());
     fs::create_dir_all(&service_dir)?;
 
     println!("📦 Generating code for service: {}", service_name);
@@ -120,7 +120,7 @@ fn generate_mod_file(output_dir: &Path, service_name: &str, cli: &Cli) -> std::i
         mod_content.push_str("pub mod client;\n");
     }
 
-    mod_content.push_str("\n");
+    mod_content.push('\n');
 
     // Re-export types for convenience
     if !cli.server_only && !cli.client_only {

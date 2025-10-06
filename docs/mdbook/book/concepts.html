@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Concepts - RpcNet Guide</title>
+        <title>Core Concepts - RpcNet Guide</title>
 
 
         <!-- Custom HTML head -->
@@ -381,16 +381,98 @@ server.register_streaming("uppercase", |mut reqs| async move {
     }
 }).await;
 <span class="boring">}</span></code></pre></pre>
+<h2 id="cluster-management-v020"><a class="header" href="#cluster-management-v020">Cluster Management (v0.2.0+)</a></h2>
+<p>RpcNet provides built-in distributed systems support for building scalable clusters with automatic discovery and failover.</p>
+<h3 id="architecture-components"><a class="header" href="#architecture-components">Architecture Components</a></h3>
+<h4 id="noderegistry"><a class="header" href="#noderegistry">NodeRegistry</a></h4>
+<p>Tracks all nodes in the cluster with their metadata (address, tags, status). Filters nodes by tags for heterogeneous worker pools (e.g., GPU workers, CPU workers).</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::cluster::NodeRegistry;
+
+let registry = NodeRegistry::new(cluster);
+let gpu_workers = registry.nodes_with_tag("gpu").await;
+<span class="boring">}</span></code></pre></pre>
+<h4 id="workerregistry"><a class="header" href="#workerregistry">WorkerRegistry</a></h4>
+<p>Automatically discovers workers via gossip and provides load-balanced worker selection.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::cluster::{WorkerRegistry, LoadBalancingStrategy};
+
+let registry = WorkerRegistry::new(
+    cluster,
+    LoadBalancingStrategy::LeastConnections
+);
+registry.start().await;
+
+let worker = registry.select_worker(Some("role=worker")).await?;
+<span class="boring">}</span></code></pre></pre>
+<h4 id="load-balancing-strategies"><a class="header" href="#load-balancing-strategies">Load Balancing Strategies</a></h4>
+<ul>
+<li><strong>Round Robin</strong>: Even distribution across workers</li>
+<li><strong>Random</strong>: Random selection for stateless workloads</li>
+<li><strong>Least Connections</strong>: Routes to least-loaded worker (recommended)</li>
+</ul>
+<h4 id="health-checking"><a class="header" href="#health-checking">Health Checking</a></h4>
+<p>Phi Accrual failure detector provides accurate, adaptive health monitoring:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::cluster::HealthChecker;
+
+let health = HealthChecker::new(cluster, config);
+health.start().await;
+
+// Automatically marks nodes as failed/recovered
+<span class="boring">}</span></code></pre></pre>
+<h4 id="connection-pooling"><a class="header" href="#connection-pooling">Connection Pooling</a></h4>
+<p>Efficient connection reuse with configurable pool sizes:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::cluster::{ConnectionPool, PoolConfig};
+
+let pool = ConnectionPool::new(PoolConfig {
+    max_connections: 100,
+    idle_timeout: Duration::from_secs(60),
+    ..Default::default()
+});
+<span class="boring">}</span></code></pre></pre>
+<h3 id="gossip-protocol"><a class="header" href="#gossip-protocol">Gossip Protocol</a></h3>
+<p>RpcNet uses SWIM (Scalable Weakly-consistent Infection-style Process Group Membership Protocol) for:</p>
+<ul>
+<li>Automatic node discovery</li>
+<li>Failure detection propagation</li>
+<li>Cluster state synchronization</li>
+<li>Network partition detection</li>
+</ul>
+<h3 id="clusterclient"><a class="header" href="#clusterclient">ClusterClient</a></h3>
+<p>High-level client that combines worker discovery and load balancing:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::cluster::{ClusterClient, WorkerRegistry, LoadBalancingStrategy};
+
+let registry = Arc::new(WorkerRegistry::new(
+    cluster,
+    LoadBalancingStrategy::LeastConnections
+));
+registry.start().await;
+
+let client = Arc::new(ClusterClient::new(registry, config));
+
+// Call any worker in the pool
+let result = client.call_worker("compute", data, Some("role=worker")).await?;
+<span class="boring">}</span></code></pre></pre>
+<h3 id="complete-example"><a class="header" href="#complete-example">Complete Example</a></h3>
+<p>See the <a href="cluster-example.html">Cluster Example</a> chapter for a complete walkthrough of building a distributed worker pool with automatic discovery, load balancing, and failover.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="introduction.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="getting-started.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="getting-started.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="rpcnet-gen.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -400,11 +482,11 @@ server.register_streaming("uppercase", |mut reqs| async move {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="introduction.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="getting-started.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="getting-started.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="rpcnet-gen.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

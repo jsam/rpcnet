@@ -176,40 +176,54 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
-<p>RpcNet is a QUIC-based RPC transport built on top of <code>s2n-quic</code>. The crate provides
-high-level server and client primitives, TLS configuration helpers, and rich support
-for unary and streaming request flows. This book centralises the user-facing
-materials that previously lived in API comments so you can read them in one place
-while keeping the library sources compact.</p>
+<blockquote>
+<p><strong>Version</strong>: 0.2.0 | <strong>Performance</strong>: 172K+ RPS | <strong>Features</strong>: Cluster Management, Streaming, Code Generation</p>
+</blockquote>
+<p>RpcNet is a high-performance QUIC-based RPC library built on <code>s2n-quic</code>. The library provides
+high-level server and client primitives, TLS configuration helpers, rich support for
+unary and streaming request flows, and complete distributed cluster management. This book
+centralizes the user-facing materials so you can learn RpcNet in one place.</p>
 <h2 id="key-capabilities"><a class="header" href="#key-capabilities">Key Capabilities</a></h2>
+<h3 id="core-rpc"><a class="header" href="#core-rpc">Core RPC</a></h3>
 <ul>
 <li>TLS-first configuration for both client and server components</li>
 <li>Simple registration of request handlers with async closures</li>
-<li>Bidirectional, client-streaming, and server-streaming helpers</li>
+<li>Bidirectional, client-streaming, and server-streaming support</li>
 <li>Structured error reporting through <code>RpcError</code></li>
-<li>Test-friendly abstractions that allow mocking QUIC streams and connections</li>
+<li>Test-friendly abstractions that allow mocking QUIC streams</li>
+</ul>
+<h3 id="distributed-systems-v020"><a class="header" href="#distributed-systems-v020">Distributed Systems (v0.2.0+)</a></h3>
+<ul>
+<li><strong>Cluster Management</strong>: Built-in gossip protocol (SWIM) for node discovery</li>
+<li><strong>Load Balancing</strong>: Multiple strategies (Round Robin, Random, Least Connections)</li>
+<li><strong>Health Checking</strong>: Phi Accrual failure detection</li>
+<li><strong>Connection Pooling</strong>: Efficient connection reuse</li>
+<li><strong>Tag-Based Routing</strong>: Route requests by worker capabilities</li>
+<li><strong>Auto-Failover</strong>: Zero-downtime worker replacement</li>
+</ul>
+<h3 id="performance"><a class="header" href="#performance">Performance</a></h3>
+<ul>
+<li><strong>172K+ RPS</strong>: Exceptional throughput with full QUIC+TLS encryption</li>
+<li><strong>Sub-millisecond latency</strong>: &lt; 0.1ms overhead</li>
+<li><strong>10K+ concurrent streams</strong>: Per connection</li>
 </ul>
 <h2 id="how-to-read-this-book"><a class="header" href="#how-to-read-this-book">How To Read This Book</a></h2>
 <ol>
-<li><strong>Core Concepts</strong> introduces the configuration model and error types.</li>
-<li><strong>Server Guide</strong> walks through binding, registering methods, and starting the
-accept loop.</li>
-<li><strong>Client Guide</strong> covers connection setup plus simple RPC calls.</li>
-<li><strong>Streaming Patterns</strong> dives into bidirectional and one-way streaming helpers.</li>
-<li><strong>Testing &amp; Coverage</strong> documents the built-in mocks used throughout our test
-suite and in the examples you can run locally.</li>
-<li><strong>Reference Tables</strong> summarise the main APIs, argument expectations, and
-return values at a glance.</li>
+<li><strong>Getting Started</strong> walks through installing RpcNet and creating your first service.</li>
+<li><strong>Core Concepts</strong> introduces the configuration model, error types, and runtime fundamentals.</li>
+<li><strong>Cluster Example</strong> demonstrates building distributed systems with automatic discovery and load balancing.</li>
+<li><strong>Streaming Patterns</strong> covers bidirectional and one-way streaming.</li>
+<li><strong>rpcnet-gen CLI</strong> explains the code generation tool and workflows.</li>
 </ol>
-<p>Throughout the chapters you will find executable snippets based on the unit
-and integration tests that accompany the crate.</p>
+<p>Throughout the chapters you will find executable snippets based on the working examples
+in the repository.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
 
-                            <a rel="next prefetch" href="concepts.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="getting-started.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -220,7 +234,7 @@ and integration tests that accompany the crate.</p>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
 
-                    <a rel="next prefetch" href="concepts.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="getting-started.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

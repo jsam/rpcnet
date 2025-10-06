@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 //! Calculator server using generated code.
 
 #[path = "generated/calculator/mod.rs"]

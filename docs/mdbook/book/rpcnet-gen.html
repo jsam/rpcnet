@@ -180,10 +180,10 @@
 client, server, and type modules consumed by your application. This chapter
 covers installation, day-to-day usage, and automation patterns.</p>
 <h2 id="installing"><a class="header" href="#installing">Installing</a></h2>
-<p>The CLI ships with the <code>rpcnet</code> crate and is enabled by the <code>codegen</code> feature.
-Install it once and reuse it across workspaces:</p>
-<pre><code class="language-bash">cargo install rpcnet --features codegen --bin rpcnet-gen
+<p>Starting with v0.2.0, the CLI is included by default with rpcnet. Install it once and reuse it across workspaces:</p>
+<pre><code class="language-bash">cargo install rpcnet
 </code></pre>
+<p>The CLI is always available - no feature flags needed! This is a major usability improvement over v0.1.x.</p>
 <p>Add <code>--locked</code> in CI to guarantee reproducible dependency resolution.</p>
 <h2 id="input-files-at-a-glance"><a class="header" href="#input-files-at-a-glance">Input Files at a Glance</a></h2>
 <p>Service definitions are ordinary Rust modules annotated with <code>#[rpcnet::service]</code>.
@@ -325,10 +325,13 @@ step: edit the <code>.rpc.rs</code> trait, regenerate, and keep building.</p>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="streaming-example.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="concepts.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
+                            <a rel="next prefetch" href="cluster/overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
 
                         <div style="clear: both"></div>
                     </nav>
@@ -336,10 +339,13 @@ step: edit the <code>.rpc.rs</code> trait, regenerate, and keep building.</p>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="streaming-example.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="concepts.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
+                    <a rel="next prefetch" href="cluster/overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
             </nav>
 
         </div>

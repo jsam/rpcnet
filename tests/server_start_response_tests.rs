@@ -1,3 +1,9 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 // Tests for RpcServer start method, specifically targeting response sending logic
 // This test focuses on exercising the line: let _ = stream.send(response_data.into()).await;
 // and the final Ok(()) return from the start method

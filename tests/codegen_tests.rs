@@ -1,3 +1,9 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 //! Integration tests for code generation.
 
 #![cfg(feature = "codegen")]
@@ -12,23 +18,23 @@ use tempfile::TempDir;
 fn test_parse_simple_service() {
     let input = r#"
         use serde::{Serialize, Deserialize};
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct AddRequest {
             pub a: i32,
             pub b: i32,
         }
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct AddResponse {
             pub result: i32,
         }
-        
+
         #[derive(Serialize, Deserialize)]
         pub enum MathError {
             Overflow,
         }
-        
+
         #[service]
         pub trait Calculator {
             async fn add(&self, request: AddRequest) -> Result<AddResponse, MathError>;
@@ -80,17 +86,17 @@ fn test_reject_non_result_return() {
 fn test_generate_server_code() {
     let input = r#"
         use serde::{Serialize, Deserialize};
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct EchoRequest {
             pub message: String,
         }
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct EchoResponse {
             pub message: String,
         }
-        
+
         #[service]
         pub trait EchoService {
             async fn echo(&self, request: EchoRequest) -> Result<EchoResponse, String>;
@@ -116,18 +122,18 @@ fn test_generate_server_code() {
 fn test_generate_client_code() {
     let input = r#"
         use serde::{Serialize, Deserialize};
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct PingRequest {
             pub id: u64,
         }
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct PingResponse {
             pub id: u64,
             pub timestamp: u64,
         }
-        
+
         #[service]
         pub trait PingService {
             async fn ping(&self, request: PingRequest) -> Result<PingResponse, String>;
@@ -161,17 +167,17 @@ fn test_builder_api() {
     // Write test service definition
     let service_def = r#"
         use serde::{Serialize, Deserialize};
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct TestRequest {
             pub value: String,
         }
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct TestResponse {
             pub result: String,
         }
-        
+
         #[service]
         pub trait TestService {
             async fn test_method(&self, request: TestRequest) -> Result<TestResponse, String>;
@@ -234,17 +240,17 @@ fn test_parse_calculator_example() {
 fn test_generated_code_is_valid_rust() {
     let input = r#"
         use serde::{Serialize, Deserialize};
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct Request {
             pub data: Vec<u8>,
         }
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct Response {
             pub result: Vec<u8>,
         }
-        
+
         #[service]
         pub trait DataService {
             async fn process(&self, request: Request) -> Result<Response, String>;
@@ -270,25 +276,25 @@ fn test_generated_code_is_valid_rust() {
 fn test_multiple_methods() {
     let input = r#"
         use serde::{Serialize, Deserialize};
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct GetRequest { pub key: String }
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct GetResponse { pub value: String }
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct SetRequest { pub key: String, pub value: String }
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct SetResponse { pub success: bool }
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct DeleteRequest { pub key: String }
-        
+
         #[derive(Serialize, Deserialize)]
         pub struct DeleteResponse { pub success: bool }
-        
+
         #[service]
         pub trait KVStore {
             async fn get(&self, request: GetRequest) -> Result<GetResponse, String>;

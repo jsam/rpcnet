@@ -1,3 +1,5 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
 #[cfg(feature = "perf")]
 use jemallocator::Jemalloc;
 
@@ -63,7 +65,7 @@ async fn start_streaming_server() -> Result<SocketAddr, RpcError> {
                 if let Some(request_data) = request_stream.next().await {
                     let count: u32 = bincode::deserialize(&request_data)
                         .unwrap_or(100);
-                    
+
                     for i in 0..count {
                         let token = format!("token-{}", i);
                         if let Ok(bytes) = bincode::serialize(&token) {
@@ -132,9 +134,9 @@ fn bench_bidirectional_streaming_throughput(c: &mut Criterion) {
                             let messages: Vec<Vec<u8>> = (0..size)
                                 .map(|i| format!("message-{}", i).into_bytes())
                                 .collect();
-                            
+
                             let request_stream = futures::stream::iter(messages);
-                            
+
                             let response_stream = client
                                 .call_streaming("echo_stream", request_stream)
                                 .await
@@ -178,38 +180,34 @@ fn bench_streaming_token_burst(c: &mut Criterion) {
 
     for count in token_counts {
         group.throughput(Throughput::Elements(count as u64));
-        group.bench_with_input(
-            BenchmarkId::new("tokens", count),
-            &count,
-            |b, &count| {
-                b.iter_custom(|iterations| {
-                    let start = Instant::now();
+        group.bench_with_input(BenchmarkId::new("tokens", count), &count, |b, &count| {
+            b.iter_custom(|iterations| {
+                let start = Instant::now();
 
-                    rt.block_on(async {
-                        for _ in 0..iterations {
-                            let request = bincode::serialize(&count).unwrap();
-                            let request_stream = futures::stream::iter(vec![request]);
-                            
-                            let response_stream = client
-                                .call_streaming("burst_tokens", request_stream)
-                                .await
-                                .unwrap();
+                rt.block_on(async {
+                    for _ in 0..iterations {
+                        let request = bincode::serialize(&count).unwrap();
+                        let request_stream = futures::stream::iter(vec![request]);
 
-                            let mut response_stream = Box::pin(response_stream);
-                            let mut received = 0;
-                            while let Some(Ok(_token)) = response_stream.next().await {
-                                received += 1;
-                                if received >= count {
-                                    break;
-                                }
+                        let response_stream = client
+                            .call_streaming("burst_tokens", request_stream)
+                            .await
+                            .unwrap();
+
+                        let mut response_stream = Box::pin(response_stream);
+                        let mut received = 0;
+                        while let Some(Ok(_token)) = response_stream.next().await {
+                            received += 1;
+                            if received >= count {
+                                break;
                             }
                         }
-                    });
-
-                    elapsed_with_stats(start, iterations, count as u64)
+                    }
                 });
-            },
-        );
+
+                elapsed_with_stats(start, iterations, count as u64)
+            });
+        });
     }
 
     group.finish();
@@ -234,11 +232,7 @@ fn bench_concurrent_streaming(c: &mut Criterion) {
     let mut group = c.benchmark_group("concurrent_streaming");
     group.sample_size(20);
 
-    let patterns = [
-        ("single_stream", 1),
-        ("dual_stream", 2),
-        ("quad_stream", 4),
-    ];
+    let patterns = [("single_stream", 1), ("dual_stream", 2), ("quad_stream", 4)];
 
     for (name, client_count) in patterns {
         group.throughput(Throughput::Elements(100));
@@ -249,7 +243,7 @@ fn bench_concurrent_streaming(c: &mut Criterion) {
 
                 rt.block_on(async {
                     let messages_per_stream = 100;
-                    
+
                     for _ in 0..iterations {
                         let stream_tasks: Vec<_> = (0..client_count)
                             .map(|i| {
@@ -258,9 +252,9 @@ fn bench_concurrent_streaming(c: &mut Criterion) {
                                     let messages: Vec<Vec<u8>> = (0..messages_per_stream)
                                         .map(|j| format!("msg-{}", j).into_bytes())
                                         .collect();
-                                    
+
                                     let request_stream = futures::stream::iter(messages);
-                                    
+
                                     let response_stream = client
                                         .call_streaming("concurrent_echo", request_stream)
                                         .await
@@ -320,10 +314,10 @@ fn bench_lockfree_streaming_latency(c: &mut Criterion) {
             rt.block_on(async {
                 for _ in 0..iterations {
                     let iteration_start = Instant::now();
-                    
+
                     let message = b"latency test".to_vec();
                     let request_stream = futures::stream::iter(vec![message]);
-                    
+
                     let response_stream = client
                         .call_streaming("echo_stream", request_stream)
                         .await
@@ -347,12 +341,11 @@ fn bench_lockfree_streaming_latency(c: &mut Criterion) {
 
             rt.block_on(async {
                 for _ in 0..iterations {
-                    let messages: Vec<Vec<u8>> = (0..10)
-                        .map(|i| format!("msg-{}", i).into_bytes())
-                        .collect();
-                    
+                    let messages: Vec<Vec<u8>> =
+                        (0..10).map(|i| format!("msg-{}", i).into_bytes()).collect();
+
                     let request_stream = futures::stream::iter(messages);
-                    
+
                     let response_stream = client
                         .call_streaming("echo_stream", request_stream)
                         .await
@@ -386,7 +379,7 @@ fn print_latency_stats(latencies: &[Duration], label: &str) {
 
     let total: Duration = sorted_latencies.iter().sum();
     let mean = total / sorted_latencies.len() as u32;
-    
+
     let p50 = sorted_latencies[sorted_latencies.len() * 50 / 100];
     let p90 = sorted_latencies[sorted_latencies.len() * 90 / 100];
     let p95 = sorted_latencies[sorted_latencies.len() * 95 / 100];
@@ -416,7 +409,12 @@ fn print_latency_stats(latencies: &[Duration], label: &str) {
         ("📈", "Baseline")
     };
 
-    println!("   {} {}: {:.3} ms mean latency", emoji, rating, mean.as_secs_f64() * 1000.0);
+    println!(
+        "   {} {}: {:.3} ms mean latency",
+        emoji,
+        rating,
+        mean.as_secs_f64() * 1000.0
+    );
 }
 
 fn elapsed_with_stats(start: Instant, iterations: u64, items_per_iteration: u64) -> Duration {
@@ -426,7 +424,11 @@ fn elapsed_with_stats(start: Instant, iterations: u64, items_per_iteration: u64)
 
     if total_items >= 1000 {
         println!("\n📊 Streaming Performance:");
-        println!("   Messages: {} in {:.3}s", total_items, elapsed.as_secs_f64());
+        println!(
+            "   Messages: {} in {:.3}s",
+            total_items,
+            elapsed.as_secs_f64()
+        );
         println!("   Throughput: {:.0} msg/s", items_per_second);
 
         let (emoji, rating) = if items_per_second > 100_000.0 {

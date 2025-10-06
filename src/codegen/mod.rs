@@ -8,7 +8,7 @@
 //!
 //! The code generator takes `.rpc.rs` files containing service definitions and generates:
 //! - **Types**: Request/response structs and error enums
-//! - **Server**: Handler trait and server implementation  
+//! - **Server**: Handler trait and server implementation
 //! - **Client**: Type-safe client with method stubs
 //!
 //! ## Code Generation Workflow
@@ -20,10 +20,11 @@
 //!
 //! ## Service Definition Format
 //!
-//! Service definitions use standard Rust syntax with the `#[rpcnet::service]` attribute:
+//! Service definitions use standard Rust syntax with the `#[rpc_trait]` attribute:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use serde::{Serialize, Deserialize};
+//! use rpcnet::prelude::*;
 //!
 //! // Request/response types
 //! #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -44,7 +45,7 @@
 //! }
 //!
 //! // Service trait definition
-//! #[rpcnet::service]
+//! #[rpc_trait]
 //! pub trait MyService {
 //!     async fn my_method(&self, request: MyRequest) -> Result<MyResponse, MyError>;
 //! }
@@ -117,34 +118,30 @@
 //! ### Build Script Integration
 //!
 //! ```rust,no_run
-//! // build.rs
-//! fn main() {
-//!     println!("cargo:rerun-if-changed=service.rpc.rs");
-//!     
-//!     rpcnet::codegen::Builder::new()
-//!         .input("service.rpc.rs")
-//!         .output("src/generated")
-//!         .build()
-//!         .expect("Failed to generate RPC code");
-//! }
+//! // In build.rs
+//! println!("cargo:rerun-if-changed=service.rpc.rs");
+//!
+//! rpcnet::codegen::Builder::new()
+//!     .input("service.rpc.rs")
+//!     .output("src/generated")
+//!     .build()
+//!     .expect("Failed to generate RPC code");
 //! ```
 //!
 //! ### Multiple Services
 //!
 //! ```rust,no_run
-//! // build.rs for multiple services
-//! fn main() {
-//!     let services = ["user.rpc.rs", "auth.rpc.rs", "data.rpc.rs"];
-//!     
-//!     for service in &services {
-//!         println!("cargo:rerun-if-changed={}", service);
-//!         
-//!         rpcnet::codegen::Builder::new()
-//!             .input(service)
-//!             .output("src/generated")
-//!             .build()
-//!             .expect("Failed to generate RPC code");
-//!     }
+//! // In build.rs for multiple services
+//! let services = ["user.rpc.rs", "auth.rpc.rs", "data.rpc.rs"];
+//!
+//! for service in &services {
+//!     println!("cargo:rerun-if-changed={}", service);
+//!
+//!     rpcnet::codegen::Builder::new()
+//!         .input(service)
+//!         .output("src/generated")
+//!         .build()
+//!         .expect("Failed to generate RPC code");
 //! }
 //! ```
 //!
@@ -156,7 +153,7 @@
 //! - All service methods must be `async`
 //! - All methods must have `&self` as the first parameter
 //! - All methods must return `Result<T, E>`
-//! - Service traits must have the `#[rpcnet::service]` attribute
+//! - Service traits must have the `#[rpc_trait]` attribute
 //!
 //! ### Error Handling
 //!
@@ -193,18 +190,24 @@ use std::path::{Path, PathBuf};
 /// # Example
 ///
 /// ```rust,no_run
-/// fn main() {
-///     rpcnet::codegen::Builder::new()
-///         .input("rpc/calculator.rpc.rs")
-///         .output("src/generated")
-///         .build()
-///         .expect("Failed to generate RPC code");
-/// }
+/// // In build.rs
+/// rpcnet::codegen::Builder::new()
+///     .input("rpc/calculator.rpc.rs")
+///     .output("src/generated")
+///     .build()
+///     .expect("Failed to generate RPC code");
 /// ```
 #[cfg(feature = "codegen")]
 pub struct Builder {
     inputs: Vec<PathBuf>,
     output: PathBuf,
+}
+
+#[cfg(feature = "codegen")]
+impl Default for Builder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(feature = "codegen")]
@@ -262,8 +265,8 @@ impl Builder {
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("generated");
-            let service_name = if service_name.ends_with(".rpc") {
-                &service_name[..service_name.len() - 4] // Remove ".rpc" suffix
+            let service_name = if let Some(stripped) = service_name.strip_suffix(".rpc") {
+                stripped // Remove ".rpc" suffix
             } else {
                 service_name
             };
@@ -309,7 +312,9 @@ mod tests {
 
     fn sample_service() -> &'static str {
         r#"
-            #[rpcnet::service]
+            use rpcnet::prelude::*;
+
+            #[rpc_trait]
             pub trait Example {
                 async fn run(&self, request: ExampleRequest) -> Result<ExampleResponse, ExampleError>;
             }

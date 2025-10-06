@@ -27,9 +27,9 @@ impl CodeGenerator {
         let register_methods = self.generate_register_methods(&methods, trait_name);
 
         // Check if any method uses streaming to add necessary imports
-        let has_streaming = methods.iter().any(|m| {
-            self.is_streaming_request(m) || self.is_streaming_response(m)
-        });
+        let has_streaming = methods
+            .iter()
+            .any(|m| self.is_streaming_request(m) || self.is_streaming_response(m));
 
         let stream_imports = if has_streaming {
             quote! {
@@ -93,9 +93,9 @@ impl CodeGenerator {
         let client_methods = self.generate_client_methods(&methods, trait_name);
 
         // Check if any method uses streaming to add necessary imports
-        let has_streaming = methods.iter().any(|m| {
-            self.is_streaming_request(m) || self.is_streaming_response(m)
-        });
+        let has_streaming = methods
+            .iter()
+            .any(|m| self.is_streaming_request(m) || self.is_streaming_response(m));
 
         let stream_imports = if has_streaming {
             quote! {
@@ -139,7 +139,7 @@ impl CodeGenerator {
         }
 
         // Add type definitions
-        for (_name, service_type) in &self.definition.types {
+        for service_type in self.definition.types.values() {
             match service_type {
                 ServiceType::Struct(item_struct) => {
                     type_tokens.push(quote! { #item_struct });
@@ -186,6 +186,7 @@ impl CodeGenerator {
                 let is_streaming_resp = self.is_streaming_response(method);
 
                 if is_streaming_req && is_streaming_resp {
+                    #[allow(unused_variables)]
                     let (request_item_type, response_item_type) = self.extract_streaming_types(method);
                     quote! {
                         {
@@ -194,11 +195,11 @@ impl CodeGenerator {
                                 let handler = handler.clone();
                                 async move {
                                     use futures::StreamExt;
-                                    
+
                                     let typed_request_stream = request_stream.map(|bytes| {
                                         bincode::deserialize::<#request_item_type>(&bytes).unwrap()
                                     });
-                                    
+
                                     match handler.#method_name(Box::pin(typed_request_stream)).await {
                                         Ok(response_stream) => {
                                             let byte_response_stream = response_stream.map(|item| {
@@ -259,8 +260,9 @@ impl CodeGenerator {
                 let is_streaming_resp = self.is_streaming_response(method);
 
                 if is_streaming_req && is_streaming_resp {
+                    #[allow(unused_variables)]
                     let (request_item_type, response_item_type) = self.extract_streaming_types(method);
-                    
+
                     // Build streaming client method
                     let mut client_sig = method.sig.clone();
                     if !client_sig.inputs.is_empty() {
@@ -279,20 +281,20 @@ impl CodeGenerator {
                     quote! {
                         pub #client_sig {
                             use futures::StreamExt;
-                            
+
                             let byte_request_stream = #param_name.map(|item| {
                                 bincode::serialize(&item).unwrap()
                             });
-                            
+
                             let byte_response_stream = self.inner.call_streaming(#full_method_name, Box::pin(byte_request_stream)).await?;
-                            
+
                             let typed_response_stream = byte_response_stream.map(|result| {
                                 result.and_then(|bytes| {
                                     bincode::deserialize::<#response_item_type>(&bytes)
                                         .map_err(RpcError::SerializationError)
                                 })
                             });
-                            
+
                             Ok(Box::pin(typed_response_stream))
                         }
                     }
@@ -414,6 +416,7 @@ impl CodeGenerator {
         (request_item, response_item)
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn extract_stream_item_type(&self, ty: &Type) -> TokenStream {
         match ty {
             Type::Path(type_path) => {
@@ -449,38 +452,39 @@ impl CodeGenerator {
                 }
                 quote! { () }
             }
-            _ => quote! { () }
+            _ => quote! { () },
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn type_contains_stream(&self, ty: &Type) -> bool {
         match ty {
-            Type::Path(type_path) => {
-                type_path.path.segments.iter().any(|seg| {
-                    seg.ident == "Stream" || {
-                        if let PathArguments::AngleBracketed(args) = &seg.arguments {
-                            args.args.iter().any(|arg| {
-                                if let GenericArgument::Type(inner_ty) = arg {
-                                    self.type_contains_stream(inner_ty)
-                                } else {
-                                    false
-                                }
-                            })
-                        } else {
-                            false
-                        }
-                    }
-                })
-            }
-            Type::TraitObject(trait_obj) => {
-                trait_obj.bounds.iter().any(|bound| {
-                    if let syn::TypeParamBound::Trait(trait_bound) = bound {
-                        trait_bound.path.segments.iter().any(|seg| seg.ident == "Stream")
+            Type::Path(type_path) => type_path.path.segments.iter().any(|seg| {
+                seg.ident == "Stream" || {
+                    if let PathArguments::AngleBracketed(args) = &seg.arguments {
+                        args.args.iter().any(|arg| {
+                            if let GenericArgument::Type(inner_ty) = arg {
+                                self.type_contains_stream(inner_ty)
+                            } else {
+                                false
+                            }
+                        })
                     } else {
                         false
                     }
-                })
-            }
+                }
+            }),
+            Type::TraitObject(trait_obj) => trait_obj.bounds.iter().any(|bound| {
+                if let syn::TypeParamBound::Trait(trait_bound) = bound {
+                    trait_bound
+                        .path
+                        .segments
+                        .iter()
+                        .any(|seg| seg.ident == "Stream")
+                } else {
+                    false
+                }
+            }),
             _ => false,
         }
     }
@@ -494,7 +498,9 @@ mod tests {
 
     fn sample_generator() -> CodeGenerator {
         let input = r#"
-            #[rpcnet::service]
+            use rpcnet::prelude::*;
+
+            #[rpc_trait]
             pub trait SampleService {
                 async fn do_work(&self, request: WorkRequest) -> Result<WorkResponse, WorkError>;
             }
@@ -578,7 +584,7 @@ mod tests {
     fn detects_streaming_response_with_trait_object() {
         let generator = sample_generator();
         let method: syn::TraitItemFn = parse_quote! {
-            async fn stream_out(&self, request: String) 
+            async fn stream_out(&self, request: String)
                 -> Result<Pin<Box<dyn Stream<Item = String> + Send>>, WorkError>;
         };
 
@@ -614,7 +620,9 @@ mod tests {
     #[test]
     fn generates_streaming_server_registration() {
         let input = r#"
-            #[rpcnet::service]
+            use rpcnet::prelude::*;
+
+            #[rpc_trait]
             pub trait StreamService {
                 async fn generate(
                     &self,
@@ -636,7 +644,9 @@ mod tests {
     #[test]
     fn generates_streaming_client_method() {
         let input = r#"
-            #[rpcnet::service]
+            use rpcnet::prelude::*;
+
+            #[rpc_trait]
             pub trait StreamService {
                 async fn generate(
                     &self,

@@ -46,7 +46,7 @@ impl PooledConnection {
         R: Send,
     {
         let mut conn = self.connection.lock().await;
-        f(&mut *conn).await
+        f(&mut conn).await
     }
 
     pub fn addr(&self) -> SocketAddr {
@@ -189,11 +189,7 @@ impl ConnectionPool for ConnectionPoolImpl {
             self.evict_idle_connection().await?;
         }
 
-        let per_peer_count = self
-            .connections
-            .iter()
-            .filter(|e| *e.key() == addr)
-            .count();
+        let per_peer_count = self.connections.iter().filter(|e| *e.key() == addr).count();
 
         if per_peer_count >= self.config.max_per_peer {
             return Err(PoolError::PoolFull {
@@ -264,9 +260,9 @@ impl ConnectionPool for ConnectionPoolImpl {
 
             for (addr, conn) in to_health_check {
                 let conn_guard = conn.connection.lock().await;
-                let is_healthy = self.check_connection_health(&*conn_guard).await;
+                let is_healthy = self.check_connection_health(&conn_guard).await;
                 drop(conn_guard);
-                
+
                 if !is_healthy {
                     connections.remove(&addr);
                 }
@@ -391,13 +387,9 @@ mod tests {
         let pool1 = pool.clone();
         let pool2 = pool.clone();
 
-        let handle1 = tokio::spawn(async move {
-            pool1.try_reuse_existing(addr).await
-        });
+        let handle1 = tokio::spawn(async move { pool1.try_reuse_existing(addr).await });
 
-        let handle2 = tokio::spawn(async move {
-            pool2.try_reuse_existing(addr).await
-        });
+        let handle2 = tokio::spawn(async move { pool2.try_reuse_existing(addr).await });
 
         let (result1, result2) = tokio::join!(handle1, handle2);
 
@@ -414,7 +406,7 @@ mod tests {
         let pool = ConnectionPoolImpl::new(config, client);
 
         let addr1: SocketAddr = "127.0.0.1:9001".parse().unwrap();
-        let addr2: SocketAddr = "127.0.0.1:9002".parse().unwrap();
+        let _addr2: SocketAddr = "127.0.0.1:9002".parse().unwrap();
 
         let stats = pool.stats();
         assert_eq!(stats.total_connections, 0);
@@ -440,7 +432,7 @@ mod tests {
         let pool = ConnectionPoolImpl::new(config, client);
 
         let stats = pool.stats();
-        
+
         assert_eq!(stats.total_connections, 0);
         assert_eq!(stats.in_use, 0);
         assert_eq!(stats.idle, 0);
@@ -449,23 +441,21 @@ mod tests {
 
     #[tokio::test]
     async fn test_connection_timeout_config() {
-        let config = PoolConfig::new()
-            .with_connect_timeout(Duration::from_millis(100));
+        let config = PoolConfig::new().with_connect_timeout(Duration::from_millis(100));
         let client = create_test_client().await;
         let pool = ConnectionPoolImpl::new(config, client);
 
         let addr: SocketAddr = "127.0.0.1:19999".parse().unwrap();
-        
+
         let result = pool.get_or_create(addr).await;
-        
+
         assert!(result.is_err());
         if let Err(e) = result {
             match e {
                 PoolError::Timeout { timeout } => {
                     assert_eq!(timeout, Duration::from_millis(100));
                 }
-                PoolError::ConnectionFailed { .. } => {
-                }
+                PoolError::ConnectionFailed { .. } => {}
                 _ => panic!("Expected Timeout or ConnectionFailed error"),
             }
         }

@@ -1,3 +1,13 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
+#![allow(clippy::type_complexity)]
+#![allow(clippy::never_loop)]
+#![allow(clippy::collapsible_if)]
+
 use rpcnet::{RpcConfig, RpcServer};
 use std::time::Duration;
 

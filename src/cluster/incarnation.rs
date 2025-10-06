@@ -26,7 +26,7 @@ impl Incarnation {
             .as_millis() as u64;
         Self(timestamp)
     }
-    
+
     pub fn from_value(value: u64) -> Self {
         Self(value)
     }
@@ -70,7 +70,7 @@ pub fn resolve_conflict<'a>(a: &'a NodeStatus, b: &'a NodeStatus) -> &'a NodeSta
 
 impl PartialOrd for Incarnation {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.compare(other))
+        Some(std::cmp::Ord::cmp(self, other))
     }
 }
 

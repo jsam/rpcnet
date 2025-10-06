@@ -1,5 +1,5 @@
-use crate::cluster::incarnation::{resolve_conflict, NodeStatus};
 use crate::cluster::gossip::{NodeId, NodeState};
+use crate::cluster::incarnation::{resolve_conflict, NodeStatus};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -41,7 +41,7 @@ impl Default for SharedNodeRegistry {
 impl NodeRegistry for SharedNodeRegistry {
     fn insert(&self, status: NodeStatus) {
         let mut registry = self.inner.write().unwrap();
-        
+
         if let Some(existing) = registry.get(&status.node_id) {
             let winner = resolve_conflict(existing, &status);
             if std::ptr::eq(winner, &status) {
@@ -92,7 +92,7 @@ mod tests {
     use super::*;
     use crate::cluster::incarnation::Incarnation;
     use std::collections::HashMap;
-    
+
     use std::time::Instant;
 
     fn create_node_status(id: &str, _incarnation: u64, state: NodeState) -> NodeStatus {
@@ -105,8 +105,12 @@ mod tests {
             tags: HashMap::new(),
         }
     }
-    
-    fn create_node_status_with_incarnation(id: &str, incarnation_value: u64, state: NodeState) -> NodeStatus {
+
+    fn create_node_status_with_incarnation(
+        id: &str,
+        incarnation_value: u64,
+        state: NodeState,
+    ) -> NodeStatus {
         NodeStatus {
             node_id: NodeId::new(id),
             addr: "127.0.0.1:8000".parse().unwrap(),
@@ -121,9 +125,9 @@ mod tests {
     fn test_insert_and_get() {
         let registry = SharedNodeRegistry::new();
         let status = create_node_status("node-1", 100, NodeState::Alive);
-        
+
         registry.insert(status.clone());
-        
+
         let retrieved = registry.get(&NodeId::new("node-1"));
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().node_id.as_str(), "node-1");
@@ -133,10 +137,10 @@ mod tests {
     fn test_remove() {
         let registry = SharedNodeRegistry::new();
         let status = create_node_status("node-1", 100, NodeState::Alive);
-        
+
         registry.insert(status);
         assert_eq!(registry.len(), 1);
-        
+
         let removed = registry.remove(&NodeId::new("node-1"));
         assert!(removed.is_some());
         assert_eq!(registry.len(), 0);
@@ -145,11 +149,11 @@ mod tests {
     #[test]
     fn test_all_nodes() {
         let registry = SharedNodeRegistry::new();
-        
+
         registry.insert(create_node_status("node-1", 100, NodeState::Alive));
         registry.insert(create_node_status("node-2", 200, NodeState::Suspect));
         registry.insert(create_node_status("node-3", 300, NodeState::Failed));
-        
+
         let all = registry.all_nodes();
         assert_eq!(all.len(), 3);
     }
@@ -157,15 +161,15 @@ mod tests {
     #[test]
     fn test_alive_nodes() {
         let registry = SharedNodeRegistry::new();
-        
+
         registry.insert(create_node_status("node-1", 100, NodeState::Alive));
         registry.insert(create_node_status("node-2", 200, NodeState::Suspect));
         registry.insert(create_node_status("node-3", 300, NodeState::Alive));
         registry.insert(create_node_status("node-4", 400, NodeState::Failed));
-        
+
         let alive = registry.alive_nodes();
         assert_eq!(alive.len(), 2);
-        
+
         let alive_ids: Vec<_> = alive.iter().map(|s| s.node_id.as_str()).collect();
         assert!(alive_ids.contains(&"node-1"));
         assert!(alive_ids.contains(&"node-3"));
@@ -174,18 +178,18 @@ mod tests {
     #[test]
     fn test_incarnation_conflict_resolution() {
         let registry = SharedNodeRegistry::new();
-        
+
         let mut status_old = create_node_status("node-1", 100, NodeState::Alive);
         status_old.incarnation = Incarnation::initial();
-        
+
         registry.insert(status_old.clone());
-        
+
         let mut status_new = create_node_status("node-1", 200, NodeState::Suspect);
         status_new.incarnation = status_old.incarnation;
         status_new.incarnation.increment();
-        
+
         registry.insert(status_new.clone());
-        
+
         let retrieved = registry.get(&NodeId::new("node-1")).unwrap();
         assert_eq!(retrieved.state, NodeState::Suspect);
     }
@@ -203,7 +207,11 @@ mod tests {
             let handle = thread::spawn(move || {
                 for j in 0..10 {
                     let id = format!("node-{}-{}", i, j);
-                    reg.insert(create_node_status(&id, (i * 10 + j) as u64, NodeState::Alive));
+                    reg.insert(create_node_status(
+                        &id,
+                        (i * 10 + j) as u64,
+                        NodeState::Alive,
+                    ));
                 }
             });
             handles.push(handle);
@@ -220,9 +228,9 @@ mod tests {
     fn test_clone_shares_data() {
         let registry = SharedNodeRegistry::new();
         let cloned = registry.clone();
-        
+
         registry.insert(create_node_status("node-1", 100, NodeState::Alive));
-        
+
         assert_eq!(cloned.len(), 1);
         assert!(cloned.get(&NodeId::new("node-1")).is_some());
     }
@@ -231,10 +239,10 @@ mod tests {
     fn test_is_empty() {
         let registry = SharedNodeRegistry::new();
         assert!(registry.is_empty());
-        
+
         registry.insert(create_node_status("node-1", 100, NodeState::Alive));
         assert!(!registry.is_empty());
-        
+
         registry.remove(&NodeId::new("node-1"));
         assert!(registry.is_empty());
     }
@@ -243,15 +251,15 @@ mod tests {
     fn test_state_transitions() {
         let registry = SharedNodeRegistry::new();
         let node_id = NodeId::new("node-1");
-        
+
         let mut status = create_node_status("node-1", 100, NodeState::Alive);
         registry.insert(status.clone());
-        
+
         status.state = NodeState::Suspect;
         status.incarnation.increment();
         registry.insert(status.clone());
         assert_eq!(registry.get(&node_id).unwrap().state, NodeState::Suspect);
-        
+
         status.state = NodeState::Failed;
         status.incarnation.increment();
         registry.insert(status.clone());
@@ -262,13 +270,13 @@ mod tests {
     fn test_higher_incarnation_wins() {
         let registry = SharedNodeRegistry::new();
         let node_id = NodeId::new("node-1");
-        
+
         let status_low = create_node_status_with_incarnation("node-1", 0, NodeState::Alive);
         let status_high = create_node_status_with_incarnation("node-1", 2, NodeState::Suspect);
-        
+
         registry.insert(status_low.clone());
         registry.insert(status_high.clone());
-        
+
         let result = registry.get(&node_id).unwrap();
         assert_eq!(result.incarnation.value(), 2);
         assert_eq!(result.state, NodeState::Suspect);
@@ -278,13 +286,13 @@ mod tests {
     fn test_lower_incarnation_rejected() {
         let registry = SharedNodeRegistry::new();
         let node_id = NodeId::new("node-1");
-        
+
         let status_high = create_node_status_with_incarnation("node-1", 2, NodeState::Alive);
         let status_low = create_node_status_with_incarnation("node-1", 0, NodeState::Suspect);
-        
+
         registry.insert(status_high.clone());
         registry.insert(status_low.clone());
-        
+
         let result = registry.get(&node_id).unwrap();
         assert_eq!(result.incarnation.value(), 2);
         assert_eq!(result.state, NodeState::Alive);
@@ -294,13 +302,13 @@ mod tests {
     fn test_same_incarnation_alive_wins() {
         let registry = SharedNodeRegistry::new();
         let node_id = NodeId::new("node-1");
-        
+
         let status_suspect = create_node_status_with_incarnation("node-1", 0, NodeState::Suspect);
         let status_alive = create_node_status_with_incarnation("node-1", 0, NodeState::Alive);
-        
+
         registry.insert(status_suspect.clone());
         registry.insert(status_alive.clone());
-        
+
         let result = registry.get(&node_id).unwrap();
         assert_eq!(result.state, NodeState::Alive);
     }
@@ -309,13 +317,13 @@ mod tests {
     fn test_conflict_resolution_suspect_vs_failed() {
         let registry = SharedNodeRegistry::new();
         let node_id = NodeId::new("node-1");
-        
+
         let status_suspect = create_node_status_with_incarnation("node-1", 0, NodeState::Suspect);
         let status_failed = create_node_status_with_incarnation("node-1", 0, NodeState::Failed);
-        
+
         registry.insert(status_suspect.clone());
         registry.insert(status_failed.clone());
-        
+
         let result = registry.get(&node_id).unwrap();
         assert_eq!(result.state, NodeState::Failed);
     }

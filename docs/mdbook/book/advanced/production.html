@@ -1,0 +1,1021 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Production Deployment - RpcNet Guide</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">RpcNet Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="production-deployment"><a class="header" href="#production-deployment">Production Deployment</a></h1>
+<p>This guide covers best practices for deploying RpcNet clusters in production environments, including security, monitoring, high availability, and operational procedures.</p>
+<h2 id="architecture-patterns"><a class="header" href="#architecture-patterns">Architecture Patterns</a></h2>
+<h3 id="1-basic-production-setup"><a class="header" href="#1-basic-production-setup">1. Basic Production Setup</a></h3>
+<p>Minimum viable production deployment:</p>
+<pre><code>                    Load Balancer (L4)
+                           |
+              ┌────────────┼────────────┐
+              │            │            │
+         ┌────▼───┐   ┌────▼───┐   ┌────▼───┐
+         │Director│   │Director│   │Director│  (3+ for HA)
+         │  (HA)  │   │  (HA)  │   │  (HA)  │
+         └────┬───┘   └────┬───┘   └────┬───┘
+              │            │            │
+      ┌───────┴────────────┴────────────┴───────┐
+      │                                          │
+  ┌───▼────┐  ┌────────┐  ┌────────┐  ┌────────▼┐
+  │Worker 1│  │Worker 2│  │Worker 3│  │Worker N │
+  └────────┘  └────────┘  └────────┘  └─────────┘
+</code></pre>
+<p><strong>Components</strong>:</p>
+<ul>
+<li><strong>Load Balancer</strong>: Routes clients to healthy directors</li>
+<li><strong>Directors (3+)</strong>: Coordinator nodes in HA configuration</li>
+<li><strong>Workers (N)</strong>: Processing nodes, scale horizontally</li>
+</ul>
+<h3 id="2-multi-region-setup"><a class="header" href="#2-multi-region-setup">2. Multi-Region Setup</a></h3>
+<p>For global deployments:</p>
+<pre><code>        Region US-EAST              Region EU-WEST
+┌──────────────────────────┐  ┌──────────────────────────┐
+│   Director Cluster (3)   │  │   Director Cluster (3)   │
+│   Worker Pool (10+)      │  │   Worker Pool (10+)      │
+└──────────┬───────────────┘  └───────────┬──────────────┘
+           │                               │
+           └───────────┬───────────────────┘
+                       │
+                 Cross-region
+                 Gossip Protocol
+                 (optional coordination)
+</code></pre>
+<p><strong>Benefits</strong>:</p>
+<ul>
+<li>Lower latency for regional clients</li>
+<li>Fault isolation (region failure doesn't affect others)</li>
+<li>Regulatory compliance (data locality)</li>
+</ul>
+<h3 id="3-hybrid-edge-deployment"><a class="header" href="#3-hybrid-edge-deployment">3. Hybrid Edge Deployment</a></h3>
+<p>For edge computing scenarios:</p>
+<pre><code>              Cloud (Central)
+         ┌─────────────────────┐
+         │  Director Cluster   │
+         │  Worker Pool        │
+         └──────────┬──────────┘
+                    │
+         ┌──────────┼──────────┐
+         │          │          │
+    ┌────▼───┐ ┌───▼────┐ ┌───▼────┐
+    │ Edge 1 │ │ Edge 2 │ │ Edge 3 │
+    │Workers │ │Workers │ │Workers │
+    └────────┘ └────────┘ └────────┘
+</code></pre>
+<p><strong>Use cases</strong>:</p>
+<ul>
+<li>IoT workloads</li>
+<li>Low-latency requirements</li>
+<li>Bandwidth optimization</li>
+</ul>
+<h2 id="security"><a class="header" href="#security">Security</a></h2>
+<h3 id="tls-configuration"><a class="header" href="#tls-configuration">TLS Configuration</a></h3>
+<h4 id="production-certificates"><a class="header" href="#production-certificates">Production Certificates</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// ❌ Bad: Self-signed certificates
+let cert = std::fs::read("self_signed.pem")?;
+
+// ✅ Good: Proper CA-signed certificates
+let cert = std::fs::read("/etc/rpcnet/certs/server.crt")?;
+let key = std::fs::read("/etc/rpcnet/certs/server.key")?;
+let ca = std::fs::read("/etc/rpcnet/certs/ca.crt")?;
+
+let config = ServerConfig::builder()
+    .with_cert_and_key(cert, key)?
+    .with_ca_cert(ca)?  // Verify clients
+    .build();
+<span class="boring">}</span></code></pre></pre>
+<h4 id="certificate-rotation"><a class="header" href="#certificate-rotation">Certificate Rotation</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use tokio::time::{interval, Duration};
+
+async fn rotate_certificates(server: Arc&lt;Server&gt;) {
+    let mut check_interval = interval(Duration::from_secs(3600)); // Check hourly
+    
+    loop {
+        check_interval.tick().await;
+        
+        // Check certificate expiry
+        if certificate_expires_soon("/etc/rpcnet/certs/server.crt", 30).await? {
+            log::warn!("Certificate expiring soon, rotating...");
+            
+            // Load new certificate
+            let new_cert = std::fs::read("/etc/rpcnet/certs/server.crt.new")?;
+            let new_key = std::fs::read("/etc/rpcnet/certs/server.key.new")?;
+            
+            // Hot-reload without downtime
+            server.reload_certificate(new_cert, new_key).await?;
+            
+            log::info!("Certificate rotated successfully");
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="authentication--authorization"><a class="header" href="#authentication--authorization">Authentication &amp; Authorization</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[rpc_trait]
+pub trait SecureService {
+    async fn process(&amp;self, auth_token: String, data: Vec&lt;u8&gt;) -&gt; Result&lt;Response&gt;;
+}
+
+#[rpc_impl]
+impl SecureService for Handler {
+    async fn process(&amp;self, auth_token: String, data: Vec&lt;u8&gt;) -&gt; Result&lt;Response&gt; {
+        // Verify token
+        let claims = verify_jwt(&amp;auth_token)?;
+        
+        // Check permissions
+        if !claims.has_permission("compute:execute") {
+            return Err(anyhow::anyhow!("Insufficient permissions"));
+        }
+        
+        // Process request
+        Ok(self.do_process(data).await?)
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="network-segmentation"><a class="header" href="#network-segmentation">Network Segmentation</a></h3>
+<pre><code>┌─────────────────────────────────────────────────────┐
+│                 Public Network                       │
+│  (Clients, Load Balancer)                           │
+└────────────────────┬────────────────────────────────┘
+                     │ Firewall
+┌────────────────────▼────────────────────────────────┐
+│             Management Network                       │
+│  (Directors, Monitoring, Logging)                   │
+└────────────────────┬────────────────────────────────┘
+                     │ Firewall
+┌────────────────────▼────────────────────────────────┐
+│              Worker Network                          │
+│  (Workers, Internal Communication)                  │
+└─────────────────────────────────────────────────────┘
+</code></pre>
+<p><strong>Firewall Rules</strong>:</p>
+<pre><code class="language-bash"># Public → Management: Only load balancer ports
+iptables -A FORWARD -i public -o management -p tcp --dport 8080 -j ACCEPT
+
+# Management → Workers: Full access
+iptables -A FORWARD -i management -o workers -j ACCEPT
+
+# Workers → Workers: Gossip protocol
+iptables -A FORWARD -i workers -o workers -p udp --dport 7946 -j ACCEPT
+</code></pre>
+<h2 id="monitoring"><a class="header" href="#monitoring">Monitoring</a></h2>
+<h3 id="essential-metrics"><a class="header" href="#essential-metrics">Essential Metrics</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use prometheus::{register_gauge, register_counter, register_histogram};
+
+// Throughput
+let request_counter = register_counter!("rpc_requests_total", "Total RPC requests");
+request_counter.inc();
+
+// Latency
+let latency_histogram = register_histogram!(
+    "rpc_latency_seconds",
+    "RPC latency distribution",
+    vec![0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0]
+);
+latency_histogram.observe(duration.as_secs_f64());
+
+// Health
+let healthy_workers = register_gauge!("cluster_healthy_workers", "Number of healthy workers");
+healthy_workers.set(registry.healthy_count().await as f64);
+
+// Errors
+let error_counter = register_counter!("rpc_errors_total", "Total RPC errors", &amp;["type"]);
+error_counter.with_label_values(&amp;["timeout"]).inc();
+<span class="boring">}</span></code></pre></pre>
+<h3 id="prometheus-integration"><a class="header" href="#prometheus-integration">Prometheus Integration</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use prometheus::{Encoder, TextEncoder};
+use warp::Filter;
+
+async fn start_metrics_server() {
+    let metrics_route = warp::path!("metrics").map(|| {
+        let encoder = TextEncoder::new();
+        let metric_families = prometheus::gather();
+        let mut buffer = vec![];
+        encoder.encode(&amp;metric_families, &amp;mut buffer).unwrap();
+        
+        warp::reply::with_header(
+            buffer,
+            "Content-Type",
+            "text/plain; charset=utf-8",
+        )
+    });
+    
+    warp::serve(metrics_route)
+        .run(([0, 0, 0, 0], 9090))
+        .await;
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Prometheus config</strong> (<code>prometheus.yml</code>):</p>
+<pre><code class="language-yaml">scrape_configs:
+  - job_name: 'rpcnet_directors'
+    static_configs:
+      - targets: ['director-1:9090', 'director-2:9090', 'director-3:9090']
+  
+  - job_name: 'rpcnet_workers'
+    static_configs:
+      - targets: ['worker-1:9090', 'worker-2:9090', 'worker-3:9090']
+</code></pre>
+<h3 id="grafana-dashboards"><a class="header" href="#grafana-dashboards">Grafana Dashboards</a></h3>
+<p><strong>Key panels</strong>:</p>
+<ol>
+<li><strong>Throughput</strong>: <code>rate(rpc_requests_total[1m])</code></li>
+<li><strong>Latency P99</strong>: <code>histogram_quantile(0.99, rpc_latency_seconds)</code></li>
+<li><strong>Error Rate</strong>: <code>rate(rpc_errors_total[1m])</code></li>
+<li><strong>Worker Health</strong>: <code>cluster_healthy_workers</code></li>
+</ol>
+<h3 id="alerting"><a class="header" href="#alerting">Alerting</a></h3>
+<pre><code class="language-yaml"># alerts.yml
+groups:
+  - name: rpcnet
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: rate(rpc_errors_total[5m]) &gt; 0.05
+        for: 2m
+        annotations:
+          summary: "High RPC error rate detected"
+      
+      - alert: LowWorkerCount
+        expr: cluster_healthy_workers &lt; 3
+        for: 1m
+        annotations:
+          summary: "Less than 3 healthy workers available"
+      
+      - alert: HighLatency
+        expr: histogram_quantile(0.99, rpc_latency_seconds) &gt; 0.1
+        for: 5m
+        annotations:
+          summary: "P99 latency above 100ms"
+</code></pre>
+<h2 id="logging"><a class="header" href="#logging">Logging</a></h2>
+<h3 id="structured-logging"><a class="header" href="#structured-logging">Structured Logging</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use tracing::{info, warn, error, instrument};
+
+#[instrument(skip(data))]
+async fn process_request(request_id: Uuid, worker_id: Uuid, data: Vec&lt;u8&gt;) -&gt; Result&lt;Response&gt; {
+    info!(
+        request_id = %request_id,
+        worker_id = %worker_id,
+        data_size = data.len(),
+        "Processing request"
+    );
+    
+    match worker.call("compute", data).await {
+        Ok(response) =&gt; {
+            info!(
+                request_id = %request_id,
+                worker_id = %worker_id,
+                response_size = response.len(),
+                "Request completed"
+            );
+            Ok(response)
+        }
+        Err(e) =&gt; {
+            error!(
+                request_id = %request_id,
+                worker_id = %worker_id,
+                error = %e,
+                "Request failed"
+            );
+            Err(e)
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="log-aggregation"><a class="header" href="#log-aggregation">Log Aggregation</a></h3>
+<p><strong>Fluentd config</strong> (<code>fluent.conf</code>):</p>
+<pre><code>&lt;source&gt;
+  @type forward
+  port 24224
+&lt;/source&gt;
+
+&lt;match rpcnet.**&gt;
+  @type elasticsearch
+  host elasticsearch.example.com
+  port 9200
+  index_name rpcnet
+  type_name logs
+&lt;/match&gt;
+</code></pre>
+<h2 id="high-availability"><a class="header" href="#high-availability">High Availability</a></h2>
+<h3 id="director-ha-setup"><a class="header" href="#director-ha-setup">Director HA Setup</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Each director is identical, configured via environment
+let director_id = Uuid::new_v4();
+let cluster_config = ClusterConfig::default()
+    .with_bind_addr(env::var("BIND_ADDR")?.parse()?)
+    .with_seeds(parse_seeds(&amp;env::var("SEED_NODES")?)?);
+
+let cluster = server.enable_cluster(cluster_config).await?;
+
+// Tag as director
+cluster.set_tag("role", "director");
+cluster.set_tag("id", &amp;director_id.to_string());
+
+// All directors operate identically, clients can use any one
+<span class="boring">}</span></code></pre></pre>
+<h3 id="graceful-shutdown"><a class="header" href="#graceful-shutdown">Graceful Shutdown</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use tokio::signal;
+
+async fn run_server(mut server: Server) -&gt; Result&lt;()&gt; {
+    // Spawn server task
+    let server_handle = tokio::spawn(async move {
+        server.run().await
+    });
+    
+    // Wait for shutdown signal
+    signal::ctrl_c().await?;
+    
+    log::info!("Shutdown signal received, gracefully shutting down...");
+    
+    // 1. Stop accepting new connections
+    server.stop_accepting().await;
+    
+    // 2. Wait for in-flight requests (with timeout)
+    tokio::time::timeout(
+        Duration::from_secs(30),
+        server.wait_for_in_flight()
+    ).await?;
+    
+    // 3. Leave cluster gracefully
+    cluster.leave().await?;
+    
+    // 4. Close connections
+    server.shutdown().await?;
+    
+    log::info!("Shutdown complete");
+    Ok(())
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="health-checks"><a class="header" href="#health-checks">Health Checks</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[rpc_trait]
+pub trait HealthService {
+    async fn health(&amp;self) -&gt; Result&lt;HealthStatus&gt;;
+    async fn ready(&amp;self) -&gt; Result&lt;ReadyStatus&gt;;
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct HealthStatus {
+    pub healthy: bool,
+    pub version: String,
+    pub uptime_secs: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ReadyStatus {
+    pub ready: bool,
+    pub workers_available: usize,
+    pub cluster_size: usize,
+}
+
+#[rpc_impl]
+impl HealthService for Handler {
+    async fn health(&amp;self) -&gt; Result&lt;HealthStatus&gt; {
+        Ok(HealthStatus {
+            healthy: true,
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            uptime_secs: self.start_time.elapsed().as_secs(),
+        })
+    }
+    
+    async fn ready(&amp;self) -&gt; Result&lt;ReadyStatus&gt; {
+        let workers = self.registry.worker_count().await;
+        let cluster_size = self.cluster.node_count().await;
+        
+        Ok(ReadyStatus {
+            ready: workers &gt; 0,
+            workers_available: workers,
+            cluster_size,
+        })
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Kubernetes probes</strong>:</p>
+<pre><code class="language-yaml">livenessProbe:
+  exec:
+    command:
+    - /usr/local/bin/health-check
+    - --endpoint=health
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+readinessProbe:
+  exec:
+    command:
+    - /usr/local/bin/health-check
+    - --endpoint=ready
+  initialDelaySeconds: 5
+  periodSeconds: 5
+</code></pre>
+<h2 id="deployment"><a class="header" href="#deployment">Deployment</a></h2>
+<h3 id="docker"><a class="header" href="#docker">Docker</a></h3>
+<p><strong>Dockerfile</strong>:</p>
+<pre><code class="language-dockerfile">FROM rust:1.75 as builder
+
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+
+RUN apt-get update &amp;&amp; apt-get install -y \
+    ca-certificates \
+    &amp;&amp; rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/target/release/director /usr/local/bin/
+COPY --from=builder /app/target/release/worker /usr/local/bin/
+
+# Expose ports
+EXPOSE 8080 7946/udp
+
+CMD ["director"]
+</code></pre>
+<p><strong>Docker Compose</strong> (<code>docker-compose.yml</code>):</p>
+<pre><code class="language-yaml">version: '3.8'
+
+services:
+  director-1:
+    image: rpcnet:latest
+    command: director
+    environment:
+      - DIRECTOR_ADDR=0.0.0.0:8080
+      - RUST_LOG=info
+    ports:
+      - "8080:8080"
+      - "7946:7946/udp"
+  
+  worker-1:
+    image: rpcnet:latest
+    command: worker
+    environment:
+      - WORKER_LABEL=worker-1
+      - WORKER_ADDR=0.0.0.0:8081
+      - DIRECTOR_ADDR=director-1:8080
+      - RUST_LOG=info
+    depends_on:
+      - director-1
+</code></pre>
+<h3 id="kubernetes"><a class="header" href="#kubernetes">Kubernetes</a></h3>
+<p><strong>Deployment</strong> (<code>director-deployment.yaml</code>):</p>
+<pre><code class="language-yaml">apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rpcnet-director
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: rpcnet-director
+  template:
+    metadata:
+      labels:
+        app: rpcnet-director
+    spec:
+      containers:
+      - name: director
+        image: rpcnet:latest
+        command: ["director"]
+        env:
+        - name: DIRECTOR_ADDR
+          value: "0.0.0.0:8080"
+        - name: RUST_LOG
+          value: "info"
+        ports:
+        - containerPort: 8080
+          name: rpc
+        - containerPort: 7946
+          name: gossip
+          protocol: UDP
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+</code></pre>
+<p><strong>Service</strong> (<code>director-service.yaml</code>):</p>
+<pre><code class="language-yaml">apiVersion: v1
+kind: Service
+metadata:
+  name: rpcnet-director
+spec:
+  type: LoadBalancer
+  selector:
+    app: rpcnet-director
+  ports:
+  - name: rpc
+    port: 8080
+    targetPort: 8080
+  - name: gossip
+    port: 7946
+    targetPort: 7946
+    protocol: UDP
+</code></pre>
+<p><strong>HorizontalPodAutoscaler</strong>:</p>
+<pre><code class="language-yaml">apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rpcnet-worker-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: rpcnet-worker
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+</code></pre>
+<h2 id="configuration-management"><a class="header" href="#configuration-management">Configuration Management</a></h2>
+<h3 id="environment-based-config"><a class="header" href="#environment-based-config">Environment-Based Config</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use config::{Config, Environment, File};
+
+#[derive(Debug, Deserialize)]
+struct Settings {
+    server: ServerSettings,
+    cluster: ClusterSettings,
+    monitoring: MonitoringSettings,
+}
+
+#[derive(Debug, Deserialize)]
+struct ServerSettings {
+    bind_addr: String,
+    cert_path: String,
+    key_path: String,
+}
+
+fn load_config() -&gt; Result&lt;Settings&gt; {
+    let settings = Config::builder()
+        // Default config
+        .add_source(File::with_name("config/default"))
+        // Environment-specific config (optional)
+        .add_source(File::with_name(&amp;format!("config/{}", env!("ENV"))).required(false))
+        // Environment variables (override)
+        .add_source(Environment::with_prefix("RPCNET"))
+        .build()?;
+    
+    settings.try_deserialize()
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="secret-management"><a class="header" href="#secret-management">Secret Management</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use aws_sdk_secretsmanager::Client as SecretsClient;
+
+async fn load_tls_certs_from_secrets() -&gt; Result&lt;(Vec&lt;u8&gt;, Vec&lt;u8&gt;)&gt; {
+    let config = aws_config::load_from_env().await;
+    let client = SecretsClient::new(&amp;config);
+    
+    // Load certificate
+    let cert_secret = client
+        .get_secret_value()
+        .secret_id("rpcnet/production/tls_cert")
+        .send()
+        .await?;
+    let cert = cert_secret.secret_binary().unwrap().as_ref().to_vec();
+    
+    // Load key
+    let key_secret = client
+        .get_secret_value()
+        .secret_id("rpcnet/production/tls_key")
+        .send()
+        .await?;
+    let key = key_secret.secret_binary().unwrap().as_ref().to_vec();
+    
+    Ok((cert, key))
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="operational-procedures"><a class="header" href="#operational-procedures">Operational Procedures</a></h2>
+<h3 id="rolling-updates"><a class="header" href="#rolling-updates">Rolling Updates</a></h3>
+<pre><code class="language-bash">#!/bin/bash
+# Rolling update script for workers
+
+WORKERS=("worker-1" "worker-2" "worker-3" "worker-4")
+
+for worker in "${WORKERS[@]}"; do
+    echo "Updating $worker..."
+    
+    # Gracefully shutdown worker
+    kubectl exec $worker -- kill -SIGTERM 1
+    
+    # Wait for worker to leave cluster
+    sleep 10
+    
+    # Update image
+    kubectl set image deployment/rpcnet-worker worker=rpcnet:new-version
+    
+    # Wait for new pod to be ready
+    kubectl wait --for=condition=ready pod -l app=$worker --timeout=60s
+    
+    # Verify worker joined cluster
+    kubectl exec director-1 -- check-worker-registered $worker
+    
+    echo "$worker updated successfully"
+done
+</code></pre>
+<h3 id="backup-and-restore"><a class="header" href="#backup-and-restore">Backup and Restore</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Backup cluster state (metadata only, not data)
+async fn backup_cluster_state(cluster: Arc&lt;ClusterMembership&gt;) -&gt; Result&lt;()&gt; {
+    let state = ClusterState {
+        nodes: cluster.nodes().await,
+        timestamp: SystemTime::now(),
+    };
+    
+    let backup = serde_json::to_vec(&amp;state)?;
+    std::fs::write("/backup/cluster_state.json", backup)?;
+    
+    Ok(())
+}
+
+// Restore from backup (for disaster recovery)
+async fn restore_cluster_state(path: &amp;str) -&gt; Result&lt;ClusterState&gt; {
+    let backup = std::fs::read(path)?;
+    let state: ClusterState = serde_json::from_slice(&amp;backup)?;
+    Ok(state)
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="runbooks"><a class="header" href="#runbooks">Runbooks</a></h3>
+<p><strong>Worker Node Failure</strong>:</p>
+<ol>
+<li>Verify failure: <code>kubectl get pods | grep worker</code></li>
+<li>Check logs: <code>kubectl logs &lt;worker-pod&gt;</code></li>
+<li>If recoverable: <code>kubectl delete pod &lt;worker-pod&gt;</code> (auto-restarts)</li>
+<li>If not: Investigate root cause, fix, redeploy</li>
+<li>Verify cluster health: <code>kubectl exec director-1 -- cluster-health</code></li>
+</ol>
+<p><strong>High Latency</strong>:</p>
+<ol>
+<li>Check Grafana: Identify which nodes have high latency</li>
+<li>SSH to affected nodes: <code>ssh worker-5</code></li>
+<li>Check CPU/memory: <code>top</code>, <code>free -h</code></li>
+<li>Check network: <code>netstat -s</code>, <code>iftop</code></li>
+<li>Review logs: <code>journalctl -u rpcnet-worker -n 1000</code></li>
+<li>If needed: Scale up workers or restart affected nodes</li>
+</ol>
+<h2 id="cost-optimization"><a class="header" href="#cost-optimization">Cost Optimization</a></h2>
+<h3 id="resource-sizing"><a class="header" href="#resource-sizing">Resource Sizing</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Right-size based on actual usage
+async fn recommend_sizing(metrics: &amp;Metrics) -&gt; Recommendation {
+    let avg_cpu = metrics.avg_cpu_usage();
+    let avg_memory = metrics.avg_memory_usage();
+    let p99_cpu = metrics.p99_cpu_usage();
+    
+    if avg_cpu &lt; 30.0 &amp;&amp; p99_cpu &lt; 60.0 {
+        Recommendation::DownsizeWorkers
+    } else if p99_cpu &gt; 80.0 {
+        Recommendation::UpsizeWorkers
+    } else {
+        Recommendation::CurrentSizingOptimal
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="auto-scaling"><a class="header" href="#auto-scaling">Auto-Scaling</a></h3>
+<pre><code class="language-yaml"># Scale workers based on request rate
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rpcnet-worker-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: rpcnet-worker
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+  - type: Pods
+    pods:
+      metric:
+        name: rpc_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "5000"  # Scale when &gt; 5K RPS per worker
+</code></pre>
+<h2 id="checklist"><a class="header" href="#checklist">Checklist</a></h2>
+<h3 id="pre-deployment"><a class="header" href="#pre-deployment">Pre-Deployment</a></h3>
+<ul>
+<li><input disabled="" type="checkbox"/>
+TLS certificates from trusted CA</li>
+<li><input disabled="" type="checkbox"/>
+Secrets stored in secret manager (not env vars)</li>
+<li><input disabled="" type="checkbox"/>
+Monitoring and alerting configured</li>
+<li><input disabled="" type="checkbox"/>
+Log aggregation set up</li>
+<li><input disabled="" type="checkbox"/>
+Health checks implemented</li>
+<li><input disabled="" type="checkbox"/>
+Graceful shutdown handling</li>
+<li><input disabled="" type="checkbox"/>
+Resource limits configured</li>
+<li><input disabled="" type="checkbox"/>
+Auto-scaling rules defined</li>
+<li><input disabled="" type="checkbox"/>
+Backup procedures tested</li>
+<li><input disabled="" type="checkbox"/>
+Runbooks documented</li>
+</ul>
+<h3 id="post-deployment"><a class="header" href="#post-deployment">Post-Deployment</a></h3>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Verify all nodes healthy</li>
+<li><input disabled="" type="checkbox"/>
+Check metrics dashboards</li>
+<li><input disabled="" type="checkbox"/>
+Test failover scenarios</li>
+<li><input disabled="" type="checkbox"/>
+Validate performance (latency, throughput)</li>
+<li><input disabled="" type="checkbox"/>
+Review logs for errors</li>
+<li><input disabled="" type="checkbox"/>
+Test rolling updates</li>
+<li><input disabled="" type="checkbox"/>
+Verify backups working</li>
+<li><input disabled="" type="checkbox"/>
+Update documentation</li>
+</ul>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<ul>
+<li><strong><a href="performance.html">Performance Tuning</a></strong> - Optimize for production load</li>
+<li><strong><a href="../cluster/failures.html">Failure Handling</a></strong> - Handle production incidents</li>
+<li><strong><a href="migration.html">Migration Guide</a></strong> - Migrate existing systems</li>
+</ul>
+<h2 id="references"><a class="header" href="#references">References</a></h2>
+<ul>
+<li><a href="https://kubernetes.io/docs/concepts/configuration/overview/">Kubernetes Best Practices</a> - K8s configuration</li>
+<li><a href="https://prometheus.io/docs/practices/naming/">Prometheus Monitoring</a> - Metrics best practices</li>
+<li><a href="https://aws.amazon.com/architecture/well-architected/">AWS Well-Architected</a> - Cloud architecture patterns</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../advanced/performance.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../advanced/migration.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../advanced/performance.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../advanced/migration.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

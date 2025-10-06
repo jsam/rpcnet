@@ -31,7 +31,7 @@ impl ClusterClient {
             .ok_or_else(|| RpcError::ConnectionError("No available workers".to_string()))?;
 
         let client = self.get_or_create_client(worker.addr).await?;
-        
+
         worker.increment_connections();
         let result = client.call(method, params).await;
         worker.decrement_connections();
@@ -51,7 +51,7 @@ impl ClusterClient {
         }
 
         let client = Arc::new(RpcClient::connect(addr, self.config.clone()).await?);
-        
+
         let mut clients = self.clients.write().await;
         clients.insert(addr, client.clone());
 
@@ -67,9 +67,10 @@ impl ClusterClient {
         let workers = if let Some(filter) = tag_filter {
             let mut filtered = Vec::new();
             for worker in self.registry.all_workers().await {
-                if filter.iter().all(|(k, v)| {
-                    worker.tags.get(k).map(|val| val == v).unwrap_or(false)
-                }) {
+                if filter
+                    .iter()
+                    .all(|(k, v)| worker.tags.get(k).map(|val| val == v).unwrap_or(false))
+                {
                     filtered.push(worker);
                 }
             }
@@ -79,7 +80,7 @@ impl ClusterClient {
         };
 
         let mut tasks = Vec::new();
-        
+
         for worker in workers {
             let addr = worker.addr;
             let method = method.to_string();
@@ -157,8 +158,15 @@ mod tests {
         let addr: SocketAddr = "127.0.0.1:10000".parse().unwrap();
         let quic_client = create_test_client().await;
 
-        let cluster = Arc::new(ClusterMembership::new(addr, config, quic_client).await.unwrap());
-        let registry = Arc::new(WorkerRegistry::new(cluster, LoadBalancingStrategy::RoundRobin));
+        let cluster = Arc::new(
+            ClusterMembership::new(addr, config, quic_client)
+                .await
+                .unwrap(),
+        );
+        let registry = Arc::new(WorkerRegistry::new(
+            cluster,
+            LoadBalancingStrategy::RoundRobin,
+        ));
 
         let rpc_config = RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0");
         let cluster_client = ClusterClient::new(registry, rpc_config);

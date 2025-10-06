@@ -1,3 +1,7 @@
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 use rpcnet::migration::{ConnectionService, ConnectionRequest, ConnectionResponse, DualConnection};
 use rpcnet::RpcError;
 
@@ -25,7 +29,7 @@ async fn test_establish_connection_contract() {
 
     let result = service.establish_connection(request).await;
     assert!(result.is_ok(), "establish_connection should succeed with valid request");
-    
+
     let response = result.unwrap();
     assert!(!response.userspace_connection_id.is_nil(), "Userspace connection ID should be valid");
     assert!(!response.management_connection_id.is_nil(), "Management connection ID should be valid");

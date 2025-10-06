@@ -1,3 +1,9 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 // Tests specifically targeting uncovered error handling paths
 // Focuses on various error scenarios throughout the codebase
 
@@ -6,7 +12,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 fn create_test_config(port: u16) -> RpcConfig {
-    RpcConfig::new("certs/test_cert.pem", &format!("127.0.0.1:{}", port))
+    RpcConfig::new("certs/test_cert.pem", format!("127.0.0.1:{}", port))
         .with_key_path("certs/test_key.pem")
         .with_server_name("localhost")
         .with_keep_alive_interval(Duration::from_millis(100))

@@ -1,0 +1,883 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Failure Handling - RpcNet Guide</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">RpcNet Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="failure-handling"><a class="header" href="#failure-handling">Failure Handling</a></h1>
+<p>Distributed systems must gracefully handle node failures, network partitions, and other failure scenarios. This chapter explains how RpcNet detects and recovers from failures in cluster deployments.</p>
+<h2 id="types-of-failures"><a class="header" href="#types-of-failures">Types of Failures</a></h2>
+<h3 id="1-node-crashes"><a class="header" href="#1-node-crashes">1. Node Crashes</a></h3>
+<p><strong>Scenario</strong>: Worker process terminates unexpectedly</p>
+<pre><code>Before:                  After:
+  [Director]               [Director]
+      |                        |
+  ┌───┴───┐               ┌────┴────┐
+  A   B   C               A       C
+          X ← Crashed
+</code></pre>
+<p><strong>Detection</strong>:</p>
+<ul>
+<li>Gossip protocol detects missing heartbeats</li>
+<li>Phi Accrual marks node as failed (typically 4-8 seconds)</li>
+<li>Failure event propagated to all nodes</li>
+</ul>
+<p><strong>Recovery</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Automatic handling via WorkerRegistry
+let mut events = registry.subscribe();
+
+while let Some(event) = events.recv().await {
+    match event {
+        ClusterEvent::NodeFailed(node) =&gt; {
+            log::error!("Worker {} failed", node.id);
+            // WorkerRegistry automatically removes from pool
+            // Future requests route to remaining workers
+        }
+        _ =&gt; {}
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="2-network-partitions"><a class="header" href="#2-network-partitions">2. Network Partitions</a></h3>
+<p><strong>Scenario</strong>: Network split divides cluster</p>
+<pre><code>Before partition:         After partition:
+     Director                Director  |  
+      /    \                   /       |     
+     A      B                 A        |  B
+     
+Cluster view splits into two independent groups
+</code></pre>
+<p><strong>Detection</strong>:</p>
+<ul>
+<li>Nodes on each side detect "failures" of nodes on other side</li>
+<li>Partition detector identifies split-brain scenario</li>
+<li>Both sides continue operating independently</li>
+</ul>
+<p><strong>Handling</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Monitor for partitions
+let mut events = cluster.subscribe();
+
+while let Some(event) = events.recv().await {
+    if let ClusterEvent::PartitionDetected(minority, majority) = event {
+        log::error!("Network partition detected!");
+        
+        if minority.contains(&amp;my_node_id) {
+            // I'm in minority partition
+            log::warn!("In minority partition, entering degraded mode");
+            enter_read_only_mode().await;
+        } else {
+            // I'm in majority partition
+            log::info!("In majority partition, continuing normal operation");
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="3-slow-nodes-degraded-performance"><a class="header" href="#3-slow-nodes-degraded-performance">3. Slow Nodes (Degraded Performance)</a></h3>
+<p><strong>Scenario</strong>: Node responding but very slowly</p>
+<pre><code>Normal response:    100ms
+Degraded response:  5000ms (50x slower)
+</code></pre>
+<p><strong>Detection</strong>:</p>
+<ul>
+<li>Phi Accrual increases suspicion level but may not mark as failed</li>
+<li>Request timeouts at application level</li>
+<li>Load balancer (Least Connections) naturally avoids slow nodes</li>
+</ul>
+<p><strong>Handling</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Set request timeout
+let timeout = Duration::from_secs(5);
+
+match tokio::time::timeout(timeout, worker.call("compute", data)).await {
+    Ok(Ok(result)) =&gt; {
+        // Success
+    }
+    Ok(Err(e)) =&gt; {
+        log::error!("Worker returned error: {}", e);
+        retry_with_different_worker(data).await?;
+    }
+    Err(_) =&gt; {
+        log::warn!("Worker timeout, trying another");
+        retry_with_different_worker(data).await?;
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="4-cascading-failures"><a class="header" href="#4-cascading-failures">4. Cascading Failures</a></h3>
+<p><strong>Scenario</strong>: Failure of one node causes others to fail</p>
+<pre><code>Worker A crashes
+  → Remaining workers overloaded
+    → Worker B crashes from overload
+      → Worker C also crashes
+        → Complete system failure
+</code></pre>
+<p><strong>Prevention</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Load shedding to prevent cascading failures
+async fn select_worker_with_shedding(
+    registry: &amp;WorkerRegistry,
+    max_load: f64,
+) -&gt; Result&lt;Worker&gt; {
+    let worker = registry.select_worker(Some("role=worker")).await?;
+    
+    let load = worker.active_connections as f64 / worker.capacity as f64;
+    
+    if load &gt; max_load {
+        // Reject request to prevent overload
+        return Err(anyhow::anyhow!("All workers at capacity, shedding load"));
+    }
+    
+    Ok(worker)
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="failure-detection-timeline"><a class="header" href="#failure-detection-timeline">Failure Detection Timeline</a></h2>
+<h3 id="node-crash-detection"><a class="header" href="#node-crash-detection">Node Crash Detection</a></h3>
+<pre><code>Time:    0s      1s      2s      3s      4s      5s      6s      7s      8s
+         |       |       |       |       |       |       |       |       |
+Gossip:  ✓       ✓       ✓       X       .       .       .       .       .
+         
+Phi:     0       0       0       2       4       6       8       10      12
+                                                 ^
+                                            Threshold (8.0)
+                                            Node marked FAILED
+                                            
+Events:  -       -       -       -       -       -    NodeFailed propagated
+         
+Registry:-       -       -       -       -       -    Worker removed from pool
+         
+Clients: -       -       -       -       -       -    Requests route elsewhere
+</code></pre>
+<p><strong>Total time to full recovery</strong>: ~6-8 seconds with default settings</p>
+<h3 id="partition-detection-timeline"><a class="header" href="#partition-detection-timeline">Partition Detection Timeline</a></h3>
+<pre><code>Time:    0s          5s          10s         15s         20s
+         |           |           |           |           |
+         Partition occurs
+         |
+         Side A can't reach Side B
+         Side B can't reach Side A
+         |
+         Both sides mark other as "suspect"
+                     |
+                     Multiple nodes confirm partition
+                                 |
+                                 PartitionDetected event
+                                             |
+                                             Both sides operate independently
+                                                         |
+                                                         Partition heals
+                                                         Gossip merges views
+</code></pre>
+<p><strong>Detection time</strong>: 10-15 seconds<br />
+<strong>Recovery time</strong>: 5-10 seconds after partition heals</p>
+<h2 id="retry-strategies"><a class="header" href="#retry-strategies">Retry Strategies</a></h2>
+<h3 id="automatic-retry"><a class="header" href="#automatic-retry">Automatic Retry</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use tokio::time::{sleep, Duration};
+
+async fn call_with_retry&lt;T&gt;(
+    f: impl Fn() -&gt; Pin&lt;Box&lt;dyn Future&lt;Output = Result&lt;T&gt;&gt;&gt;&gt;,
+    max_retries: usize,
+) -&gt; Result&lt;T&gt; {
+    let mut retries = 0;
+    
+    loop {
+        match f().await {
+            Ok(result) =&gt; return Ok(result),
+            Err(e) if retries &lt; max_retries =&gt; {
+                retries += 1;
+                log::warn!("Retry {}/{} after error: {}", retries, max_retries, e);
+                
+                // Exponential backoff
+                let delay = Duration::from_millis(100 * 2_u64.pow(retries as u32));
+                sleep(delay).await;
+            }
+            Err(e) =&gt; return Err(e),
+        }
+    }
+}
+
+// Usage
+let result = call_with_retry(
+    || Box::pin(worker.call("compute", data.clone())),
+    3
+).await?;
+<span class="boring">}</span></code></pre></pre>
+<h3 id="failover-to-different-worker"><a class="header" href="#failover-to-different-worker">Failover to Different Worker</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn call_with_failover(
+    registry: Arc&lt;WorkerRegistry&gt;,
+    method: &amp;str,
+    data: Vec&lt;u8&gt;,
+    max_attempts: usize,
+) -&gt; Result&lt;Response&gt; {
+    let mut attempted_workers = HashSet::new();
+    
+    for attempt in 0..max_attempts {
+        // Select worker we haven't tried yet
+        let worker = loop {
+            let w = registry.select_worker(Some("role=worker")).await?;
+            if !attempted_workers.contains(&amp;w.id) {
+                break w;
+            }
+            
+            if attempted_workers.len() &gt;= registry.worker_count().await {
+                return Err(anyhow::anyhow!("All workers failed"));
+            }
+        };
+        
+        attempted_workers.insert(worker.id);
+        
+        log::info!("Attempt {}: trying worker {}", attempt + 1, worker.label);
+        
+        match worker.call(method, data.clone()).await {
+            Ok(response) =&gt; return Ok(response),
+            Err(e) =&gt; {
+                log::warn!("Worker {} failed: {}", worker.label, e);
+                continue;
+            }
+        }
+    }
+    
+    Err(anyhow::anyhow!("Failed after {} attempts", max_attempts))
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="circuit-breaker"><a class="header" href="#circuit-breaker">Circuit Breaker</a></h3>
+<p>Prevent cascading failures by temporarily stopping requests to failed nodes:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::sync::Arc;
+use tokio::sync::RwLock;
+use std::collections::HashMap;
+
+#[derive(Clone)]
+enum CircuitState {
+    Closed,       // Normal operation
+    Open,         // Failing, reject requests
+    HalfOpen,     // Testing recovery
+}
+
+struct CircuitBreaker {
+    states: Arc&lt;RwLock&lt;HashMap&lt;Uuid, CircuitState&gt;&gt;&gt;,
+    failure_threshold: usize,
+    timeout: Duration,
+}
+
+impl CircuitBreaker {
+    async fn call&lt;T&gt;(
+        &amp;self,
+        worker_id: Uuid,
+        f: impl Future&lt;Output = Result&lt;T&gt;&gt;,
+    ) -&gt; Result&lt;T&gt; {
+        let state = self.states.read().await
+            .get(&amp;worker_id)
+            .cloned()
+            .unwrap_or(CircuitState::Closed);
+        
+        match state {
+            CircuitState::Open =&gt; {
+                // Circuit open, reject immediately
+                Err(anyhow::anyhow!("Circuit breaker open for worker {}", worker_id))
+            }
+            CircuitState::HalfOpen | CircuitState::Closed =&gt; {
+                match f.await {
+                    Ok(result) =&gt; {
+                        // Success, close circuit
+                        self.states.write().await.insert(worker_id, CircuitState::Closed);
+                        Ok(result)
+                    }
+                    Err(e) =&gt; {
+                        // Failure, open circuit
+                        self.states.write().await.insert(worker_id, CircuitState::Open);
+                        
+                        // Schedule transition to half-open
+                        let states = self.states.clone();
+                        let timeout = self.timeout;
+                        tokio::spawn(async move {
+                            sleep(timeout).await;
+                            states.write().await.insert(worker_id, CircuitState::HalfOpen);
+                        });
+                        
+                        Err(e)
+                    }
+                }
+            }
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="partition-handling"><a class="header" href="#partition-handling">Partition Handling</a></h2>
+<h3 id="split-brain-prevention"><a class="header" href="#split-brain-prevention">Split-Brain Prevention</a></h3>
+<p><strong>Problem</strong>: During partition, both sides may accept writes, leading to conflicts.</p>
+<p><strong>Solution 1</strong>: Majority quorum</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn handle_partition_with_quorum(
+    cluster: Arc&lt;ClusterMembership&gt;,
+    total_nodes: usize,
+) -&gt; Result&lt;()&gt; {
+    let visible_nodes = cluster.visible_nodes().await.len();
+    let majority = total_nodes / 2 + 1;
+    
+    if visible_nodes &lt; majority {
+        log::error!("Lost majority quorum ({}/{}), entering read-only mode",
+            visible_nodes, total_nodes);
+        
+        // Enter read-only mode
+        set_read_only(true).await;
+        
+        // Wait for partition to heal
+        loop {
+            sleep(Duration::from_secs(5)).await;
+            let current = cluster.visible_nodes().await.len();
+            
+            if current &gt;= majority {
+                log::info!("Regained quorum, resuming writes");
+                set_read_only(false).await;
+                break;
+            }
+        }
+    }
+    
+    Ok(())
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Solution 2</strong>: Designated leader</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Only one node (leader) accepts writes
+async fn handle_partition_with_leader(
+    cluster: Arc&lt;ClusterMembership&gt;,
+    leader_id: Uuid,
+) -&gt; Result&lt;()&gt; {
+    let my_id = cluster.local_node_id();
+    
+    if my_id == leader_id {
+        // I'm the leader, check if I can reach majority
+        if !can_reach_majority(&amp;cluster).await {
+            log::error!("Leader lost majority, stepping down");
+            set_read_only(true).await;
+        }
+    } else {
+        // I'm not the leader, check if I can reach leader
+        if !can_reach_node(&amp;cluster, leader_id).await {
+            log::error!("Lost connection to leader, entering read-only mode");
+            set_read_only(true).await;
+        }
+    }
+    
+    Ok(())
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="partition-recovery"><a class="header" href="#partition-recovery">Partition Recovery</a></h3>
+<p>When partition heals, nodes must reconcile state:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn handle_partition_recovery(
+    cluster: Arc&lt;ClusterMembership&gt;,
+) -&gt; Result&lt;()&gt; {
+    let mut events = cluster.subscribe();
+    
+    while let Some(event) = events.recv().await {
+        if let ClusterEvent::PartitionHealed = event {
+            log::info!("Partition healed, reconciling state");
+            
+            // Re-sync cluster state
+            cluster.resync().await?;
+            
+            // Reconcile application state
+            reconcile_application_state().await?;
+            
+            // Resume normal operation
+            set_read_only(false).await;
+            
+            log::info!("Partition recovery complete");
+        }
+    }
+    
+    Ok(())
+}
+
+async fn reconcile_application_state() -&gt; Result&lt;()&gt; {
+    // Application-specific reconciliation logic
+    // Examples:
+    // - Compare vector clocks
+    // - Merge CRDTs
+    // - Apply conflict resolution rules
+    // - Manual operator intervention
+    
+    Ok(())
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="client-side-handling"><a class="header" href="#client-side-handling">Client-Side Handling</a></h2>
+<h3 id="transparent-failover"><a class="header" href="#transparent-failover">Transparent Failover</a></h3>
+<p>Clients should automatically failover to healthy workers:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Client implementation with automatic failover
+struct ResilientClient {
+    registry: Arc&lt;WorkerRegistry&gt;,
+    connection_pool: Arc&lt;ConnectionPool&gt;,
+}
+
+impl ResilientClient {
+    async fn call(&amp;self, method: &amp;str, data: Vec&lt;u8&gt;) -&gt; Result&lt;Response&gt; {
+        const MAX_ATTEMPTS: usize = 3;
+        
+        for attempt in 1..=MAX_ATTEMPTS {
+            // Get healthy worker
+            let worker = match self.registry.select_worker(Some("role=worker")).await {
+                Ok(w) =&gt; w,
+                Err(e) if attempt &lt; MAX_ATTEMPTS =&gt; {
+                    log::warn!("No workers available, retrying...");
+                    sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
+                Err(e) =&gt; return Err(e),
+            };
+            
+            // Get pooled connection
+            let conn = self.connection_pool.get_or_connect(worker.addr).await?;
+            
+            // Make request
+            match conn.call(method, data.clone()).await {
+                Ok(response) =&gt; return Ok(response),
+                Err(e) =&gt; {
+                    log::warn!("Worker {} failed (attempt {}): {}", 
+                        worker.label, attempt, e);
+                    
+                    // Mark worker as potentially failed
+                    self.registry.report_failure(worker.id).await;
+                    
+                    if attempt &lt; MAX_ATTEMPTS {
+                        sleep(Duration::from_millis(100 * attempt as u64)).await;
+                    }
+                }
+            }
+        }
+        
+        Err(anyhow::anyhow!("All attempts failed"))
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="request-hedging"><a class="header" href="#request-hedging">Request Hedging</a></h3>
+<p>Send duplicate requests to multiple workers, use first response:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn hedged_call(
+    registry: Arc&lt;WorkerRegistry&gt;,
+    method: &amp;str,
+    data: Vec&lt;u8&gt;,
+    hedge_after: Duration,
+) -&gt; Result&lt;Response&gt; {
+    let worker1 = registry.select_worker(Some("role=worker")).await?;
+    
+    // Start first request
+    let req1 = worker1.call(method, data.clone());
+    
+    tokio::select! {
+        result = req1 =&gt; result,
+        _ = sleep(hedge_after) =&gt; {
+            // First request taking too long, send hedge request
+            log::info!("Hedging request to second worker");
+            
+            let worker2 = registry.select_worker(Some("role=worker")).await?;
+            let req2 = worker2.call(method, data.clone());
+            
+            // Return whichever completes first
+            tokio::select! {
+                result = req1 =&gt; result,
+                result = req2 =&gt; result,
+            }
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="monitoring-failures"><a class="header" href="#monitoring-failures">Monitoring Failures</a></h2>
+<h3 id="track-failure-metrics"><a class="header" href="#track-failure-metrics">Track Failure Metrics</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>struct FailureMetrics {
+    node_failures: Counter,
+    partition_count: Counter,
+    retry_count: Counter,
+    circuit_breaks: Counter,
+}
+
+async fn monitor_failures(cluster: Arc&lt;ClusterMembership&gt;) {
+    let mut events = cluster.subscribe();
+    
+    while let Some(event) = events.recv().await {
+        match event {
+            ClusterEvent::NodeFailed(node) =&gt; {
+                metrics::increment_counter!("cluster.node_failures");
+                log::error!("Node {} failed", node.id);
+                
+                // Alert if critical worker
+                if node.tags.get("critical") == Some(&amp;"true".to_string()) {
+                    alert_ops_team(&amp;format!("Critical node {} failed", node.id));
+                }
+            }
+            ClusterEvent::PartitionDetected(_) =&gt; {
+                metrics::increment_counter!("cluster.partitions");
+                alert_ops_team("Network partition detected");
+            }
+            _ =&gt; {}
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="health-dashboard"><a class="header" href="#health-dashboard">Health Dashboard</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>async fn health_dashboard(registry: Arc&lt;WorkerRegistry&gt;) -&gt; String {
+    let workers = registry.workers().await;
+    let total = workers.len();
+    let healthy = workers.iter().filter(|w| w.is_healthy()).count();
+    let degraded = workers.iter().filter(|w| w.is_degraded()).count();
+    let failed = total - healthy - degraded;
+    
+    format!(
+        "Cluster Health:\n\
+         Total Workers: {}\n\
+         Healthy: {} ({}%)\n\
+         Degraded: {} ({}%)\n\
+         Failed: {} ({}%)\n",
+        total,
+        healthy, (healthy * 100 / total),
+        degraded, (degraded * 100 / total),
+        failed, (failed * 100 / total)
+    )
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<h3 id="1-design-for-failure"><a class="header" href="#1-design-for-failure">1. Design for Failure</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Assume failures will happen
+// ✅ Good: Handle failures gracefully
+async fn process(data: Vec&lt;u8&gt;) -&gt; Result&lt;Response&gt; {
+    match call_worker(data.clone()).await {
+        Ok(response) =&gt; Ok(response),
+        Err(e) =&gt; {
+            log::error!("Worker call failed: {}", e);
+            fallback_processing(data).await
+        }
+    }
+}
+
+// ❌ Bad: No failure handling
+async fn process(data: Vec&lt;u8&gt;) -&gt; Result&lt;Response&gt; {
+    call_worker(data).await  // Will panic/error if worker fails
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="2-set-appropriate-timeouts"><a class="header" href="#2-set-appropriate-timeouts">2. Set Appropriate Timeouts</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// ✅ Good: Timeout prevents hanging
+let result = tokio::time::timeout(
+    Duration::from_secs(5),
+    worker.call("compute", data)
+).await??;
+
+// ❌ Bad: No timeout, could hang forever
+let result = worker.call("compute", data).await?;
+<span class="boring">}</span></code></pre></pre>
+<h3 id="3-implement-idempotency"><a class="header" href="#3-implement-idempotency">3. Implement Idempotency</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// ✅ Good: Idempotent operations safe to retry
+#[rpc_trait]
+pub trait ComputeService {
+    async fn process(&amp;self, request_id: Uuid, data: Vec&lt;u8&gt;) -&gt; Result&lt;Response&gt;;
+    //                      ^^^^^^^^^^^^ request ID makes it idempotent
+}
+
+// Check if already processed
+if let Some(cached) = self.check_cache(request_id).await {
+    return Ok(cached);
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="4-monitor-everything"><a class="header" href="#4-monitor-everything">4. Monitor Everything</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Track all failure types
+metrics::increment_counter!("failures.node_crash");
+metrics::increment_counter!("failures.timeout");
+metrics::increment_counter!("failures.partition");
+metrics::gauge!("cluster.healthy_nodes", healthy_count as f64);
+<span class="boring">}</span></code></pre></pre>
+<h3 id="5-test-failure-scenarios"><a class="header" href="#5-test-failure-scenarios">5. Test Failure Scenarios</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[tokio::test]
+async fn test_worker_failure() {
+    // Start cluster
+    let (director, workers) = setup_cluster().await;
+    
+    // Kill one worker
+    workers[0].shutdown().await;
+    
+    // Verify requests still succeed
+    let client = ResilientClient::new(director.registry());
+    let result = client.call("compute", vec![1, 2, 3]).await;
+    assert!(result.is_ok());
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<ul>
+<li><strong><a href="discovery.html">Discovery</a></strong> - Understand how nodes discover failures</li>
+<li><strong><a href="health.html">Health Checking</a></strong> - Learn about Phi Accrual detection</li>
+<li><strong><a href="../advanced/production.html">Production Guide</a></strong> - Deploy resilient clusters</li>
+</ul>
+<h2 id="references"><a class="header" href="#references">References</a></h2>
+<ul>
+<li><a href="https://en.wikipedia.org/wiki/Fallacies_of_distributed_computing">Fallacies of Distributed Computing</a> - Common mistakes</li>
+<li><a href="https://en.wikipedia.org/wiki/CAP_theorem">CAP Theorem</a> - Consistency vs Availability trade-offs</li>
+<li><a href="https://martinfowler.com/bliki/CircuitBreaker.html">Circuit Breaker Pattern</a> - Martin Fowler's article</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../cluster/pooling.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../streaming-overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../cluster/pooling.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../streaming-overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

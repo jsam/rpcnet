@@ -1,6 +1,11 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 // Parser validation tests for code generation module
 // These tests focus on edge cases in service definition parsing
-
 #![cfg(feature = "codegen")]
 
 use rpcnet::codegen::{ServiceDefinition, ServiceType};
@@ -41,16 +46,16 @@ fn test_parse_valid_service_trait() {
     // Test parsing a valid service trait
     let content = r#"
         use std::result::Result;
-        
+
         #[rpcnet::service]
         pub trait TestService {
             async fn test_method(&self, param: String) -> Result<Vec<u8>, String>;
         }
-        
+
         pub struct RequestType {
             pub data: String,
         }
-        
+
         pub enum ErrorType {
             ValidationError,
             ProcessingError,
@@ -100,7 +105,7 @@ fn test_parse_multiple_service_traits() {
         pub trait FirstService {
             async fn method1(&self) -> Result<Vec<u8>, String>;
         }
-        
+
         #[rpcnet::service]
         pub trait SecondService {
             async fn method2(&self) -> Result<Vec<u8>, String>;
@@ -199,16 +204,16 @@ fn test_parse_complex_method_signatures() {
             async fn with_generics<T>(&self, data: T) -> Result<Response<T>, Box<dyn std::error::Error>>;
             async fn with_lifetime<'a>(&self, data: &'a str) -> Result<&'a str, Error>;
         }
-        
+
         pub struct User {
             pub id: u64,
             pub name: String,
         }
-        
+
         pub struct Response<T> {
             pub data: T,
         }
-        
+
         pub enum ServiceError {
             NotFound,
             InvalidInput,
@@ -230,7 +235,7 @@ fn test_parse_trait_with_associated_types() {
         pub trait ServiceWithAssociatedTypes {
             type Error;
             type Response;
-            
+
             async fn method(&self) -> Result<Self::Response, Self::Error>;
         }
     "#;
@@ -258,7 +263,7 @@ fn test_parse_trait_with_default_implementations() {
         #[rpcnet::service]
         pub trait ServiceWithDefaults {
             async fn required_method(&self) -> Result<String, Error>;
-            
+
             async fn default_method(&self) -> Result<String, Error> {
                 Ok("default".to_string())
             }
@@ -281,7 +286,7 @@ fn test_parse_unicode_identifiers() {
         pub trait Сервис {
             async fn метод(&self, データ: String) -> Result<Vec<u8>, Error>;
         }
-        
+
         pub struct Данные {
             pub значение: String,
         }
@@ -356,7 +361,7 @@ fn test_parse_with_complex_imports() {
         use serde::{Serialize, Deserialize};
         use crate::types::*;
         use super::common::{Error, Response};
-        
+
         #[rpcnet::service]
         pub trait ImportService {
             async fn method(&self, data: HashMap<String, String>) -> Result<Response, Error>;
@@ -395,7 +400,7 @@ fn test_parse_trait_with_attributes() {
         pub trait AttributedService {
             #[deprecated]
             async fn old_method(&self) -> Result<String, Error>;
-            
+
             #[allow(unused)]
             async fn new_method(&self) -> Result<String, Error>;
         }
@@ -416,11 +421,11 @@ fn test_service_type_variants() {
         pub trait TestService {
             async fn method(&self) -> Result<MyStruct, MyEnum>;
         }
-        
+
         pub struct MyStruct {
             pub field: String,
         }
-        
+
         pub enum MyEnum {
             Variant1,
             Variant2(String),

@@ -39,10 +39,10 @@ serde = { version = "1", features = ["derive"] }
 
 ## Step 3: Install the rpcnet-gen CLI
 
-Install the generator globally so every project can call it:
+Starting with v0.2.0, the CLI is included by default when you install rpcnet:
 
 ```bash
-cargo install rpcnet --features codegen --bin rpcnet-gen
+cargo install rpcnet  # CLI automatically included!
 ```
 
 Verify the install:

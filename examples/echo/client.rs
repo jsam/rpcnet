@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 //! Echo client using generated code.
 
 #[path = "generated/echo/mod.rs"]

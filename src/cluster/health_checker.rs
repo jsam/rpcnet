@@ -99,10 +99,7 @@ impl HealthChecker {
 
     pub async fn phi(&self, node_id: &NodeId) -> f64 {
         let detectors = self.detectors.read().await;
-        detectors
-            .get(node_id)
-            .map(|d| d.phi())
-            .unwrap_or(0.0)
+        detectors.get(node_id).map(|d| d.phi()).unwrap_or(0.0)
     }
 }
 
@@ -110,7 +107,7 @@ impl HealthChecker {
 mod tests {
     use super::*;
     use crate::cluster::incarnation::{Incarnation, NodeStatus};
-    
+
     use std::time::Instant;
 
     #[tokio::test]
@@ -121,7 +118,7 @@ mod tests {
 
         let checker = HealthChecker::new(config, registry, broadcaster);
 
-        assert_eq!(checker.running.load(Ordering::SeqCst), false);
+        assert!(!checker.running.load(Ordering::SeqCst));
     }
 
     #[tokio::test]
@@ -176,7 +173,7 @@ mod tests {
 
         if let Some(ClusterEvent::NodeFailed(failed_id)) = event {
             assert_eq!(failed_id.as_str(), "failing-node");
-            
+
             let updated = registry.get(&node_id).unwrap();
             assert_eq!(updated.state, NodeState::Suspect);
         }
@@ -201,7 +198,7 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(20)).await;
 
-        assert_eq!(checker.running.load(Ordering::SeqCst), false);
+        assert!(!checker.running.load(Ordering::SeqCst));
 
         handle.abort();
     }

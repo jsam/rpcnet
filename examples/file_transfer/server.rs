@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 //! File transfer server using generated code.
 
 #[path = "generated/filetransfer/mod.rs"]

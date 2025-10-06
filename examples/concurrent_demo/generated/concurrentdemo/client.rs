@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 use super::types::*;
 use rpcnet::{RpcClient, RpcConfig, RpcError};
 use std::net::SocketAddr;

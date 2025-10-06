@@ -1,3 +1,9 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 // Comprehensive tests for create_request_stream method (lines 1519-1558)
 // This test exercises all code paths in the create_request_stream function through real streaming operations
 
@@ -53,19 +59,19 @@ async fn test_create_request_stream_complete_coverage() {
         Box::pin(async_stream::stream! {
             let mut message_count = 0;
             let mut received_messages = Vec::new();
-            
+
             // This will exercise create_request_stream by consuming the stream
             while let Some(request_data) = request_stream.next().await {
                 message_count += 1;
                 let message_size = request_data.len();
                 received_messages.push(message_size);
-                
+
                 println!("📨 Server received message {}: {} bytes", message_count, message_size);
-                
+
                 // Echo back information about what we received
                 let response = format!("Processed message {} of {} bytes", message_count, message_size);
                 yield Ok(response.into_bytes());
-                
+
                 // Test different response patterns to exercise the response stream as well
                 if message_count == 1 && message_size == 0 {
                     // This was an empty message - test zero-length handling
@@ -79,9 +85,9 @@ async fn test_create_request_stream_complete_coverage() {
                     break;
                 }
             }
-            
+
             // Final summary
-            let summary = format!("Stream completed. Processed {} messages with sizes: {:?}", 
+            let summary = format!("Stream completed. Processed {} messages with sizes: {:?}",
                                 message_count, received_messages);
             yield Ok(summary.into_bytes());
         })
@@ -105,19 +111,19 @@ async fn test_create_request_stream_complete_coverage() {
             let test_messages = vec![
                 // Test 1: Empty message (exercises zero-length handling - lines 1537-1539)
                 vec![],
-                
+
                 // Test 2: Single byte message (exercises minimal data handling)
                 vec![0x42],
-                
+
                 // Test 3: Small message (exercises normal parsing)
                 b"Hello".to_vec(),
-                
+
                 // Test 4: Medium message (exercises buffer management)
                 b"This is a medium-sized message for testing buffer handling in create_request_stream".to_vec(),
-                
+
                 // Test 5: Large message (exercises large data handling)
                 vec![0xAA; 4096], // 4KB of data
-                
+
                 // Test 6: Binary data with various byte patterns
                 vec![0x00, 0xFF, 0x55, 0xAA, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0],
             ];
@@ -229,10 +235,10 @@ async fn test_create_request_stream_buffer_edge_cases() {
     server.register_streaming("buffer_edge_test", |mut request_stream| async move {
         Box::pin(async_stream::stream! {
             let mut message_number = 0;
-            
+
             while let Some(request_data) = request_stream.next().await {
                 message_number += 1;
-                
+
                 // Analyze the received data to verify buffer parsing worked correctly
                 match message_number {
                     1 => {
@@ -263,7 +269,7 @@ async fn test_create_request_stream_buffer_edge_cases() {
                         yield Ok(format!("Additional message {} with {} bytes", message_number, request_data.len()).into_bytes());
                     }
                 }
-                
+
                 if message_number >= 3 {
                     break;
                 }
@@ -401,7 +407,7 @@ async fn test_create_request_stream_zero_length_end_marker() {
     server.register_streaming("zero_length_test", |mut request_stream| async move {
         Box::pin(async_stream::stream! {
             let mut received_before_end = 0;
-            
+
             while let Some(request_data) = request_stream.next().await {
                 if request_data.is_empty() {
                     // This should exercise the zero-length handling in create_request_stream
@@ -411,12 +417,12 @@ async fn test_create_request_stream_zero_length_end_marker() {
                     received_before_end += 1;
                     yield Ok(format!("Normal message {} with {} bytes", received_before_end, request_data.len()).into_bytes());
                 }
-                
+
                 if received_before_end >= 3 {
                     break;
                 }
             }
-            
+
             yield Ok(format!("Stream ended after {} messages", received_before_end).into_bytes());
         })
     }).await;

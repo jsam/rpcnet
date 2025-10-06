@@ -86,31 +86,36 @@ impl WorkerRegistry {
                             && node.tags.get("role").map(|v| v.as_str()) == Some("worker")
                     })
                     .collect();
-                
+
                 let mut workers_guard = workers.write().await;
-                
-                let current_node_ids: std::collections::HashSet<_> = 
+
+                let current_node_ids: std::collections::HashSet<_> =
                     all_workers.iter().map(|n| n.node_id.clone()).collect();
-                
+
                 workers_guard.retain(|node_id, _| current_node_ids.contains(node_id));
-                
+
                 for node_status in all_workers {
-                    workers_guard.entry(node_status.node_id.clone()).or_insert_with(|| {
-                        WorkerInfo::from_node_status(node_status)
-                    });
+                    workers_guard
+                        .entry(node_status.node_id.clone())
+                        .or_insert_with(|| WorkerInfo::from_node_status(node_status));
                 }
             }
         });
     }
 
-    pub async fn select_worker(&self, tag_filter: Option<&HashMap<String, String>>) -> Option<WorkerInfo> {
+    pub async fn select_worker(
+        &self,
+        tag_filter: Option<&HashMap<String, String>>,
+    ) -> Option<WorkerInfo> {
         let workers = self.workers.read().await;
-        
+
         let candidates: Vec<_> = workers
             .values()
             .filter(|w| {
                 if let Some(filter) = tag_filter {
-                    filter.iter().all(|(k, v)| w.tags.get(k).map(|val| val == v).unwrap_or(false))
+                    filter
+                        .iter()
+                        .all(|(k, v)| w.tags.get(k).map(|val| val == v).unwrap_or(false))
                 } else {
                     true
                 }
@@ -124,7 +129,8 @@ impl WorkerRegistry {
 
         match self.strategy {
             LoadBalancingStrategy::RoundRobin => {
-                let idx = self.round_robin_counter.fetch_add(1, Ordering::Relaxed) % candidates.len();
+                let idx =
+                    self.round_robin_counter.fetch_add(1, Ordering::Relaxed) % candidates.len();
                 Some(candidates[idx].clone())
             }
             LoadBalancingStrategy::Random => {
@@ -167,7 +173,6 @@ mod tests {
     use crate::cluster::{ClusterConfig, ClusterMembership};
     use s2n_quic::Client as QuicClient;
     use std::path::Path;
-    
 
     async fn create_test_client() -> Arc<QuicClient> {
         let cert_path = Path::new("certs/test_cert.pem");

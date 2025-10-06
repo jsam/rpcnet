@@ -66,9 +66,7 @@ where
                 this.timer.set(Some(sleep(*this.timeout)));
                 Poll::Ready(Some(Ok(item)))
             }
-            Poll::Ready(Some(Err(e))) => {
-                Poll::Ready(Some(Err(StreamError::Transport(e))))
-            }
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(StreamError::Transport(e)))),
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Pending => Poll::Pending,
         }
@@ -91,7 +89,7 @@ where
     pub fn new(buffer: usize) -> Self {
         let (tx, rx) = mpsc::channel::<T>(buffer);
         let stream = ReceiverStream::new(rx);
-        
+
         Self {
             sender: tx,
             stream: Box::pin(stream),
@@ -106,10 +104,10 @@ where
     {
         let (tx, rx) = mpsc::channel::<T>(buffer);
         let stream = ReceiverStream::new(rx);
-        
+
         let sender_clone = tx.clone();
         let abort_handle = tokio::spawn(task(sender_clone));
-        
+
         Self {
             sender: tx,
             stream: Box::pin(stream),

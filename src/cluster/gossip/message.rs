@@ -63,9 +63,8 @@ impl GossipMessage {
             });
         }
 
-        let serialized = bincode::serialize(self).map_err(|e| GossipError::SerializationError {
-            source: e,
-        })?;
+        let serialized =
+            bincode::serialize(self).map_err(|e| GossipError::SerializationError { source: e })?;
 
         if serialized.len() > MAX_MESSAGE_SIZE {
             return Err(GossipError::MessageTooLarge {
@@ -94,7 +93,7 @@ pub enum GossipError {
 mod tests {
     use super::*;
 
-    fn create_test_update(id: &str, incarnation_val: u64) -> NodeUpdate {
+    fn create_test_update(id: &str, _incarnation_val: u64) -> NodeUpdate {
         NodeUpdate {
             node_id: NodeId::new(id),
             addr: "127.0.0.1:8000".parse().unwrap(),

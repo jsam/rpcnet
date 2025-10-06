@@ -6,12 +6,13 @@ covers installation, day-to-day usage, and automation patterns.
 
 ## Installing
 
-The CLI ships with the `rpcnet` crate and is enabled by the `codegen` feature.
-Install it once and reuse it across workspaces:
+Starting with v0.2.0, the CLI is included by default with rpcnet. Install it once and reuse it across workspaces:
 
 ```bash
-cargo install rpcnet --features codegen --bin rpcnet-gen
+cargo install rpcnet
 ```
+
+The CLI is always available - no feature flags needed! This is a major usability improvement over v0.1.x.
 
 Add `--locked` in CI to guarantee reproducible dependency resolution.
 

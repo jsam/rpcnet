@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Getting Started - RpcNet Guide</title>
+        <title>Quick Start - RpcNet Guide</title>
 
 
         <!-- Custom HTML head -->
@@ -201,8 +201,8 @@ rpcnet = { version = "0.2", default-features = false }
 <pre><code class="language-toml">serde = { version = "1", features = ["derive"] }
 </code></pre>
 <h2 id="step-3-install-the-rpcnet-gen-cli"><a class="header" href="#step-3-install-the-rpcnet-gen-cli">Step 3: Install the rpcnet-gen CLI</a></h2>
-<p>Install the generator globally so every project can call it:</p>
-<pre><code class="language-bash">cargo install rpcnet --features codegen --bin rpcnet-gen
+<p>Starting with v0.2.0, the CLI is included by default when you install rpcnet:</p>
+<pre><code class="language-bash">cargo install rpcnet  # CLI automatically included!
 </code></pre>
 <p>Verify the install:</p>
 <pre><code class="language-bash">rpcnet-gen --help
@@ -387,11 +387,11 @@ server/client wiring, and streaming patterns.</li>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="concepts.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="introduction.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="connection-swapping.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="concepts.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -401,11 +401,11 @@ server/client wiring, and streaming patterns.</li>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="concepts.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="introduction.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="connection-swapping.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="concepts.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

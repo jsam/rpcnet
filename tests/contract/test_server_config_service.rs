@@ -1,3 +1,7 @@
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 use rpcnet::migration::{ServerConfigService, ServerConfig, PortConfig};
 use rpcnet::RpcError;
 

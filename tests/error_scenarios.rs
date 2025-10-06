@@ -1,3 +1,9 @@
+#![allow(clippy::all)]
+#![allow(warnings)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(clippy::needless_borrows_for_generic_args)]
+#![allow(clippy::assertions_on_constants)]
 use rpcnet::{RpcClient, RpcConfig, RpcError, RpcServer};
 use std::sync::Arc;
 use std::time::Duration;

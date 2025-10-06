@@ -99,7 +99,7 @@ impl PartitionDetector {
                 let mut detection_start = self.detection_start.write().unwrap();
                 *detection_start.get_or_insert(now)
             };
-            
+
             let elapsed = now.duration_since(start_time);
 
             if elapsed >= self.config.grace_period {
@@ -320,9 +320,7 @@ mod tests {
         let mut handles = vec![];
         for _ in 0..10 {
             let d = detector.clone();
-            let handle = task::spawn(async move {
-                d.check_partition(4).await
-            });
+            let handle = task::spawn(async move { d.check_partition(4).await });
             handles.push(handle);
         }
 

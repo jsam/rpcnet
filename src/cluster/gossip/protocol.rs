@@ -61,11 +61,14 @@ impl SwimProtocol {
 
     async fn protocol_period(&self) {
         use tracing::debug;
-        
+
         let nodes = self.registry.all_nodes();
-        
-        debug!("🔄 [SWIM] Protocol period: {} total nodes in registry", nodes.len());
-        
+
+        debug!(
+            "🔄 [SWIM] Protocol period: {} total nodes in registry",
+            nodes.len()
+        );
+
         if nodes.is_empty() {
             debug!("⚠️  [SWIM] No nodes to ping");
             return;
@@ -84,10 +87,15 @@ impl SwimProtocol {
 
             let seq = self.next_seq();
             let updates = self.queue.select_updates();
-            
-            debug!("📤 [SWIM] Sending Ping to {:?} at {} (seq={}, {} updates)", 
-                  target.node_id, target.addr, seq, updates.len());
-            
+
+            debug!(
+                "📤 [SWIM] Sending Ping to {:?} at {} (seq={}, {} updates)",
+                target.node_id,
+                target.addr,
+                seq,
+                updates.len()
+            );
+
             let ping = SwimMessage::Ping {
                 from: self.node_id.clone(),
                 from_addr: self.node_addr,
@@ -100,7 +108,10 @@ impl SwimProtocol {
             if ack_received {
                 debug!("✅ [SWIM] Received ACK from {:?}", target.node_id);
             } else {
-                debug!("⚠️  [SWIM] No ACK from {:?}, trying indirect ping", target.node_id);
+                debug!(
+                    "⚠️  [SWIM] No ACK from {:?}, trying indirect ping",
+                    target.node_id
+                );
                 self.indirect_ping(&target, ping).await;
             }
         }
@@ -119,7 +130,7 @@ impl SwimProtocol {
                 updated.last_seen = std::time::Instant::now();
                 self.registry.insert(updated);
                 true
-            },
+            }
             _ => false,
         }
     }
@@ -145,24 +156,24 @@ impl SwimProtocol {
             let ping_req = ping_req.clone();
             let pool = self.connection_pool.clone();
             let timeout_dur = self.config.indirect_timeout;
-            
+
             tasks.push(tokio::spawn(async move {
-                timeout(timeout_dur, Self::send_message_static(pool, intermediary.addr, &ping_req))
-                    .await
-                    .ok()
-                    .and_then(|r| r.ok())
-                    .and_then(|msg| msg)
+                timeout(
+                    timeout_dur,
+                    Self::send_message_static(pool, intermediary.addr, &ping_req),
+                )
+                .await
+                .ok()
+                .and_then(|r| r.ok())
+                .and_then(|msg| msg)
             }));
         }
 
         let results = futures::future::join_all(tasks).await;
-        
-        let ack_received = results.iter().any(|r| {
-            matches!(
-                r,
-                Ok(Some(SwimMessage::Ack { .. }))
-            )
-        });
+
+        let ack_received = results
+            .iter()
+            .any(|r| matches!(r, Ok(Some(SwimMessage::Ack { .. }))));
 
         if ack_received {
             let mut updated = target.clone();
@@ -190,7 +201,7 @@ impl SwimProtocol {
         };
 
         self.queue.enqueue(update, Priority::High);
-        
+
         self.event_broadcaster
             .send(ClusterEvent::NodeFailed(target.node_id.clone()));
     }
@@ -204,10 +215,7 @@ impl SwimProtocol {
             .collect();
 
         let mut rng = rand::thread_rng();
-        nodes
-            .choose_multiple(&mut rng, count)
-            .cloned()
-            .collect()
+        nodes.choose_multiple(&mut rng, count).cloned().collect()
     }
 
     async fn send_message(
@@ -224,20 +232,32 @@ impl SwimProtocol {
         msg: &SwimMessage,
     ) -> Result<Option<SwimMessage>, Box<dyn std::error::Error + Send + Sync>> {
         let conn = pool.get_or_create(addr).await?;
-        
+
         let bytes = msg.serialize()?;
-        
+
         let mut conn_guard = conn.connection.lock().await;
-        let mut stream = conn_guard.open_bidirectional_stream().await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        stream.send(bytes.into()).await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-        
-        let response = if let Some(data) = stream.receive().await.map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)? {
-            SwimMessage::deserialize(&data).map(Some).map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?
+        let mut stream = conn_guard
+            .open_bidirectional_stream()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+        stream
+            .send(bytes.into())
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+
+        let response = if let Some(data) = stream
+            .receive()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?
+        {
+            SwimMessage::deserialize(&data)
+                .map(Some)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?
         } else {
             None
         };
         drop(conn_guard);
-        
+
         pool.release(&addr);
         Ok(response)
     }
@@ -250,7 +270,7 @@ impl GossipProtocol for SwimProtocol {
 
         let running = self.running.clone();
         let period = self.config.protocol_period;
-        
+
         while running.load(Ordering::SeqCst) {
             self.protocol_period().await;
             sleep(period).await;
@@ -276,9 +296,9 @@ impl GossipProtocol for SwimProtocol {
 mod tests {
     use super::*;
     use crate::cluster::connection_pool::{ConnectionPoolImpl, PoolConfig};
+    use s2n_quic::Client as QuicClient;
     use std::collections::HashMap;
     use std::path::Path;
-    use s2n_quic::Client as QuicClient;
 
     async fn create_test_client() -> Arc<QuicClient> {
         let cert_path = Path::new("certs/test_cert.pem");

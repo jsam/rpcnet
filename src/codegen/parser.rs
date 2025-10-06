@@ -70,7 +70,7 @@ impl ServiceDefinition {
         let service_trait = service_trait.ok_or_else(|| {
             syn::Error::new(
                 proc_macro2::Span::call_site(),
-                "No service trait found. Add #[rpcnet::service] attribute to your trait.",
+                "No service trait found. Add #[rpc_trait] attribute to your trait.",
             )
         })?;
 
@@ -102,14 +102,20 @@ impl ServiceDefinition {
     }
 }
 
-/// Checks if a trait has the #[rpcnet::service] attribute.
+/// Checks if a trait has the #[rpc_trait] attribute.
 fn has_rpcnet_service_attribute(trait_item: &ItemTrait) -> bool {
     trait_item.attrs.iter().any(|attr| {
-        // Check for both #[rpcnet::service] and #[service] (assuming use rpcnet::service)
+        // Check for #[rpc_trait] (new style)
+        if attr.path().is_ident("rpc_trait") {
+            return true;
+        }
+
+        // Check for #[service] (for backwards compatibility)
         if attr.path().is_ident("service") {
             return true;
         }
 
+        // Check for #[rpcnet::service] (for backwards compatibility)
         if attr.path().segments.len() == 2 {
             let segments: Vec<_> = attr.path().segments.iter().collect();
             segments[0].ident == "rpcnet" && segments[1].ident == "service"

@@ -75,14 +75,16 @@ predicates = "3.1"
 
 [[bench]]
 name = "simple"
+path = "benches/simple.rs"
 harness = false
 
 # High-performance benchmark with optimizations enabled
-[[bench]]
-name = "simple_perf"
-path = "benches/simple.rs"
-harness = false
-required-features = ["perf"]
+# (Disabled to avoid duplicate target warning - use simple bench instead)
+# [[bench]]
+# name = "simple_perf"
+# path = "benches/simple.rs"
+# harness = false
+# required-features = ["perf"]
 
 # Streaming benchmark - server streaming responses
 [[bench]]
@@ -155,7 +157,9 @@ path = "examples/concurrent_demo/client.rs"
 required-features = ["codegen"]
 
 # Tarpaulin configuration for coverage analysis
-[tool.tarpaulin.config]
+# Note: This section uses non-standard TOML and may cause warnings
+# Consider moving to .tarpaulin.toml if warnings persist
+[package.metadata.tarpaulin]
 exclude-files = [
     "examples/*",
     "benches/*", 

@@ -61,15 +61,13 @@ impl ClusterEventBroadcaster {
     }
 
     pub fn send(&self, event: ClusterEvent) {
-        if self.tx.receiver_count() > 0 {
-            if let Err(_) = self.tx.send(event) {
-                let current_drops = self.drops.fetch_add(1, Ordering::SeqCst) + 1;
-                
-                if current_drops % 100 == 0 {
-                    let _ = self.tx.send(ClusterEvent::EventsDropped {
-                        count: current_drops,
-                    });
-                }
+        if self.tx.receiver_count() > 0 && self.tx.send(event).is_err() {
+            let current_drops = self.drops.fetch_add(1, Ordering::SeqCst) + 1;
+
+            if current_drops % 100 == 0 {
+                let _ = self.tx.send(ClusterEvent::EventsDropped {
+                    count: current_drops,
+                });
             }
         }
     }
@@ -234,10 +232,7 @@ mod tests {
         let mut receiver = broadcaster.subscribe();
 
         let result = receiver.try_recv();
-        assert!(matches!(
-            result,
-            Err(broadcast::error::TryRecvError::Empty)
-        ));
+        assert!(matches!(result, Err(broadcast::error::TryRecvError::Empty)));
 
         broadcaster.send(ClusterEvent::NodeFailed(NodeId::new("test")));
 
@@ -265,9 +260,6 @@ mod tests {
         let broadcaster1 = ClusterEventBroadcaster::with_default_capacity();
         let broadcaster2 = broadcaster1.clone();
 
-        assert_eq!(
-            Arc::ptr_eq(&broadcaster1.drops, &broadcaster2.drops),
-            true
-        );
+        assert!(Arc::ptr_eq(&broadcaster1.drops, &broadcaster2.drops));
     }
 }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 //! Basic greeting server using generated code.
 
 #[path = "generated/greeting/mod.rs"]

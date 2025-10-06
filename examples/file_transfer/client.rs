@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
 //! File transfer client using generated code.
 
 #[path = "generated/filetransfer/mod.rs"]
@@ -28,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file_id = "test_file_001";
     let test_data = b"This is a test file content that will be split into chunks for transfer.";
     let chunk_size = 20; // Small chunks for testing
-    let total_chunks = (test_data.len() + chunk_size - 1) / chunk_size;
+    let total_chunks = test_data.len().div_ceil(chunk_size);
 
     println!(
         "Uploading file '{}' in {} chunks of {} bytes each",

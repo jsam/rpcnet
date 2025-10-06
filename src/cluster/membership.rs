@@ -1,14 +1,17 @@
 use crate::cluster::connection_pool::{ConnectionPool, ConnectionPoolImpl, PoolConfig};
 use crate::cluster::events::{ClusterEvent, ClusterEventBroadcaster, ClusterEventReceiver};
-use crate::cluster::gossip::{GossipConfig, GossipProtocol, GossipQueue, NodeId, NodeState, NodeUpdate, Priority, SwimProtocol};
+use crate::cluster::gossip::{
+    GossipConfig, GossipProtocol, GossipQueue, NodeId, NodeState, NodeUpdate, Priority,
+    SwimProtocol,
+};
 use crate::cluster::health_checker::{HealthCheckConfig, HealthChecker};
 use crate::cluster::incarnation::{Incarnation, NodeStatus};
 use crate::cluster::node_registry::{NodeRegistry, SharedNodeRegistry};
 use s2n_quic::Client as QuicClient;
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tokio::time::timeout;
@@ -38,16 +41,16 @@ impl Default for ClusterConfig {
 pub enum ClusterError {
     #[error("No seed nodes are reachable")]
     NoSeedsReachable,
-    
+
     #[error("Bootstrap timeout after {0:?}")]
     BootstrapTimeout(Duration),
-    
+
     #[error("Cluster already joined")]
     AlreadyJoined,
-    
+
     #[error("Cluster not joined")]
     NotJoined,
-    
+
     #[error("Failed to create QUIC client: {0}")]
     QuicClientError(String),
 }
@@ -75,7 +78,7 @@ impl ClusterMembership {
         let node_id = config
             .node_id
             .clone()
-            .unwrap_or_else(|| NodeId::new(&format!("node-{}", node_addr)));
+            .unwrap_or_else(|| NodeId::new(format!("node-{}", node_addr)));
 
         let registry = SharedNodeRegistry::new();
         let event_broadcaster = ClusterEventBroadcaster::with_default_capacity();
@@ -165,9 +168,9 @@ impl ClusterMembership {
             match self.pool.get_or_create(seed_addr).await {
                 Ok(_conn) => {
                     self.pool.release(&seed_addr);
-                    
+
                     let seed_node = NodeStatus {
-                        node_id: NodeId::new(&format!("seed-{}", seed_addr)),
+                        node_id: NodeId::new(format!("seed-{}", seed_addr)),
                         addr: seed_addr,
                         incarnation: Incarnation::initial(),
                         state: NodeState::Alive,
@@ -175,7 +178,7 @@ impl ClusterMembership {
                         tags: HashMap::new(),
                     };
                     self.registry.insert(seed_node);
-                    
+
                     return Ok(());
                 }
                 Err(_) => continue,
@@ -476,7 +479,9 @@ mod tests {
 
         let cluster = ClusterMembership::new(addr, config, client).await.unwrap();
 
-        cluster.update_tag("role".to_string(), "worker".to_string()).await;
+        cluster
+            .update_tag("role".to_string(), "worker".to_string())
+            .await;
 
         let tags = cluster.tags.read().await;
         assert_eq!(tags.get("role"), Some(&"worker".to_string()));
@@ -490,7 +495,9 @@ mod tests {
 
         let cluster = ClusterMembership::new(addr, config, client).await.unwrap();
 
-        cluster.update_tag("role".to_string(), "worker".to_string()).await;
+        cluster
+            .update_tag("role".to_string(), "worker".to_string())
+            .await;
         cluster.remove_tag("role").await;
 
         let tags = cluster.tags.read().await;
@@ -505,7 +512,9 @@ mod tests {
 
         let cluster = ClusterMembership::new(addr, config, client).await.unwrap();
 
-        cluster.update_tag("role".to_string(), "worker".to_string()).await;
+        cluster
+            .update_tag("role".to_string(), "worker".to_string())
+            .await;
 
         let mut other_node = NodeStatus {
             node_id: NodeId::new("other-node"),
@@ -515,7 +524,9 @@ mod tests {
             last_seen: Instant::now(),
             tags: HashMap::new(),
         };
-        other_node.tags.insert("role".to_string(), "worker".to_string());
+        other_node
+            .tags
+            .insert("role".to_string(), "worker".to_string());
         cluster.registry().insert(other_node);
 
         let workers = cluster.nodes_with_tag("role", "worker").await;
@@ -587,8 +598,12 @@ mod tests {
         tags_map.insert("role".to_string(), "worker".to_string());
         tags_map.insert("zone".to_string(), "us-east".to_string());
 
-        cluster.update_tag("role".to_string(), "worker".to_string()).await;
-        cluster.update_tag("zone".to_string(), "us-east".to_string()).await;
+        cluster
+            .update_tag("role".to_string(), "worker".to_string())
+            .await;
+        cluster
+            .update_tag("zone".to_string(), "us-east".to_string())
+            .await;
 
         let mut other_node = NodeStatus {
             node_id: NodeId::new("other-node"),
@@ -598,7 +613,9 @@ mod tests {
             last_seen: Instant::now(),
             tags: HashMap::new(),
         };
-        other_node.tags.insert("role".to_string(), "worker".to_string());
+        other_node
+            .tags
+            .insert("role".to_string(), "worker".to_string());
         cluster.registry().insert(other_node);
 
         let nodes = cluster.nodes_with_all_tags(&tags_map).await;

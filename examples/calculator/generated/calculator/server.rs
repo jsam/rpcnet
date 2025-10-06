@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 use super::types::*;
 use async_trait::async_trait;
 use rpcnet::{RpcConfig, RpcError, RpcServer};
