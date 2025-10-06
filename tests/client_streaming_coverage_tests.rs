@@ -40,7 +40,7 @@ async fn test_call_client_streaming_coverage() {
 
     println!("📍 Starting test_call_client_streaming_coverage");
 
-    let mut server = RpcServer::new(create_test_config(0));
+    let server = RpcServer::new(create_test_config(0));
 
     // Register a streaming handler for client streaming
     println!("📍 Registering streaming handler for client streaming");
@@ -163,7 +163,7 @@ async fn test_call_client_streaming_empty_stream() {
 
     println!("📍 Testing client streaming with empty stream");
 
-    let mut server = RpcServer::new(create_test_config(0));
+    let server = RpcServer::new(create_test_config(0));
 
     server
         .register_streaming("count_messages", |mut request_stream| async move {
@@ -230,7 +230,7 @@ async fn test_call_client_streaming_large_stream() {
 
     println!("📍 Testing client streaming with large stream");
 
-    let mut server = RpcServer::new(create_test_config(0));
+    let server = RpcServer::new(create_test_config(0));
 
     server.register_streaming("process_large_stream", |mut request_stream| async move {
         Box::pin(async_stream::stream! {

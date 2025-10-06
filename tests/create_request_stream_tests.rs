@@ -46,7 +46,7 @@ async fn test_create_request_stream_complete_coverage() {
     // - Lines 1548-1550: Incomplete message handling
     // - Lines 1552-1555: Connection closed/error handling
 
-    let mut server = RpcServer::new(create_test_config(0));
+    let server = RpcServer::new(create_test_config(0));
 
     // Register a streaming handler that will receive and process all our test messages
     server.register_streaming("comprehensive_test", |mut request_stream| async move {
@@ -223,7 +223,7 @@ async fn test_create_request_stream_buffer_edge_cases() {
 
     println!("📍 Starting test_create_request_stream_buffer_edge_cases");
 
-    let mut server = RpcServer::new(create_test_config(0));
+    let server = RpcServer::new(create_test_config(0));
 
     println!("📍 Registering streaming handler for buffer_edge_test");
     server.register_streaming("buffer_edge_test", |mut request_stream| async move {
@@ -395,7 +395,7 @@ async fn test_create_request_stream_zero_length_end_marker() {
 
     println!("📍 Starting test_create_request_stream_zero_length_end_marker");
 
-    let mut server = RpcServer::new(create_test_config(0));
+    let server = RpcServer::new(create_test_config(0));
 
     println!("📍 Registering streaming handler for zero_length_test");
     server.register_streaming("zero_length_test", |mut request_stream| async move {

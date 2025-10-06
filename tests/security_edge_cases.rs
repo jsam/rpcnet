@@ -1,7 +1,7 @@
 // Security edge case tests to improve coverage
 // These tests focus on TLS validation, certificate errors, and authentication edge cases
 
-use rpcnet::{RpcClient, RpcConfig, RpcError, RpcServer};
+use rpcnet::{RpcClient, RpcConfig, RpcServer};
 use std::time::Duration;
 use tokio::time::timeout;
 

@@ -2,7 +2,7 @@
 // This test focuses on confirming that streaming operations trigger the create_request_stream code path
 
 use futures::StreamExt;
-use rpcnet::{RpcClient, RpcConfig, RpcError, RpcServer};
+use rpcnet::{RpcClient, RpcConfig, RpcServer};
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -147,7 +147,7 @@ async fn test_create_request_stream_handler_registration() {
     // This test verifies that streaming handler registration works,
     // which is a prerequisite for create_request_stream to be called
 
-    let mut server = RpcServer::new(create_test_config(0));
+    let server = RpcServer::new(create_test_config(0));
 
     // Register multiple streaming handlers to test the streaming infrastructure
     server

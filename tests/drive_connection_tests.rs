@@ -3,7 +3,7 @@
 
 use rpcnet::{ConnectionDriveOutcome, RpcConfig, RpcServer};
 use std::sync::Arc;
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::oneshot;
 
 // Mock implementation for testing drive_connection logic
 // Since we can't easily mock QUIC connections, we'll test the logic we can access

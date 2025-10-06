@@ -1,4 +1,4 @@
-use futures::{stream, StreamExt};
+use futures::StreamExt;
 use rpcnet::{RpcClient, RpcConfig, RpcServer};
 use std::time::Duration;
 

@@ -3,7 +3,6 @@
 
 use futures::{SinkExt, StreamExt};
 use rpcnet::{RpcClient, RpcConfig, RpcError, RpcServer};
-use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -143,7 +142,7 @@ async fn test_server_streaming_with_mock_data() {
     // Test server-side streaming functionality
 
     let config = create_test_config("127.0.0.1:0");
-    let mut server = RpcServer::new(config);
+    let server = RpcServer::new(config);
 
     // Register a streaming handler to exercise streaming code paths
     server
@@ -249,7 +248,7 @@ async fn test_streaming_request_stream_errors() {
     // Test request stream error scenarios
 
     let config = create_test_config("127.0.0.1:0");
-    let mut server = RpcServer::new(config);
+    let server = RpcServer::new(config);
 
     // Register a handler that tests request stream error handling
     server
@@ -286,7 +285,7 @@ async fn test_response_stream_send_failures() {
     // Test response stream send failure scenarios
 
     let config = create_test_config("127.0.0.1:0");
-    let mut server = RpcServer::new(config);
+    let server = RpcServer::new(config);
 
     // Register a handler that simulates send failures
     server
@@ -364,7 +363,7 @@ async fn test_buffer_management_edge_cases() {
     // Test buffer management in streaming scenarios
 
     let config = create_test_config("127.0.0.1:0");
-    let mut server = RpcServer::new(config);
+    let server = RpcServer::new(config);
 
     // Register handler that tests buffer edge cases
     server

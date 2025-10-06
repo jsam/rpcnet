@@ -110,7 +110,7 @@ impl HealthChecker {
 mod tests {
     use super::*;
     use crate::cluster::incarnation::{Incarnation, NodeStatus};
-    use std::net::SocketAddr;
+    
     use std::time::Instant;
 
     #[tokio::test]

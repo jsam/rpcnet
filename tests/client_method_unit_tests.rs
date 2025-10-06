@@ -2,7 +2,7 @@
 // These tests focus on exercising the method logic without requiring full networking
 
 use futures::StreamExt;
-use rpcnet::{RpcClient, RpcConfig, RpcError};
+use rpcnet::{RpcConfig, RpcError};
 use std::time::Duration;
 
 fn create_test_config() -> RpcConfig {

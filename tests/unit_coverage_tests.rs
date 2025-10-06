@@ -2,10 +2,8 @@
 // These tests directly exercise the methods without requiring full networking
 
 use futures::StreamExt;
-use rpcnet::{RpcClient, RpcConfig, RpcError, RpcServer};
-use std::sync::Arc;
+use rpcnet::{RpcConfig, RpcError, RpcServer};
 use std::time::Duration;
-use tokio::sync::Mutex;
 
 fn create_basic_config() -> RpcConfig {
     RpcConfig::new("test_cert.pem", "127.0.0.1:0")

@@ -167,7 +167,7 @@ mod tests {
     use crate::cluster::{ClusterConfig, ClusterMembership};
     use s2n_quic::Client as QuicClient;
     use std::path::Path;
-    use std::time::Duration;
+    
 
     async fn create_test_client() -> Arc<QuicClient> {
         let cert_path = Path::new("certs/test_cert.pem");

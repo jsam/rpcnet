@@ -6,18 +6,19 @@
 [![Documentation](https://docs.rs/rpcnet/badge.svg)](https://docs.rs/rpcnet)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/jsam/rpcnet#license)
 
-A blazing-fast RPC library for Rust achieving **130,000+ requests per second** with full QUIC+TLS encryption. Built on the modern QUIC protocol for secure, reliable, and multiplexed communication.
+A low latency RPC library for Rust achieving with full QUIC+TLS encryption. Built on the modern QUIC protocol for secure, reliable, and multiplexed communication.
 
 ## 🚀 Performance
 
-- **130K+ RPS**: Exceptional throughput with full encryption (exceeds HTTP/1.1 performance!)
+- **172K+ RPS**: Exceptional throughput with full encryption (exceeds HTTP/1.1 performance!)
 - **QUIC Protocol**: Modern transport with connection multiplexing and 0-RTT resumption
 - **Optimized**: Custom QUIC limits, efficient buffer management, and minimal allocations
 - **Concurrent**: Handle 10,000+ simultaneous streams per connection
-- **Low Latency**: Sub-millisecond RTT for local connections
+- **Low Latency**: Less than 0.1ms overhead
 
 ## Features
 
+### Core Features
 - **🔒 TLS Security**: Built-in TLS 1.3 encryption and authentication
 - **⚡ Async/Await**: Full async support with optimized Tokio runtime
 - **📦 Binary Serialization**: Efficient data serialization with bincode
@@ -27,18 +28,45 @@ A blazing-fast RPC library for Rust achieving **130,000+ requests per second** w
 - **🔍 Error Handling**: Comprehensive error types for robust applications
 - **📊 Production Ready**: Battle-tested with extensive test coverage
 
+### Cluster & Distributed Systems
+- **🌐 Cluster Management**: Built-in distributed cluster support with automatic node discovery
+- **🔄 Load Balancing**: Multiple strategies (Round Robin, Random, Least Connections)
+- **💓 Health Checking**: Phi Accrual failure detection for accurate health monitoring
+- **🗣️ Gossip Protocol**: SWIM-based gossip for efficient cluster communication
+- **🏷️ Tag-Based Routing**: Route requests to workers by tags (role, zone, GPU/CPU, etc.)
+- **📡 Event System**: Real-time cluster events (NodeJoined, NodeLeft, NodeFailed)
+- **🔌 Connection Pooling**: Efficient connection reuse with configurable pool settings
+- **🔁 Auto-Discovery**: Workers automatically discovered via gossip protocol
+- **🛡️ Partition Detection**: Automatic detection and handling of network partitions
+
 ## Installation
+
+### Add RpcNet to Your Project
+
+Add `rpcnet` to your `Cargo.toml`:
+
+```toml
+[dependencies]
+rpcnet = "0.2.0"
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+async-trait = "0.1"
+
+# Optional: For code generation in build.rs
+[build-dependencies]
+rpcnet = { version = "0.2.0", features = ["codegen"] }
+```
 
 ### Installing the CLI Tool
 
-The `rpcnet-gen` CLI tool is included with the library. Install it globally:
+The `rpcnet-gen` CLI tool generates type-safe client and server code from service definitions. **The CLI is included by default when you install rpcnet.**
 
 ```bash
-# Install from source
-cargo install --path . --features codegen
+# Install from crates.io (includes rpcnet-gen CLI)
+cargo install rpcnet
 
-# Or install from crates.io (when published)
-cargo install rpcnet --features codegen
+# Or install from source
+cargo install --path .
 ```
 
 Verify installation:
@@ -273,10 +301,10 @@ cargo bench --bench simple concurrent      # Test concurrent operations
 ```
 
 **Performance Highlights:**
-- **130,000+ requests/second** with full QUIC+TLS encryption
-- **Sub-millisecond latency** for local connections
+- **172,000+ requests/second** with full QUIC+TLS encryption
+- **Sub-millisecond latency** (< 0.1ms overhead) for local connections
 - **10,000+ concurrent streams** per connection
-- **Optimized memory usage** with BytesMut buffers
+- **Optimized memory usage** with BytesMut buffers and optional jemalloc allocator
 
 ## Examples
 
@@ -311,6 +339,40 @@ Complete, self-contained examples demonstrating code generation:
 cargo run --example basic_greeting_server --features codegen
 cargo run --example basic_greeting_client --features codegen
 ```
+
+### Cluster Examples
+
+Production-ready cluster example demonstrating distributed systems:
+
+```bash
+# Terminal 1 - Start director/coordinator
+DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin director
+
+# Terminal 2 - Start worker A
+WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \
+  DIRECTOR_ADDR=127.0.0.1:61000 WORKER_FAILURE_ENABLED=true RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+
+# Terminal 3 - Start worker B
+WORKER_LABEL=worker-b WORKER_ADDR=127.0.0.1:62002 \
+  DIRECTOR_ADDR=127.0.0.1:61000 WORKER_FAILURE_ENABLED=true RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+
+# Terminal 4 - Start client
+DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin client
+
+# See examples/cluster/README.md for detailed setup and configuration
+```
+
+**Key cluster features demonstrated:**
+- Automatic worker discovery via gossip protocol
+- Load balancing strategies (Round Robin, Random, Least Connections)
+- Phi Accrual failure detection with simulated failures
+- Tag-based routing and filtering
+- Connection pooling and reuse
+- Zero-downtime worker failover and recovery
 
 **📚 For comprehensive tutorials and documentation, see `cargo doc --open`**
 

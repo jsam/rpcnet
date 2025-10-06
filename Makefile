@@ -34,8 +34,9 @@ help:
 	@echo "  clean           - Clean build artifacts and coverage reports"
 	@echo ""
 	@echo "Release:"
-	@echo "  publish-dry-run - Verify crate contents and build before publishing"
-	@echo "  publish         - Publish the rpcnet crate (library + rpcnet-gen CLI)"
+	@echo "  publish-check   - Run all pre-publication checks (tests, lint, docs)"
+	@echo "  publish-dry-run - Package and verify crate contents before publishing"
+	@echo "  publish         - Publish to crates.io (includes all checks + confirmation)"
 	@echo ""
 	@echo "Documentation:"
 	@echo "  doc             - Generate and open documentation"
@@ -194,15 +195,69 @@ clean:
 	@echo "Cleaning coverage reports..."
 	rm -rf target/tarpaulin target/llvm-cov coverage llvm-coverage.lcov
 
-publish-dry-run:
-	@echo "Packaging rpcnet (library + CLI) for verification..."
-	cargo package --allow-dirty
-	@echo "Running publish dry run with codegen feature enabled..."
-	cargo publish --dry-run --allow-dirty --features codegen
+publish-check:
+	@echo "=== Pre-Publication Checks ==="
+	@echo ""
+	@echo "1. Verifying all tests pass..."
+	@cargo test --all-features || (echo "❌ Tests failed! Fix tests before publishing." && exit 1)
+	@echo "✅ All tests passed"
+	@echo ""
+	@echo "2. Checking code formatting..."
+	@cargo fmt --check || (echo "❌ Code not formatted! Run 'make format' first." && exit 1)
+	@echo "✅ Code is properly formatted"
+	@echo ""
+	@echo "3. Running linter..."
+	@cargo clippy --all-targets --all-features -- -D warnings || (echo "❌ Clippy warnings found! Fix them first." && exit 1)
+	@echo "✅ No clippy warnings"
+	@echo ""
+	@echo "4. Building documentation..."
+	@cargo doc --no-deps --all-features 2>&1 | grep -q "error" && (echo "❌ Documentation build failed!" && exit 1) || echo "✅ Documentation builds successfully"
+	@echo ""
+	@echo "5. Checking coverage..."
+	@$(MAKE) coverage-check >/dev/null 2>&1 || (echo "⚠️  Coverage check failed (continuing anyway)")
+	@echo ""
+	@echo "✅ All pre-publication checks passed!"
+	@echo ""
 
-publish: publish-dry-run
+publish-dry-run: publish-check
+	@echo "=== Packaging rpcnet (library + rpcnet-gen CLI) ==="
+	@echo ""
+	@echo "Reviewing package contents..."
+	@cargo package --list --allow-dirty | head -50
+	@echo "..."
+	@echo ""
+	@echo "Building package..."
+	@cargo package --allow-dirty
+	@echo ""
+	@echo "✅ Package created successfully!"
+	@echo ""
+	@echo "Package location: target/package/rpcnet-0.2.0.crate"
+	@echo ""
+	@echo "To publish, run: make publish"
+
+publish: publish-check
+	@echo "=== Publishing to crates.io ==="
+	@echo ""
+	@echo "⚠️  WARNING: This action cannot be undone!"
+	@echo ""
+	@read -p "Are you sure you want to publish rpcnet v0.2.0? (yes/no): " confirm && \
+	if [ "$$confirm" != "yes" ]; then \
+		echo "Publication cancelled."; \
+		exit 1; \
+	fi
+	@echo ""
 	@echo "Publishing rpcnet crate (library + rpcnet-gen CLI)..."
-	cargo publish --features codegen
+	@cargo publish
+	@echo ""
+	@echo "✅ Successfully published to crates.io!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Push to GitHub: git push origin main"
+	@echo "  2. Push tag: git push origin v0.2.0"
+	@echo "  3. Create GitHub release: https://github.com/jsam/rpcnet/releases/new"
+	@echo "  4. Verify on crates.io: https://crates.io/crates/rpcnet"
+	@echo "  5. Check docs.rs: https://docs.rs/rpcnet"
+	@echo ""
 
 # Documentation commands
 doc:

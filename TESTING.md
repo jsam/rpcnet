@@ -2,6 +2,9 @@
 
 This document provides comprehensive information about testing the RpcNet library, including how to run tests, interpret coverage reports, and contribute new tests.
 
+**Version**: 0.2.0  
+**Last Updated**: 2025-01-06
+
 ## Table of Contents
 
 - [Test Organization](#test-organization)
@@ -19,39 +22,67 @@ RpcNet uses a multi-layered testing approach:
 ### Directory Structure
 ```
 rpcnet/
-├── src/lib.rs              # Library with embedded unit tests
+├── src/
+│   ├── lib.rs              # Core library with embedded unit tests
+│   ├── cluster/            # Cluster management with tests
+│   ├── streaming/          # Streaming support
+│   └── codegen/            # Code generation (always included)
 ├── tests/
-│   ├── unit_tests.rs       # Comprehensive unit tests
-│   ├── integration_tests.rs # Client-server integration tests
-│   └── error_scenarios.rs  # Error handling and edge cases
-├── examples/               # Example code (also serves as integration tests)
-└── benches/                # Performance benchmarks
+│   ├── *_tests.rs          # Comprehensive test suites
+│   ├── cluster_integration.rs # Cluster functionality tests
+│   └── streaming_*.rs      # Streaming-specific tests
+├── examples/
+│   ├── basic_*/            # Basic examples
+│   ├── cluster/            # Cluster example with full setup
+│   └── */                  # Code generation examples
+└── benches/                # Performance benchmarks (172K+ RPS)
 ```
 
 ### Test Types
 
-1. **Unit Tests** (`src/lib.rs` and `tests/unit_tests.rs`)
+1. **Unit Tests** (`src/lib.rs` and `tests/*_unit_tests.rs`)
    - Test individual components in isolation
    - Cover all public APIs
    - Test serialization/deserialization
    - Validate configuration builders
 
-2. **Integration Tests** (`tests/integration_tests.rs`)
+2. **Integration Tests** (`tests/*_integration_tests.rs`)
    - Test client-server communication
    - Test concurrent operations
    - Test large payload handling
    - Test real network scenarios
 
-3. **Error Scenario Tests** (`tests/error_scenarios.rs`)
+3. **Cluster Tests** (`tests/cluster_integration.rs`)
+   - Test gossip protocol (SWIM)
+   - Test failure detection (Phi Accrual)
+   - Test load balancing strategies
+   - Test worker discovery and health checking
+   - Test connection pooling
+
+4. **Streaming Tests** (`tests/streaming_*.rs`, `tests/*_streaming_*.rs`)
+   - Test bidirectional streaming
+   - Test client streaming
+   - Test server streaming
+   - Test backpressure handling
+   - Test stream error recovery
+
+5. **Error Scenario Tests** (`tests/*_error_tests.rs`)
    - Test error handling and recovery
    - Test network failures
    - Test configuration errors
    - Test timeout scenarios
 
-4. **Example Tests** (`examples/`)
+6. **Code Generation Tests** (`tests/codegen_*.rs`)
+   - Test generated client code
+   - Test generated server code
+   - Test type generation
+   - Test edge cases in code generation
+
+7. **Example Tests** (`examples/`)
    - Demonstrate real-world usage
    - Serve as integration tests
    - Show best practices
+   - Include cluster example with failure scenarios
 
 ## Running Tests
 
@@ -61,20 +92,27 @@ rpcnet/
 # Run all tests
 cargo test
 
-# Run only unit tests
+# Run only unit tests (library tests)
 cargo test --lib
 
 # Run only integration tests
 cargo test --test '*'
 
-# Run tests for a specific module
-cargo test --test unit_tests
+# Run specific test suite
+cargo test --test cluster_integration
+cargo test --test streaming_coverage_tests
 
 # Run tests with output
 cargo test -- --nocapture
 
 # Run tests in single thread (for debugging)
 cargo test -- --test-threads=1
+
+# Run tests with all features
+cargo test --all-features
+
+# Run cluster example tests
+cargo test --manifest-path examples/cluster/Cargo.toml
 ```
 
 ### Using Make Commands
@@ -136,8 +174,12 @@ RpcNet enforces strict coverage requirements:
 - **Security Features**: 95%+ coverage (critical)
 - **Core RPC**: 95%+ coverage (critical)  
 - **Transport Layer**: 90%+ coverage (high priority)
+- **Cluster Management**: 90%+ coverage (high priority)
+- **Streaming**: 90%+ coverage (high priority)
 - **Code Generation**: 85%+ coverage (medium priority)
 - **Utilities**: 75%+ coverage (low priority)
+
+**Current Status**: 90%+ coverage maintained across all modules
 
 ### Coverage Reports
 
@@ -174,6 +216,14 @@ Coverage reports are generated in:
 - Debug formatting
 - Error propagation
 
+#### Cluster Component Tests
+- **NodeRegistry**: Node tracking and filtering
+- **WorkerRegistry**: Worker discovery and load balancing
+- **HealthChecker**: Phi Accrual failure detection
+- **GossipProtocol**: SWIM-based membership
+- **ConnectionPool**: Connection reuse and pooling
+- **PartitionDetector**: Network partition handling
+
 ### Integration Tests Coverage
 
 #### Client-Server Communication
@@ -199,6 +249,22 @@ Coverage reports are generated in:
 - Timeout handling
 - Server shutdown during requests
 - Certificate validation
+
+#### Cluster Integration
+- **Worker Discovery**: Automatic discovery via gossip
+- **Load Balancing**: Round Robin, Random, Least Connections
+- **Failure Detection**: Worker failure and recovery
+- **Tag-Based Routing**: Filter workers by tags
+- **Connection Pooling**: Pool creation and reuse
+- **Partition Recovery**: Network split and rejoin
+- **Health Monitoring**: Continuous health checks
+
+#### Streaming Integration
+- **Bidirectional Streaming**: Client and server streaming simultaneously
+- **Client Streaming**: Multiple client messages, single server response
+- **Server Streaming**: Single client request, multiple server responses
+- **Error Handling**: Stream errors and recovery
+- **Backpressure**: Flow control and buffering
 
 ### Error Scenario Tests
 
@@ -409,8 +475,13 @@ valgrind --tool=memcheck cargo test (Linux only)
 ### Test Certificates
 - Located in `certs/` directory
 - Self-signed certificates for testing only
-- Not suitable for production use
+- **⚠️ NOT suitable for production use**
 - Automatically trusted in test environment
+- Generated via OpenSSL:
+  ```bash
+  openssl req -x509 -newkey rsa:4096 -keyout test_key.pem \
+    -out test_cert.pem -days 365 -nodes -subj "/CN=localhost"
+  ```
 
 ### Test Data Cleanup
 ```bash
@@ -442,10 +513,59 @@ When contributing new tests:
 - [ ] Error scenarios are properly handled
 - [ ] Tests run successfully in CI environment
 
+## Running Cluster Tests
+
+The cluster example includes comprehensive tests for distributed features:
+
+```bash
+# Run cluster integration tests
+cargo test --test cluster_integration
+
+# Run cluster example manually (for visual inspection)
+# Terminal 1: Director
+DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin director
+
+# Terminal 2: Worker A
+WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \
+  DIRECTOR_ADDR=127.0.0.1:61000 WORKER_FAILURE_ENABLED=true RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+
+# Terminal 3: Worker B  
+WORKER_LABEL=worker-b WORKER_ADDR=127.0.0.1:62002 \
+  DIRECTOR_ADDR=127.0.0.1:61000 WORKER_FAILURE_ENABLED=true RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+
+# Terminal 4: Client
+DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin client
+```
+
+See `examples/cluster/README.md` for detailed cluster testing scenarios.
+
+## Performance Testing
+
+```bash
+# Run benchmarks
+cargo bench
+
+# Run benchmarks with performance optimizations
+cargo bench --features perf
+
+# Test specific benchmark
+cargo bench --bench simple
+
+# Current performance targets:
+# - 172K+ requests/second with QUIC+TLS
+# - Sub-millisecond latency (< 0.1ms overhead)
+# - 10K+ concurrent streams per connection
+```
+
 ---
 
-For more information about RPC.NET development, see:
-- [README.md](README.md) - Project overview
-- [docs/COVERAGE.md](docs/COVERAGE.md) - Detailed coverage guide
-- [examples/README.md](examples/README.md) - Usage examples
+For more information about RpcNet development, see:
+- [README.md](README.md) - Project overview and features
+- [DEVELOPER.md](DEVELOPER.md) - Development and publication guide
+- [examples/cluster/README.md](examples/cluster/README.md) - Cluster setup guide
 - [API Documentation](https://docs.rs/rpcnet) - Generated API docs
+- [Crates.io](https://crates.io/crates/rpcnet) - Published package

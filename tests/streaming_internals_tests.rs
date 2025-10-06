@@ -1,10 +1,8 @@
 // Streaming internals tests to cover uncovered code paths
 // These tests focus on the internal streaming functions and failure scenarios
 
-use bytes::{Bytes, BytesMut};
-use futures::{Stream, StreamExt};
-use rpcnet::{RpcClient, RpcConfig, RpcError, RpcServer};
-use std::pin::Pin;
+use bytes::Bytes;
+use rpcnet::{RpcClient, RpcConfig, RpcError};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;

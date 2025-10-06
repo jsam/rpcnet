@@ -392,7 +392,7 @@ async fn test_concurrent_handler_modifications() {
     for i in 0..10 {
         let server_clone = server.clone();
         let handle = task::spawn(async move {
-            let mut server = server_clone.as_ref().clone();
+            let server = server_clone.as_ref().clone();
             let method_name = format!("method_{}", i);
             server
                 .register(&method_name, move |_| async move { Ok(vec![i as u8]) })

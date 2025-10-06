@@ -92,7 +92,7 @@ mod tests {
     use super::*;
     use crate::cluster::incarnation::Incarnation;
     use std::collections::HashMap;
-    use std::net::SocketAddr;
+    
     use std::time::Instant;
 
     fn create_node_status(id: &str, _incarnation: u64, state: NodeState) -> NodeStatus {

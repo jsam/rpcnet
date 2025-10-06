@@ -38,7 +38,7 @@ async fn test_call_streaming_bidirectional_coverage() {
 
     println!("📍 Starting test_call_streaming_bidirectional_coverage");
 
-    let mut server = RpcServer::new(create_test_config(0));
+    let server = RpcServer::new(create_test_config(0));
 
     // Register a bidirectional streaming handler
     println!("📍 Registering bidirectional streaming handler");
@@ -205,7 +205,7 @@ async fn test_call_streaming_early_close() {
 
     println!("📍 Testing bidirectional streaming with early client close");
 
-    let mut server = RpcServer::new(create_test_config(0));
+    let server = RpcServer::new(create_test_config(0));
 
     server
         .register_streaming("infinite_counter", |mut request_stream| async move {
@@ -295,7 +295,7 @@ async fn test_call_streaming_server_error() {
 
     println!("📍 Testing bidirectional streaming with server errors");
 
-    let mut server = RpcServer::new(create_test_config(0));
+    let server = RpcServer::new(create_test_config(0));
 
     server
         .register_streaming("error_prone", |mut request_stream| async move {

@@ -1,7 +1,7 @@
 // Simple unit tests that should definitely work and increase coverage
 
 use futures::StreamExt;
-use rpcnet::{RpcClient, RpcConfig, RpcError, RpcRequest, RpcResponse, RpcServer};
+use rpcnet::{RpcConfig, RpcError, RpcRequest, RpcResponse, RpcServer};
 use std::time::Duration;
 
 #[test]

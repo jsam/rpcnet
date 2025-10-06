@@ -206,7 +206,7 @@ async fn test_serialization_and_response_sending() {
     //     let _ = stream.send(response_data.into()).await;
     // }
 
-    let mut server = RpcServer::new(create_test_config(0));
+    let server = RpcServer::new(create_test_config(0));
 
     // Register handlers that will test different serialization scenarios
     server

@@ -15,8 +15,7 @@ categories = ["network-programming", "asynchronous", "web-programming"]
 [[bin]]
 name = "rpcnet-gen"
 path = "src/bin/rpcnet-gen.rs"
-required-features = ["codegen"]
-# Install CLI globally with: cargo install --path . --features codegen
+# CLI is included by default when installing the library
 
 [dependencies]
 async-stream = "0.3"
@@ -50,16 +49,16 @@ flate2 = "1.0.28"
 # High-performance memory allocator
 jemallocator = { version = "0.5", optional = true }
 
-# Code generation dependencies (optional)
-syn = { version = "2.0", features = ["full", "extra-traits", "parsing"], optional = true }
-quote = { version = "1.0", optional = true }
-proc-macro2 = { version = "1.0", optional = true }
-prettyplease = { version = "0.2", optional = true }
-clap = { version = "4.0", features = ["derive"], optional = true }
+# Code generation dependencies (always included)
+syn = { version = "2.0", features = ["full", "extra-traits", "parsing"] }
+quote = { version = "1.0" }
+proc-macro2 = { version = "1.0" }
+prettyplease = { version = "0.2" }
+clap = { version = "4.0", features = ["derive"] }
 
 [features]
-default = ["perf"]
-codegen = ["syn", "quote", "proc-macro2", "clap", "prettyplease"]
+default = ["codegen", "perf"]
+codegen = []
 
 # High-performance features for benchmarking
 perf = ["jemallocator"]
