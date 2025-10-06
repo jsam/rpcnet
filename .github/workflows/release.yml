@@ -1,0 +1,337 @@
+name: Release
+
+on:
+  release:
+    types: [created]
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 0.2.0)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Perform dry run only (do not publish)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Pre-release validation
+  validate:
+    name: Pre-release Validation
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry/index
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-registry-
+    
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-release-
+    
+    - name: Generate test certificates
+      run: |
+        mkdir -p certs
+        openssl req -x509 -newkey rsa:4096 -keyout certs/test_key.pem -out certs/test_cert.pem -days 365 -nodes -subj "/CN=localhost"
+    
+    - name: Run publish checks
+      run: make publish-check
+    
+    - name: Verify version matches
+      if: github.event_name == 'release' || github.event_name == 'push'
+      run: |
+        CARGO_VERSION=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[0].version')
+        
+        if [ "${{ github.event_name }}" == "release" ]; then
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+        else
+          RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+        fi
+        
+        RELEASE_VERSION="${RELEASE_TAG#v}"
+        
+        echo "Cargo.toml version: $CARGO_VERSION"
+        echo "Git tag: $RELEASE_TAG"
+        echo "Release version: $RELEASE_VERSION"
+        
+        if [ "$CARGO_VERSION" != "$RELEASE_VERSION" ]; then
+          echo "❌ Error: Version mismatch!"
+          echo "Cargo.toml version ($CARGO_VERSION) does not match git tag ($RELEASE_VERSION)"
+          echo ""
+          echo "To fix this:"
+          echo "1. Update version in Cargo.toml to $RELEASE_VERSION"
+          echo "2. Commit the change"
+          echo "3. Re-tag with: git tag -f $RELEASE_TAG"
+          exit 1
+        fi
+        
+        echo "✅ Version check passed"
+
+  # Publish to crates.io
+  publish:
+    name: Publish to crates.io
+    needs: validate
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'release' || 
+      github.event_name == 'push' || 
+      (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry/index
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-registry-
+    
+    - name: Publish to crates.io
+      run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      env:
+        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    
+    - name: Create publish summary
+      run: |
+        if [ "${{ github.event_name }}" == "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+        else
+          VERSION="${GITHUB_REF#refs/tags/}"
+        fi
+        VERSION="${VERSION#v}"
+        
+        echo "## 🚀 Published to crates.io" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Version ${VERSION}** has been successfully published!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Installation" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`toml" >> $GITHUB_STEP_SUMMARY
+        echo "[dependencies]" >> $GITHUB_STEP_SUMMARY
+        echo "rpcnet = \"${VERSION}\"" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Links" >> $GITHUB_STEP_SUMMARY
+        echo "- 📦 [crates.io/crates/rpcnet](https://crates.io/crates/rpcnet)" >> $GITHUB_STEP_SUMMARY
+        echo "- 📚 [docs.rs/rpcnet/${VERSION}](https://docs.rs/rpcnet/${VERSION})" >> $GITHUB_STEP_SUMMARY
+
+  # Dry run for testing
+  dry-run:
+    name: Publish Dry Run
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry/index
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-registry-
+    
+    - name: Run dry-run publish
+      run: make publish-dry-run
+    
+    - name: Display package contents
+      run: |
+        echo "## 📦 Package Contents" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        cargo package --list >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  # Build release artifacts
+  build-artifacts:
+    name: Build Release Artifacts
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: rpcnet-gen-linux-x86_64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: rpcnet-gen-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: rpcnet-gen-macos-aarch64
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry/index
+        key: ${{ matrix.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: ${{ matrix.os }}-cargo-registry-
+    
+    - name: Build release binary
+      run: |
+        cargo build --release --bin rpcnet-gen --target ${{ matrix.target }}
+    
+    - name: Package binary
+      run: |
+        cd target/${{ matrix.target }}/release
+        tar czf ${{ matrix.artifact_name }}.tar.gz rpcnet-gen
+        cd -
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}.tar.gz
+        retention-days: 90
+    
+    - name: Upload to release
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}.tar.gz
+        asset_name: ${{ matrix.artifact_name }}.tar.gz
+        asset_content_type: application/gzip
+
+  # Update documentation
+  update-docs:
+    name: Update Documentation
+    needs: publish
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || github.event_name == 'push'
+    steps:
+    - name: Documentation summary
+      run: |
+        if [ "${{ github.event_name }}" == "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+        else
+          VERSION="${GITHUB_REF#refs/tags/}"
+        fi
+        VERSION="${VERSION#v}"
+        
+        echo "## 📚 Documentation Updated" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Documentation for version ${VERSION} is being built on docs.rs." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "It should be available at https://docs.rs/rpcnet/${VERSION} within a few minutes." >> $GITHUB_STEP_SUMMARY
+
+  # Post-release checks
+  verify-published:
+    name: Verify Published Package
+    needs: publish
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || github.event_name == 'push'
+    steps:
+    - name: Wait for crates.io to sync
+      run: sleep 60
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Verify package is available
+      run: |
+        if [ "${{ github.event_name }}" == "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+        else
+          VERSION="${GITHUB_REF#refs/tags/}"
+        fi
+        VERSION="${VERSION#v}"
+        
+        echo "Checking if rpcnet ${VERSION} is available on crates.io..."
+        
+        # Try to fetch the package info
+        if cargo search rpcnet --limit 1 | grep -q "rpcnet.*${VERSION}"; then
+          echo "✅ Package successfully published and indexed on crates.io!"
+        else
+          echo "⚠️  Package may still be indexing. Please check manually."
+        fi
+    
+    - name: Test installation
+      run: |
+        if [ "${{ github.event_name }}" == "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+        else
+          VERSION="${GITHUB_REF#refs/tags/}"
+        fi
+        VERSION="${VERSION#v}"
+        
+        # Create a test project and try to install the new version
+        cargo init --bin test-install
+        cd test-install
+        cargo add rpcnet@${VERSION} || echo "Package may still be syncing"
+
+  # Announce release
+  announce:
+    name: Announce Release
+    needs: [publish, build-artifacts, verify-published]
+    runs-on: ubuntu-latest
+    if: (github.event_name == 'release' || github.event_name == 'push') && success()
+    steps:
+    - name: Create release summary
+      run: |
+        if [ "${{ github.event_name }}" == "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+        else
+          VERSION="${GITHUB_REF#refs/tags/}"
+        fi
+        VERSION="${VERSION#v}"
+        
+        echo "## 🎉 Release ${VERSION} Complete!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### ✅ Published Successfully" >> $GITHUB_STEP_SUMMARY
+        echo "- 📦 [crates.io/crates/rpcnet](https://crates.io/crates/rpcnet)" >> $GITHUB_STEP_SUMMARY
+        echo "- 📚 [docs.rs/rpcnet/${VERSION}](https://docs.rs/rpcnet/${VERSION})" >> $GITHUB_STEP_SUMMARY
+        echo "- 🏗️ Release artifacts built for Linux and macOS" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Installation" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`toml" >> $GITHUB_STEP_SUMMARY
+        echo "[dependencies]" >> $GITHUB_STEP_SUMMARY
+        echo "rpcnet = \"${VERSION}\"" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### What's Next?" >> $GITHUB_STEP_SUMMARY
+        echo "- Documentation will be available on docs.rs within a few minutes" >> $GITHUB_STEP_SUMMARY
+        echo "- Binary releases are available as workflow artifacts" >> $GITHUB_STEP_SUMMARY
+        echo "- All CI checks passed ✅" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Thank you for using rpcnet! 🚀" >> $GITHUB_STEP_SUMMARY

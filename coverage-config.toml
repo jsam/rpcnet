@@ -1,0 +1,100 @@
+# RpcNet Coverage Configuration
+# Maps advertised features to source files for targeted coverage analysis
+
+[features.core_rpc]
+name = "Core RPC"
+category = "Core"
+priority = "Critical"
+threshold = 90.0
+source_paths = [
+    "src/lib.rs",
+    "src/client.rs", 
+    "src/server.rs",
+    "src/error.rs",
+    "src/config.rs"
+]
+
+[features.quic_transport]
+name = "QUIC Transport"
+category = "Transport"
+priority = "High"
+threshold = 90.0
+source_paths = [
+    "src/transport/",
+    "src/connection.rs"
+]
+
+[features.tls_security]
+name = "TLS Security"
+category = "Security" 
+priority = "Critical"
+threshold = 95.0
+source_paths = [
+    "src/tls.rs",
+    "src/cert.rs",
+    "src/auth.rs"
+]
+
+[features.code_generation]
+name = "Code Generation"
+category = "Codegen"
+priority = "Medium"
+threshold = 90.0
+source_paths = [
+    "src/codegen/",
+    "src/bin/rpcnet-gen.rs"
+]
+
+[features.streaming]
+name = "Streaming"
+category = "Streaming"
+priority = "High"
+threshold = 90.0
+source_paths = [
+    "src/streaming.rs",
+    "src/stream/"
+]
+
+[features.performance]
+name = "Performance"
+category = "Performance"
+priority = "Medium"
+threshold = 85.0
+source_paths = [
+    "src/buffer.rs",
+    "src/pool.rs",
+    "src/metrics.rs"
+]
+
+[features.examples]
+name = "Examples"
+category = "Utility"
+priority = "Low"
+threshold = 75.0
+source_paths = [
+    "examples/"
+]
+
+[exclusions]
+# Exclude from coverage analysis
+paths = [
+    "examples/*",
+    "benches/*", 
+    "tests/*",
+    "target/*",
+    "specs/*"
+]
+
+[thresholds]
+# Overall project thresholds
+overall_minimum = 90.0
+critical_minimum = 95.0
+high_minimum = 90.0
+medium_minimum = 85.0
+low_minimum = 75.0
+
+[reporting]
+# Report configuration
+formats = ["html", "json", "console"]
+output_dir = "target/coverage"
+fail_on_threshold = true

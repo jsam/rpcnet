@@ -1,22 +1,176 @@
 [package]
 name = "rpcnet"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+authors = ["Sam Hart <contact@justsam.io>"]
+description = "RPC library based on QUIC+TLS encryption"
+documentation = "https://docs.rs/rpcnet"
+repository = "https://github.com/jsam/rpcnet"
+homepage = "https://github.com/jsam/rpcnet"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["rpc", "quic", "async", "networking", "codegen"]
+categories = ["network-programming", "asynchronous", "web-programming"]
+
+[[bin]]
+name = "rpcnet-gen"
+path = "src/bin/rpcnet-gen.rs"
+# CLI is included by default when installing the library
 
 [dependencies]
+async-stream = "0.3"
+async-trait = "0.1"
 bincode = "1.3.3"
 bytes = "1.9.0"
+dashmap = "6"
+futures = "0.3"
+md5 = "0.7.0"
+pin-project = "1.1"
 quiche = "0.22.0"
 rand = "0.8.5"
 ring = "0.17.8"
 s2n-quic = "1.52.0"
 serde = { version = "1.0.217", features = ["derive"]}
+serde_json = "1.0"
+statrs = "0.17"
 thiserror = "2.0.10"
 tokio = { version = "1.43.0", features = ["full"]}
+tokio-stream = "0.1"
+tracing = "0.1"
+
+# Migration dependencies for zero-downtime QUIC connection migration
+aes-gcm = "0.10.3"
+hmac = "0.12.1"
+sha2 = "0.10.8"
+uuid = { version = "1.11.0", features = ["v4", "serde"] }
+hex = "0.4.3"
+flate2 = "1.0.28"
+
+# High-performance memory allocator
+jemallocator = { version = "0.5", optional = true }
+
+# Code generation dependencies (always included)
+syn = { version = "2.0", features = ["full", "extra-traits", "parsing"] }
+quote = { version = "1.0" }
+proc-macro2 = { version = "1.0" }
+prettyplease = { version = "0.2" }
+clap = { version = "4.0", features = ["derive"] }
+
+[features]
+default = ["codegen", "perf"]
+codegen = []
+
+# High-performance features for benchmarking
+perf = ["jemallocator"]
 
 [dev-dependencies]
 criterion = "0.5.1"
+tokio-test = "0.4.4"
+assert_matches = "1.5"
+tempfile = "3.8"
+futures = "0.3"
+num_cpus = "1.0"
+assert_cmd = "2.0"
+predicates = "3.1"
 
 [[bench]]
 name = "simple"
+path = "benches/simple.rs"
 harness = false
+
+# High-performance benchmark with optimizations enabled
+# (Disabled to avoid duplicate target warning - use simple bench instead)
+# [[bench]]
+# name = "simple_perf"
+# path = "benches/simple.rs"
+# harness = false
+# required-features = ["perf"]
+
+# Streaming benchmark - server streaming responses
+[[bench]]
+name = "streaming"
+path = "benches/streaming.rs"
+harness = false
+
+# Basic Examples (no codegen required)
+[[example]]
+name = "basic_server"
+
+[[example]]
+name = "basic_client"
+
+[[example]]
+name = "simple_echo_server"
+
+[[example]]
+name = "simple_echo_client"
+
+# Generated Code Examples (using code generation)
+[[example]]
+name = "basic_greeting_server"
+path = "examples/basic_greeting/server.rs"
+required-features = ["codegen"]
+
+[[example]]
+name = "basic_greeting_client"
+path = "examples/basic_greeting/client.rs"
+required-features = ["codegen"]
+
+[[example]]
+name = "echo_server"
+path = "examples/echo/server.rs"
+required-features = ["codegen"]
+
+[[example]]
+name = "echo_client"
+path = "examples/echo/client.rs"
+required-features = ["codegen"]
+
+[[example]]
+name = "file_transfer_server"
+path = "examples/file_transfer/server.rs"
+required-features = ["codegen"]
+
+[[example]]
+name = "file_transfer_client"
+path = "examples/file_transfer/client.rs"
+required-features = ["codegen"]
+
+[[example]]
+name = "calculator_server"
+path = "examples/calculator/server.rs"
+required-features = ["codegen"]
+
+[[example]]
+name = "calculator_client"
+path = "examples/calculator/client.rs"
+required-features = ["codegen"]
+
+[[example]]
+name = "concurrent_demo_server"
+path = "examples/concurrent_demo/server.rs"
+required-features = ["codegen"]
+
+[[example]]
+name = "concurrent_demo_client"
+path = "examples/concurrent_demo/client.rs"
+required-features = ["codegen"]
+
+# Tarpaulin configuration for coverage analysis
+# Note: This section uses non-standard TOML and may cause warnings
+# Consider moving to .tarpaulin.toml if warnings persist
+[package.metadata.tarpaulin]
+exclude-files = [
+    "examples/*",
+    "benches/*", 
+    "tests/*",
+    "specs/*",
+    "target/*",
+    "src/bin/*"
+]
+timeout = "300"
+fail-under = 90
+out = ["Html", "Json", "Xml"]
+output-dir = "target/coverage"
+all-features = true
+ignored = true

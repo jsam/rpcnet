@@ -1,0 +1,764 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Discovery (SWIM) - RpcNet Guide</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">RpcNet Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="automatic-discovery"><a class="header" href="#automatic-discovery">Automatic Discovery</a></h1>
+<p>RpcNet uses the <strong>SWIM (Scalable Weakly-consistent Infection-style Process Group Membership)</strong> protocol for automatic node discovery. This chapter explains how nodes find each other without central coordination or manual registration.</p>
+<h2 id="how-discovery-works"><a class="header" href="#how-discovery-works">How Discovery Works</a></h2>
+<h3 id="the-problem"><a class="header" href="#the-problem">The Problem</a></h3>
+<p>In distributed systems, you need to know:</p>
+<ul>
+<li>Which nodes are currently alive?</li>
+<li>Which nodes just joined?</li>
+<li>Which nodes have failed or left?</li>
+</ul>
+<p>Traditional solutions have limitations:</p>
+<ul>
+<li><strong>Centralized registry</strong>: Single point of failure</li>
+<li><strong>Broadcast</strong>: Doesn't scale (O(N²) messages)</li>
+<li><strong>Heartbeats</strong>: Network overhead grows with cluster size</li>
+</ul>
+<h3 id="the-swim-solution"><a class="header" href="#the-swim-solution">The SWIM Solution</a></h3>
+<p>SWIM provides <strong>scalable membership</strong> with constant overhead per node:</p>
+<pre><code>┌─────────────────────────────────────────────────────┐
+│  Node A discovers new nodes through gossip          │
+│  without contacting every node in the cluster       │
+└─────────────────────────────────────────────────────┘
+
+     Node A                    Node B                    Node C
+       │                         │                         │
+       │   1. Ping (health)      │                         │
+       ├────────────────────────►│                         │
+       │                         │                         │
+       │   2. Ack + Gossip       │                         │
+       │◄────────────────────────┤                         │
+       │   (includes info        │                         │
+       │    about Node C)        │                         │
+       │                         │                         │
+       │   3. Now A knows C      │                         │
+       │   exists without        │                         │
+       │   direct contact!       │                         │
+       │                         │                         │
+       └─────────────┬───────────┴─────────────────────────┘
+                     │
+              Information spreads
+              exponentially fast
+</code></pre>
+<h2 id="swim-protocol-basics"><a class="header" href="#swim-protocol-basics">SWIM Protocol Basics</a></h2>
+<h3 id="1-gossip-based-communication"><a class="header" href="#1-gossip-based-communication">1. Gossip-Based Communication</a></h3>
+<p>Nodes periodically exchange information with random peers:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Simplified gossip cycle (every 1 second by default)
+loop {
+    // Pick random node
+    let peer = select_random_node();
+    
+    // Send health check + gossip payload
+    let gossip = GossipMessage {
+        sender: my_node_id,
+        members: my_known_members.clone(),
+        incarnation: my_incarnation,
+    };
+    peer.ping(gossip).await?;
+    
+    // Receive ack + peer's gossip
+    let ack = receive_ack().await?;
+    merge_member_information(ack.members);
+    
+    tokio::time::sleep(Duration::from_secs(1)).await;
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Key properties</strong>:</p>
+<ul>
+<li>Constant overhead per node: O(1) messages per cycle</li>
+<li>Information spreads exponentially: O(log N) time</li>
+<li>No single point of failure</li>
+<li>Works with network partitions</li>
+</ul>
+<h3 id="2-three-node-states"><a class="header" href="#2-three-node-states">2. Three Node States</a></h3>
+<p>SWIM tracks nodes in three states:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub enum NodeState {
+    Alive,      // Node is healthy and responding
+    Suspect,    // Node might be failed (under investigation)
+    Failed,     // Node confirmed failed
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>State transitions</strong>:</p>
+<pre><code>         ┌──────────────────────────────────────┐
+         │                                      │
+         │  Join cluster                        │  Gossip confirms alive
+         │                                      │
+    ┌────▼─────┐  No response after 3 pings  ┌─▼──────┐
+    │  Alive   ├───────────────────────────►  │Suspect │
+    └────┬─────┘                              └───┬────┘
+         │                                        │
+         │  Voluntary leave                       │  Confirmed by multiple nodes
+         │                                        │  or timeout
+         │                                    ┌───▼────┐
+         └───────────────────────────────────►│ Failed │
+                                              └────────┘
+</code></pre>
+<h3 id="3-failure-detection-protocol"><a class="header" href="#3-failure-detection-protocol">3. Failure Detection Protocol</a></h3>
+<p>SWIM uses <strong>indirect probing</strong> to avoid false positives:</p>
+<p><strong>Direct Probe</strong> (normal case):</p>
+<pre><code>Node A                  Node B
+  │                       │
+  │  1. Ping              │
+  ├──────────────────────►│
+  │                       │
+  │  2. Ack               │
+  │◄──────────────────────┤
+  │                       │
+  │  B is alive ✓         │
+</code></pre>
+<p><strong>Indirect Probe</strong> (when direct fails):</p>
+<pre><code>Node A                  Node C                  Node B
+  │                       │                       │
+  │  1. Ping (timeout)    │                       │
+  ├─────────────────────X─┤                       │
+  │                       │                       │
+  │  2. Ask C to probe B  │                       │
+  ├──────────────────────►│                       │
+  │                       │  3. Ping              │
+  │                       ├──────────────────────►│
+  │                       │                       │
+  │                       │  4. Ack               │
+  │                       │◄──────────────────────┤
+  │  5. B is alive via C  │                       │
+  │◄──────────────────────┤                       │
+  │                       │                       │
+  │  B is alive ✓         │                       │
+</code></pre>
+<p>This prevents false positives from temporary network issues.</p>
+<h2 id="rpcnet-implementation"><a class="header" href="#rpcnet-implementation">RpcNet Implementation</a></h2>
+<h3 id="joining-a-cluster"><a class="header" href="#joining-a-cluster">Joining a Cluster</a></h3>
+<p>When a node starts, it joins by contacting one or more <strong>seed nodes</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::cluster::{ClusterMembership, ClusterConfig};
+
+// Create cluster membership
+let cluster_config = ClusterConfig::default()
+    .with_bind_addr("0.0.0.0:7946".parse()?);
+
+let cluster = ClusterMembership::new(cluster_config).await?;
+
+// Join via seed nodes (directors, known workers, etc.)
+let seeds = vec![
+    "director.example.com:7946".parse()?,
+    "worker-1.example.com:7946".parse()?,
+];
+
+cluster.join(seeds).await?;
+<span class="boring">}</span></code></pre></pre>
+<p><strong>What happens during join</strong>:</p>
+<ol>
+<li><strong>Contact seed nodes</strong>: Node sends join request to all seeds</li>
+<li><strong>Receive member list</strong>: Seed responds with known cluster members</li>
+<li><strong>Merge member info</strong>: Node learns about entire cluster</li>
+<li><strong>Start gossip</strong>: Node begins exchanging info with all members</li>
+<li><strong>Spread join event</strong>: Other nodes learn about new member via gossip</li>
+</ol>
+<p><strong>Time to full discovery</strong>: ~O(log N) gossip cycles (typically 2-5 seconds)</p>
+<h3 id="tagging-nodes"><a class="header" href="#tagging-nodes">Tagging Nodes</a></h3>
+<p>Nodes can advertise capabilities via <strong>tags</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Tag worker with role and capabilities
+cluster.set_tag("role", "worker");
+cluster.set_tag("label", "worker-gpu-1");
+cluster.set_tag("gpu", "true");
+cluster.set_tag("zone", "us-west-2a");
+cluster.set_tag("memory", "64GB");
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Tags are gossiped</strong> to all nodes, enabling:</p>
+<ul>
+<li>Service discovery (find all nodes with <code>role=worker</code>)</li>
+<li>Capability-based routing (find nodes with <code>gpu=true</code>)</li>
+<li>Zone-aware load balancing (prefer nodes in <code>zone=us-west-2a</code>)</li>
+</ul>
+<h3 id="subscribing-to-events"><a class="header" href="#subscribing-to-events">Subscribing to Events</a></h3>
+<p>Monitor cluster changes in real-time:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::cluster::ClusterEvent;
+
+let mut events = cluster.subscribe();
+
+while let Some(event) = events.recv().await {
+    match event {
+        ClusterEvent::NodeJoined(node) =&gt; {
+            println!("New node: {} at {}", node.id, node.addr);
+            println!("Tags: {:?}", node.tags);
+        }
+        ClusterEvent::NodeLeft(node) =&gt; {
+            println!("Node left gracefully: {}", node.id);
+        }
+        ClusterEvent::NodeFailed(node) =&gt; {
+            println!("Node failed: {}", node.id);
+            // Take action: remove from pool, alert monitoring, etc.
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h2 id="gossip-internals"><a class="header" href="#gossip-internals">Gossip Internals</a></h2>
+<h3 id="gossip-message-structure"><a class="header" href="#gossip-message-structure">Gossip Message Structure</a></h3>
+<p>Each gossip message contains:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>struct GossipMessage {
+    // Sender identification
+    sender_id: Uuid,
+    sender_addr: SocketAddr,
+    incarnation: u64,  // Anti-entropy counter
+    
+    // Member information
+    members: Vec&lt;MemberInfo&gt;,
+    
+    // Piggyback information
+    events: Vec&lt;ClusterEvent&gt;,
+}
+
+struct MemberInfo {
+    id: Uuid,
+    addr: SocketAddr,
+    state: NodeState,
+    incarnation: u64,
+    tags: HashMap&lt;String, String&gt;,
+    last_seen: SystemTime,
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="gossip-cycle"><a class="header" href="#gossip-cycle">Gossip Cycle</a></h3>
+<p><strong>Every gossip interval</strong> (default: 1 second):</p>
+<ol>
+<li><strong>Select target</strong>: Pick random node from member list</li>
+<li><strong>Prepare message</strong>: Collect recent events and member updates</li>
+<li><strong>Send ping</strong>: UDP datagram with gossip payload</li>
+<li><strong>Wait for ack</strong>: Timeout after 500ms (configurable)</li>
+<li><strong>Merge information</strong>: Update local member list with received data</li>
+<li><strong>Detect failures</strong>: Check for nodes that haven't responded</li>
+</ol>
+<h3 id="information-spread-speed"><a class="header" href="#information-spread-speed">Information Spread Speed</a></h3>
+<p>With <strong>N nodes</strong> and <strong>gossip interval T</strong>:</p>
+<ul>
+<li><strong>1 node</strong> knows: T seconds (initial)</li>
+<li><strong>2 nodes</strong> know: 2T seconds (1st gossip)</li>
+<li><strong>4 nodes</strong> know: 3T seconds (2nd gossip)</li>
+<li><strong>8 nodes</strong> know: 4T seconds (3rd gossip)</li>
+<li><strong>N nodes</strong> know: (log₂ N) × T seconds</li>
+</ul>
+<p><strong>Example</strong>: 1000-node cluster, 1-second interval:</p>
+<ul>
+<li>Full propagation: ~10 seconds (log₂ 1000 ≈ 10)</li>
+</ul>
+<h2 id="advanced-features"><a class="header" href="#advanced-features">Advanced Features</a></h2>
+<h3 id="incarnation-numbers"><a class="header" href="#incarnation-numbers">Incarnation Numbers</a></h3>
+<p>Each node maintains an <strong>incarnation counter</strong> to handle:</p>
+<p><strong>Problem</strong>: Node A suspects Node B is failed, but B is actually alive.</p>
+<p><strong>Solution</strong>: B increments its incarnation number and gossips "I'm alive with incarnation N+1". This overrides stale failure suspicion.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Node B refutes failure suspicion
+if cluster.is_suspected() {
+    cluster.increment_incarnation();
+    cluster.broadcast_alive();
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="anti-entropy"><a class="header" href="#anti-entropy">Anti-Entropy</a></h3>
+<p>Periodically, nodes perform <strong>full state synchronization</strong> to:</p>
+<ul>
+<li>Fix inconsistencies from packet loss</li>
+<li>Recover from network partitions</li>
+<li>Ensure eventual consistency</li>
+</ul>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Every 10 gossip cycles, do full sync with random node
+if cycle_count % 10 == 0 {
+    let peer = select_random_node();
+    let full_state = get_all_members();
+    peer.sync(full_state).await?;
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="partition-detection"><a class="header" href="#partition-detection">Partition Detection</a></h3>
+<p>SWIM can detect <strong>network partitions</strong>:</p>
+<pre><code>Before partition:            After partition:
+     Cluster                     Cluster A  |  Cluster B
+        │                            │      |      │
+  ┌─────┼─────┐                ┌─────┼─────┐|┌─────┼─────┐
+  A     B     C                A     B      ||     C     D
+  │     │     │                │     │      ||     │     │
+  └─────┼─────┘                └─────┘      |└─────┘     
+        D                                   |
+                                         SPLIT!
+</code></pre>
+<p><strong>Detection</strong>: Nodes in partition A can't reach nodes in partition B after multiple indirect probes.</p>
+<p><strong>Handling</strong>:</p>
+<ul>
+<li>Each partition continues operating independently</li>
+<li>When partition heals, gossip merges the views</li>
+<li>Application must handle split-brain scenarios</li>
+</ul>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<h3 id="tuning-gossip-parameters"><a class="header" href="#tuning-gossip-parameters">Tuning Gossip Parameters</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::cluster::ClusterConfig;
+use std::time::Duration;
+
+let config = ClusterConfig::default()
+    .with_bind_addr("0.0.0.0:7946".parse()?)
+    .with_gossip_interval(Duration::from_secs(1))      // How often to gossip
+    .with_probe_timeout(Duration::from_millis(500))    // Ping timeout
+    .with_indirect_probes(3)                           // How many indirect probes
+    .with_suspicion_timeout(Duration::from_secs(5))    // Suspect → Failed timeout
+    .with_gossip_fanout(3);                            // How many nodes to gossip to
+
+cluster = ClusterMembership::new(config).await?;
+<span class="boring">}</span></code></pre></pre>
+<h3 id="tuning-guidelines"><a class="header" href="#tuning-guidelines">Tuning Guidelines</a></h3>
+<p><strong>Small clusters</strong> (&lt; 10 nodes):</p>
+<ul>
+<li>Longer intervals (2-3 seconds)</li>
+<li>Faster timeouts (200ms)</li>
+<li>Lower fanout (1-2 nodes)</li>
+</ul>
+<p><strong>Medium clusters</strong> (10-100 nodes):</p>
+<ul>
+<li>Default settings (1 second, 500ms, 3 fanout)</li>
+</ul>
+<p><strong>Large clusters</strong> (100-1000 nodes):</p>
+<ul>
+<li>Shorter intervals (500ms)</li>
+<li>More indirect probes (5+)</li>
+<li>Higher fanout (5-7 nodes)</li>
+</ul>
+<p><strong>Very large clusters</strong> (1000+ nodes):</p>
+<ul>
+<li>Consider hierarchical clustering</li>
+<li>Adjust suspicion timeout upward</li>
+<li>Use regional seed nodes</li>
+</ul>
+<h2 id="failure-scenarios"><a class="header" href="#failure-scenarios">Failure Scenarios</a></h2>
+<h3 id="temporary-network-glitch"><a class="header" href="#temporary-network-glitch">Temporary Network Glitch</a></h3>
+<pre><code>Node A pings B → timeout (network glitch)
+Node A → Suspect B
+Node A asks C to probe B
+Node C → B responds ✓
+Node A → B is Alive (false alarm avoided)
+</code></pre>
+<p><strong>Result</strong>: No false positive due to indirect probing.</p>
+<h3 id="actual-node-failure"><a class="header" href="#actual-node-failure">Actual Node Failure</a></h3>
+<pre><code>Node A pings B → timeout
+Node A → Suspect B
+Node A asks C, D, E to probe B → all timeout
+Suspicion timeout expires (5 seconds)
+Node A → B is Failed
+Gossip spreads: B failed
+All nodes remove B from active pool
+</code></pre>
+<p><strong>Result</strong>: B marked failed within ~6 seconds (1s ping + 5s suspicion).</p>
+<h3 id="network-partition"><a class="header" href="#network-partition">Network Partition</a></h3>
+<pre><code>Partition occurs: {A, B} | {C, D}
+
+In partition {A, B}:
+- A and B communicate normally
+- C and D marked as Failed
+
+In partition {C, D}:
+- C and D communicate normally
+- A and B marked as Failed
+
+Partition heals:
+- Gossip exchanges full state
+- All nodes marked Alive again
+- Incarnation numbers resolve conflicts
+</code></pre>
+<p><strong>Result</strong>: Both partitions continue operating; merge when healed.</p>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<h3 id="1-use-multiple-seed-nodes"><a class="header" href="#1-use-multiple-seed-nodes">1. Use Multiple Seed Nodes</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// ✅ Good: Multiple seeds for reliability
+let seeds = vec![
+    "seed-1.cluster.local:7946".parse()?,
+    "seed-2.cluster.local:7946".parse()?,
+    "seed-3.cluster.local:7946".parse()?,
+];
+
+// ❌ Bad: Single seed (single point of failure)
+let seeds = vec!["seed-1.cluster.local:7946".parse()?];
+<span class="boring">}</span></code></pre></pre>
+<h3 id="2-monitor-cluster-events"><a class="header" href="#2-monitor-cluster-events">2. Monitor Cluster Events</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Log all cluster changes for debugging
+tokio::spawn(async move {
+    let mut events = cluster.subscribe();
+    while let Some(event) = events.recv().await {
+        log::info!("Cluster event: {:?}", event);
+        metrics.record_cluster_event(&amp;event);
+    }
+});
+<span class="boring">}</span></code></pre></pre>
+<h3 id="3-tag-nodes-with-rich-metadata"><a class="header" href="#3-tag-nodes-with-rich-metadata">3. Tag Nodes with Rich Metadata</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Provide detailed tags for routing decisions
+cluster.set_tag("role", "worker");
+cluster.set_tag("version", env!("CARGO_PKG_VERSION"));
+cluster.set_tag("zone", get_availability_zone());
+cluster.set_tag("instance_type", "m5.xlarge");
+cluster.set_tag("capabilities", "gpu,video-encode");
+<span class="boring">}</span></code></pre></pre>
+<h3 id="4-handle-partition-detection"><a class="header" href="#4-handle-partition-detection">4. Handle Partition Detection</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Detect partitions and alert
+let mut events = cluster.subscribe();
+while let Some(event) = events.recv().await {
+    if let ClusterEvent::PartitionDetected = event {
+        alert_ops_team("Network partition detected!");
+        enable_read_only_mode(); // Prevent split-brain writes
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="5-graceful-shutdown"><a class="header" href="#5-graceful-shutdown">5. Graceful Shutdown</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Leave cluster gracefully when shutting down
+cluster.leave().await?;
+
+// This tells other nodes "I'm leaving intentionally"
+// rather than waiting for failure detection timeout
+<span class="boring">}</span></code></pre></pre>
+<h2 id="comparison-to-other-protocols"><a class="header" href="#comparison-to-other-protocols">Comparison to Other Protocols</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Feature</th><th>SWIM (RpcNet)</th><th>Raft</th><th>Consul</th><th>Kubernetes</th></tr></thead><tbody>
+<tr><td><strong>Consistency</strong></td><td>Eventual</td><td>Strong</td><td>Strong</td><td>Eventual</td></tr>
+<tr><td><strong>Failure Detection</strong></td><td>Phi Accrual</td><td>Leader heartbeat</td><td>Gossip</td><td>kubelet heartbeat</td></tr>
+<tr><td><strong>Scalability</strong></td><td>1000+ nodes</td><td>~10 nodes</td><td>100s of nodes</td><td>1000s of nodes</td></tr>
+<tr><td><strong>Partition Handling</strong></td><td>Both sides live</td><td>Majority only</td><td>Both sides live</td><td>Both sides live</td></tr>
+<tr><td><strong>Network Overhead</strong></td><td>O(1) per node</td><td>O(N) from leader</td><td>O(1) per node</td><td>O(1) per node</td></tr>
+<tr><td><strong>Setup Complexity</strong></td><td>Low</td><td>Medium</td><td>Medium</td><td>High</td></tr>
+</tbody></table>
+</div>
+<p><strong>When to use SWIM</strong>:</p>
+<ul>
+<li>Large clusters (100+ nodes)</li>
+<li>Partition tolerance required</li>
+<li>Eventual consistency acceptable</li>
+<li>Decentralized architecture preferred</li>
+</ul>
+<p><strong>When NOT to use SWIM</strong>:</p>
+<ul>
+<li>Strong consistency required → Use Raft</li>
+<li>Small clusters (&lt; 5 nodes) → Direct RPC simpler</li>
+<li>Centralized control desired → Use coordinator pattern</li>
+</ul>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<h3 id="nodes-not-discovering"><a class="header" href="#nodes-not-discovering">Nodes Not Discovering</a></h3>
+<p><strong>Symptom</strong>: Workers join but director doesn't see them.</p>
+<p><strong>Debug</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Enable debug logging
+RUST_LOG=rpcnet::cluster=debug cargo run
+
+// Check what nodes are known
+let members = cluster.members().await;
+println!("Known members: {:?}", members);
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Common causes</strong>:</p>
+<ul>
+<li>Firewall blocking UDP gossip port</li>
+<li>Wrong seed node address</li>
+<li>Network partition</li>
+</ul>
+<h3 id="slow-propagation"><a class="header" href="#slow-propagation">Slow Propagation</a></h3>
+<p><strong>Symptom</strong>: Takes 30+ seconds for nodes to discover each other.</p>
+<p><strong>Debug</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Check gossip interval
+let config = ClusterConfig::default()
+    .with_gossip_interval(Duration::from_millis(500)); // Faster
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Common causes</strong>:</p>
+<ul>
+<li>Gossip interval too long</li>
+<li>High packet loss</li>
+<li>Too few gossip fanout targets</li>
+</ul>
+<h3 id="false-failure-detection"><a class="header" href="#false-failure-detection">False Failure Detection</a></h3>
+<p><strong>Symptom</strong>: Nodes marked failed but they're actually alive.</p>
+<p><strong>Debug</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Increase timeouts
+let config = ClusterConfig::default()
+    .with_probe_timeout(Duration::from_secs(1))    // More lenient
+    .with_suspicion_timeout(Duration::from_secs(10));
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Common causes</strong>:</p>
+<ul>
+<li>Network latency spikes</li>
+<li>Node overloaded (GC pauses)</li>
+<li>Timeout too aggressive</li>
+</ul>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<ul>
+<li><strong><a href="load-balancing.html">Load Balancing</a></strong> - Use discovered nodes for routing</li>
+<li><strong><a href="health.html">Health Checking</a></strong> - Understand Phi Accrual algorithm</li>
+<li><strong><a href="failures.html">Failures</a></strong> - Handle partitions and split-brain scenarios</li>
+</ul>
+<h2 id="references"><a class="header" href="#references">References</a></h2>
+<ul>
+<li><a href="https://www.cs.cornell.edu/projects/Quicksilver/public_pdfs/SWIM.pdf">SWIM Paper (Cornell)</a> - Original SWIM protocol</li>
+<li><a href="https://citeseerx.ist.psu.edu/document?repid=rep1&amp;type=pdf&amp;doi=babf246cf6753ad12ce97ae47e64c9d4ff85c6f7">Phi Accrual Paper</a> - Advanced failure detection</li>
+<li><a href="https://en.wikipedia.org/wiki/Gossip_protocol">Gossip Protocols Overview</a> - General gossip concepts</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../cluster-example.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../cluster/load-balancing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../cluster-example.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../cluster/load-balancing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

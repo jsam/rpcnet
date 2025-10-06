@@ -1,0 +1,46 @@
+[tool.tarpaulin.coverage]
+# Run coverage on lib tests and integration tests
+run-types = ["Tests", "Doctests"]
+
+# Include all source files
+include-tests = false
+
+# Exclude examples from coverage (they are for demonstration)
+exclude = [
+    "examples/*",
+    "benches/*",
+    "tests/*/mod.rs",
+    "specs/*",
+    "src/bin/*"
+]
+
+# Generate reports in multiple formats
+out = ["Html", "Lcov", "Json"]
+
+# Set minimum coverage threshold  
+fail-under = 65
+
+# Generate detailed HTML report
+output-dir = "target/coverage"
+
+# Follow symbolic links
+follow-exec = true
+
+# Count hits in different ways
+count = true
+
+# Skip clean between runs for performance
+skip-clean = false
+
+# Timeout for each test
+timeout = 300
+
+# Include line coverage
+line = true
+
+# Include branch coverage
+branch = true
+
+[tool.tarpaulin.report]
+# Generate comprehensive reporting
+output-dir = "coverage"
