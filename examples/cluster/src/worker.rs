@@ -21,6 +21,7 @@ struct WorkerHandler {
     worker_label: String,
     is_failed: Arc<AtomicBool>,
     failure_enabled: bool,
+    cluster: Arc<tokio::sync::RwLock<Option<Arc<rpcnet::cluster::ClusterMembership>>>>,
 }
 
 #[async_trait]
@@ -30,7 +31,9 @@ impl InferenceHandler for WorkerHandler {
         request: Pin<Box<dyn Stream<Item = InferenceRequest> + Send>>,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<InferenceResponse, InferenceError>> + Send>>, InferenceError> {
         let name = self.worker_label.clone();
+        let worker_label = self.worker_label.clone();
         let is_failed = self.is_failed.clone();
+        let cluster_holder = self.cluster.clone();
         
         if is_failed.load(Ordering::SeqCst) {
             error!("🚫 [{}] Rejecting request - worker is in failed state", name);
@@ -55,25 +58,6 @@ impl InferenceHandler for WorkerHandler {
                 
                 if first_request {
                     conn_id = req.connection_id.clone();
-                    
-                    if failure_enabled && rand::random::<f32>() < 0.7 {
-                        let delay = rand::thread_rng().gen_range(5..15);
-                        let recovery_time = rand::thread_rng().gen_range(10..30);
-                        warn!("⚠️  [{}] Will simulate failure in {} responses, recovery in {}s...", name, delay, recovery_time);
-                        tokio::spawn({
-                            let is_failed = is_failed.clone();
-                            let name = name.clone();
-                            async move {
-                                sleep(Duration::from_millis(delay as u64 * 200)).await;
-                                is_failed.store(true, Ordering::SeqCst);
-                                error!("💥 [{}] Worker failed!", name);
-                                sleep(Duration::from_secs(recovery_time)).await;
-                                info!("🔄 [{}] Worker recovering...", name);
-                                is_failed.store(false, Ordering::SeqCst);
-                                info!("✅ [{}] Worker recovered and ready to serve!", name);
-                            }
-                        });
-                    }
                     info!(
                         connection.id = %conn_id,
                         worker = %name,
@@ -162,10 +146,13 @@ async fn main() -> Result<()> {
 
     let is_failed = Arc::new(AtomicBool::new(false));
     
+    let cluster_holder = Arc::new(tokio::sync::RwLock::new(None));
+    
     let handler = WorkerHandler {
         worker_label: worker_label.clone(),
         is_failed: is_failed.clone(),
         failure_enabled: worker_failure_enabled,
+        cluster: cluster_holder.clone(),
     };
     
     let mut server = InferenceServer::new(handler, config.clone());
@@ -190,13 +177,18 @@ async fn main() -> Result<()> {
     info!("✅ Cluster enabled, connected to director");
 
     let cluster = server.rpc_server.cluster().await.expect("Cluster should be enabled");
+    
+    *cluster_holder.write().await = Some(cluster.clone());
 
-    info!("🏷️  Tagging worker with role=worker and label={}...", worker_label);
-    cluster.update_tag("role".to_string(), "worker".to_string()).await;
-    cluster.update_tag("label".to_string(), worker_label.clone()).await;
+    info!("🏷️  Tagging worker with role=worker, label={}, status=healthy...", worker_label);
+    cluster.update_tags([
+        ("role", "worker"),
+        ("label", worker_label.as_str()),
+        ("status", "healthy"),
+    ]).await;
     
     info!(
-        "✅ Worker '{}' joined cluster with role=worker, label={}",
+        "✅ Worker '{}' joined cluster with role=worker, label={}, status=healthy",
         worker_label, worker_label
     );
 
@@ -210,7 +202,36 @@ async fn main() -> Result<()> {
     });
     
     if worker_failure_enabled {
-        info!("⚠️  [{}] Worker failure simulation enabled - will fail randomly during request processing", worker_label);
+        info!("⚠️  [{}] Worker failure simulation enabled - will fail every 15-30s for 3-15s", worker_label);
+        let failure_is_failed = is_failed.clone();
+        let failure_cluster = cluster.clone();
+        let failure_label = worker_label.clone();
+        tokio::spawn(async move {
+            loop {
+                let healthy_duration = rand::thread_rng().gen_range(15..30);
+                info!("😊 [{}] Worker healthy for {}s...", failure_label, healthy_duration);
+                sleep(Duration::from_secs(healthy_duration)).await;
+                
+                failure_is_failed.store(true, Ordering::SeqCst);
+                failure_cluster.update_tags([
+                    ("role", "worker"),
+                    ("label", failure_label.as_str()),
+                    ("status", "failed"),
+                ]).await;
+                let failed_duration = rand::thread_rng().gen_range(3..15);
+                error!("💥 [{}] Worker failed! Will recover in {}s...", failure_label, failed_duration);
+                
+                sleep(Duration::from_secs(failed_duration)).await;
+                
+                failure_is_failed.store(false, Ordering::SeqCst);
+                failure_cluster.update_tags([
+                    ("role", "worker"),
+                    ("label", failure_label.as_str()),
+                    ("status", "healthy"),
+                ]).await;
+                info!("✅ [{}] Worker recovered and healthy again!", failure_label);
+            }
+        });
     }
 
     info!("🚀 Worker '{}' is running and ready to handle requests", worker_label);

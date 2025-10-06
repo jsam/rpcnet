@@ -7,7 +7,7 @@ use std::env;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::str::FromStr;
-use tokio::time::{Duration, timeout};
+use tokio::time::Duration;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
@@ -53,7 +53,8 @@ async fn main() -> Result<()> {
         
         let director_config = RpcConfig::new(cert_path, "0.0.0.0:0")
             .with_key_path(key_path)
-            .with_server_name("localhost");
+            .with_server_name("localhost")
+            .with_default_stream_timeout(Duration::from_secs(3));
         
         let director_client = match DirectorRegistryClient::connect(director_addr, director_config).await {
             Ok(client) => client,
@@ -87,7 +88,8 @@ async fn main() -> Result<()> {
                 let worker_addr = SocketAddr::from_str(&worker_addr_str)?;
                 let worker_config = RpcConfig::new(cert_path, "0.0.0.0:0")
                     .with_key_path(key_path)
-                    .with_server_name("localhost");
+                    .with_server_name("localhost")
+                    .with_default_stream_timeout(Duration::from_secs(3));
                 
                 match InferenceClient::connect(worker_addr, worker_config).await {
                     Ok(worker_client) => {
@@ -106,12 +108,9 @@ async fn main() -> Result<()> {
                         let conn_id = response.connection_id.clone();
                         let req_prompt = prompt.clone();
                         
-                        let (tx, rx) = tokio::sync::mpsc::channel::<InferenceRequest>(10);
-                        let request_stream = tokio_stream::wrappers::ReceiverStream::new(rx);
-                        
-                        let sender_task = tokio::spawn({
+                        let mut bidir_stream = rpcnet::streaming::BidirectionalStream::with_task(10, {
                             let conn_id = conn_id.clone();
-                            async move {
+                            move |sender| async move {
                                 for i in 0..100 {
                                     let req = InferenceRequest {
                                         connection_id: conn_id.clone(),
@@ -122,7 +121,7 @@ async fn main() -> Result<()> {
                                         chunk = i,
                                         "📤 client sending request chunk"
                                     );
-                                    if tx.send(req).await.is_err() {
+                                    if sender.send(req).await.is_err() {
                                         info!(connection.id = %conn_id, "📤 request stream closed by receiver");
                                         break;
                                     }
@@ -137,7 +136,9 @@ async fn main() -> Result<()> {
                             "🔌 calling generate on worker"
                         );
                         
-                        match worker_client.generate(Box::pin(request_stream)).await {
+                        let stream_to_send = bidir_stream.into_stream();
+                        
+                        match worker_client.generate(stream_to_send).await {
                             Ok(stream) => {
                                 info!(
                                     connection.id = %response.connection_id,
@@ -149,23 +150,14 @@ async fn main() -> Result<()> {
                                 let mut worker_failed = false;
 
                                 loop {
-                                    let result = match timeout(Duration::from_secs(3), stream.next()).await {
-                                        Ok(Some(r)) => r,
-                                        Ok(None) => {
+                                    let result = match stream.next().await {
+                                        Some(r) => r,
+                                        None => {
                                             info!(
                                                 connection.id = %connection_id.as_ref().unwrap(),
                                                 worker = %worker_label,
                                                 "Stream ended normally"
                                             );
-                                            break;
-                                        }
-                                        Err(_) => {
-                                            error!(
-                                                connection.id = %connection_id.as_ref().unwrap(),
-                                                worker = %worker_label,
-                                                "⏱️  Response timeout - worker appears dead"
-                                            );
-                                            worker_failed = true;
                                             break;
                                         }
                                     };
@@ -226,7 +218,6 @@ async fn main() -> Result<()> {
                                 }
                                 
                                 drop(stream);
-                                sender_task.abort();
                                 
                                 if worker_failed {
                                     info!("🔄 returning to director for new worker assignment");

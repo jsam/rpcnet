@@ -37,7 +37,15 @@ impl InferenceClient {
                             .map_err(|_| InferenceError::InvalidRequest("Deserialization failed".to_string()))
                             .and_then(|inner_result| inner_result)
                     }
-                    Err(e) => Err(InferenceError::WorkerFailed(format!("Network error: {}", e)))
+                    Err(rpcnet::streaming::StreamError::Timeout) => {
+                        Err(InferenceError::WorkerFailed("Timeout waiting for response".to_string()))
+                    }
+                    Err(rpcnet::streaming::StreamError::Transport(e)) => {
+                        Err(InferenceError::WorkerFailed(format!("Network error: {}", e)))
+                    }
+                    Err(rpcnet::streaming::StreamError::Item(_)) => {
+                        Err(InferenceError::InvalidRequest("Unexpected item error".to_string()))
+                    }
                 }
             });
         Ok(Box::pin(typed_response_stream))

@@ -22,7 +22,9 @@ use tokio::{
     sync::{oneshot, RwLock},
     task::JoinHandle,
 };
-use tracing::{debug, info};
+use tracing::debug;
+
+pub mod streaming;
 
 pub mod runtime {
     //! Helpers for configuring Tokio runtimes.
@@ -188,6 +190,8 @@ pub struct RpcConfig {
     pub bind_address: String,
 
     pub keep_alive_interval: Option<Duration>,
+
+    pub default_stream_timeout: Duration,
 }
 
 impl RpcConfig {
@@ -198,6 +202,7 @@ impl RpcConfig {
             server_name: "localhost".to_string(),
             bind_address: bind_address.into(),
             keep_alive_interval: Some(Duration::from_secs(30)),
+            default_stream_timeout: Duration::from_secs(3),
         }
     }
 
@@ -213,6 +218,11 @@ impl RpcConfig {
 
     pub fn with_keep_alive_interval(mut self, interval: Duration) -> Self {
         self.keep_alive_interval = Some(interval);
+        self
+    }
+
+    pub fn with_default_stream_timeout(mut self, timeout: Duration) -> Self {
+        self.default_stream_timeout = timeout;
         self
     }
 }
@@ -400,6 +410,28 @@ impl RpcServer {
                 Box::pin(handler(params)) as Pin<Box<dyn Future<Output = _> + Send>>
             }),
         );
+    }
+
+    pub async fn register_typed<Req, Resp, F, Fut>(&self, method: &str, handler: F)
+    where
+        Req: serde::de::DeserializeOwned + Send + 'static,
+        Resp: serde::Serialize + Send + 'static,
+        F: Fn(Req) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Resp, RpcError>> + Send + 'static,
+    {
+        let handler = Arc::new(handler);
+        self.register(method, move |params: Vec<u8>| {
+            let handler = handler.clone();
+            async move {
+                let request: Req = bincode::deserialize(&params)
+                    .map_err(|e| RpcError::SerializationError(e))?;
+                
+                let response = handler(request).await?;
+                
+                bincode::serialize(&response)
+                    .map_err(|e| RpcError::SerializationError(e))
+            }
+        }).await;
     }
 
     pub async fn register_streaming<F, Fut, S>(&self, method: &str, handler: F)
@@ -907,7 +939,7 @@ fn canonicalize_path(path: &Path) -> Result<std::path::PathBuf, RpcError> {
 
 pub struct RpcClient {
     connection: Arc<RwLock<Box<dyn QuicConnectionAdapter + Send + Sync>>>,
-
+    config: RpcConfig,
     pub next_id: Arc<AtomicU64>,
 }
 
@@ -969,6 +1001,7 @@ impl RpcClient {
             connection: Arc::new(RwLock::new(Box::new(RealConnectionAdapter::new(
                 connection,
             )))),
+            config,
             next_id: Arc::new(AtomicU64::new(1)),
         })
     }
@@ -979,6 +1012,7 @@ impl RpcClient {
     ) -> Self {
         Self {
             connection: Arc::new(RwLock::new(connection)),
+            config: RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0"),
             next_id: Arc::new(AtomicU64::new(1)),
         }
     }
@@ -1040,7 +1074,7 @@ impl RpcClient {
         &self,
         method: &str,
         request_stream: S,
-    ) -> Result<impl Stream<Item = Result<Vec<u8>, RpcError>>, RpcError>
+    ) -> Result<streaming::TimeoutStream<impl Stream<Item = Result<Vec<u8>, RpcError>>>, RpcError>
     where
         S: Stream<Item = Vec<u8>> + Send + 'static,
     {
@@ -1138,19 +1172,22 @@ impl RpcClient {
             }
         });
 
-        // Return a stream that reads from the response channel
-        Ok(async_stream::stream! {
+        // Create the base stream
+        let base_stream = async_stream::stream! {
             while let Some(response) = response_rx.recv().await {
                 yield response;
             }
-        })
+        };
+
+        // Wrap with timeout stream using config's default timeout
+        Ok(streaming::TimeoutStream::new(base_stream, self.config.default_stream_timeout))
     }
 
     pub async fn call_server_streaming(
         &self,
         method: &str,
         request: Vec<u8>,
-    ) -> Result<impl Stream<Item = Result<Vec<u8>, RpcError>>, RpcError> {
+    ) -> Result<streaming::TimeoutStream<impl Stream<Item = Result<Vec<u8>, RpcError>>>, RpcError> {
         use futures::stream;
 
         // Create a single-item stream for the request
@@ -1174,7 +1211,11 @@ impl RpcClient {
 
         match response_stream.next().await {
             Some(Ok(response)) => Ok(response),
-            Some(Err(e)) => Err(e),
+            Some(Err(streaming::StreamError::Timeout)) => Err(RpcError::Timeout),
+            Some(Err(streaming::StreamError::Transport(e))) => Err(e),
+            Some(Err(streaming::StreamError::Item(_))) => {
+                Err(RpcError::StreamError("Unexpected item error".to_string()))
+            }
             None => Err(RpcError::StreamError("No response received".to_string())),
         }
     }

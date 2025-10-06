@@ -182,6 +182,83 @@ impl ClusterMembership {
         Err(ClusterError::NoSeedsReachable)
     }
 
+    pub async fn register_self<I, K, V>(&self, tags: I)
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        let tags_map: HashMap<String, String> = tags
+            .into_iter()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect();
+
+        *self.tags.write().await = tags_map.clone();
+
+        if let Some(mut self_status) = self.registry.get(&self.node_id) {
+            self_status.tags = tags_map.clone();
+            self_status.incarnation.increment();
+            self.registry.insert(self_status.clone());
+
+            let update = NodeUpdate {
+                node_id: self.node_id.clone(),
+                addr: self.node_addr,
+                state: NodeState::Alive,
+                incarnation: self_status.incarnation,
+                tags: self_status.tags.clone(),
+            };
+
+            self.gossip.broadcast(update, Priority::High).await;
+
+            self.event_broadcaster.send(ClusterEvent::NodeTagsUpdated {
+                node_id: self.node_id.clone(),
+                tags: self_status.tags,
+            });
+        }
+    }
+
+    pub async fn update_tags<I, K, V>(&self, tags: I)
+    where
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        let updates: HashMap<String, String> = tags
+            .into_iter()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect();
+
+        {
+            let mut current_tags = self.tags.write().await;
+            for (key, value) in updates.iter() {
+                current_tags.insert(key.clone(), value.clone());
+            }
+        }
+
+        if let Some(mut self_status) = self.registry.get(&self.node_id) {
+            for (key, value) in updates.iter() {
+                self_status.tags.insert(key.clone(), value.clone());
+            }
+            self_status.incarnation.increment();
+            self.registry.insert(self_status.clone());
+
+            let update = NodeUpdate {
+                node_id: self.node_id.clone(),
+                addr: self.node_addr,
+                state: NodeState::Alive,
+                incarnation: self_status.incarnation,
+                tags: self_status.tags.clone(),
+            };
+
+            self.gossip.broadcast(update, Priority::High).await;
+
+            self.event_broadcaster.send(ClusterEvent::NodeTagsUpdated {
+                node_id: self.node_id.clone(),
+                tags: self_status.tags,
+            });
+        }
+    }
+
     pub async fn update_tag(&self, key: String, value: String) {
         self.tags.write().await.insert(key.clone(), value.clone());
 
