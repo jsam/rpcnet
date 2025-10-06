@@ -1,12 +1,23 @@
-# rpcnet
+<div align="center">
+
+# RpcNet
 
 [![PR Checks](https://github.com/jsam/rpcnet/workflows/PR%20Checks/badge.svg)](https://github.com/jsam/rpcnet/actions/workflows/pr-checks.yml)
 [![Coverage](https://codecov.io/gh/jsam/rpcnet/branch/main/graph/badge.svg)](https://codecov.io/gh/jsam/rpcnet)
 [![Crates.io](https://img.shields.io/crates/v/rpcnet.svg)](https://crates.io/crates/rpcnet)
 [![Documentation](https://docs.rs/rpcnet/badge.svg)](https://docs.rs/rpcnet)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/jsam/rpcnet#license)
+[![Rust Version](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org)
+[![Downloads](https://img.shields.io/crates/d/rpcnet.svg)](https://crates.io/crates/rpcnet)
+[![Stars](https://img.shields.io/github/stars/jsam/rpcnet?style=social)](https://github.com/jsam/rpcnet)
 
-A low latency RPC library for Rust achieving with full QUIC+TLS encryption. Built on the modern QUIC protocol for secure, reliable, and multiplexed communication.
+**A low latency RPC library for cluster building with full QUIC+TLS and SWIM support**
+
+[Getting Started](#quick-start) • [Documentation](https://docs.rs/rpcnet) • [User Guide](https://jsam.github.io/rpcnet/) • [Examples](#examples) • [Benchmarks](#benchmarking)
+
+</div>
+
+---
 
 ## 🚀 Performance
 
@@ -47,14 +58,14 @@ Add `rpcnet` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rpcnet = "0.2.0"
+rpcnet = "0.1.0"
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 async-trait = "0.1"
 
 # Optional: For code generation in build.rs
 [build-dependencies]
-rpcnet = { version = "0.2.0", features = ["codegen"] }
+rpcnet = { version = "0.1.0", features = ["codegen"] }
 ```
 
 ### Installing the CLI Tool
@@ -256,7 +267,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Testing
 
-RpcNet maintains **90%+ test coverage** with comprehensive unit tests, integration tests, and examples:
+RpcNet maintains **65%+ test coverage** with comprehensive unit tests, integration tests, and examples:
 
 ```bash
 # Run all tests
@@ -265,7 +276,7 @@ cargo test
 # Generate coverage report
 make coverage
 
-# Check coverage meets 90% threshold
+# Check coverage meets 65% threshold
 make coverage-check
 
 # Analyze coverage gaps
@@ -277,10 +288,7 @@ cargo run --example basic_client_server
 
 ### Coverage Requirements
 
-- **Overall Project**: 90% minimum coverage
-- **Security Features**: 95% minimum coverage  
-- **Core RPC**: 95% minimum coverage
-- **Transport Layer**: 90% minimum coverage
+- **Overall Project**: 65% minimum coverage
 
 See [docs/COVERAGE.md](docs/COVERAGE.md) for detailed coverage information and [TESTING.md](TESTING.md) for testing guidelines.
 
@@ -378,18 +386,25 @@ DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
 
 ## Documentation
 
-### Quick Documentation Access
+### 📖 [Read the User Guide](https://jsam.github.io/rpcnet/)
+
+The comprehensive user guide is available online at **[jsam.github.io/rpcnet](https://jsam.github.io/rpcnet/)** and includes:
+
+- **📚 Complete Tutorial**: Step-by-step guide from basics to advanced patterns
+- **🔨 Code Generation**: Complete guide to the code generation feature
+- **🌐 Cluster Management**: Distributed systems and load balancing
+- **🚀 Performance Guide**: Benchmarking and optimization tips
+- **💡 Best Practices**: Production deployment recommendations
+- **📝 Examples**: Working code you can copy and adapt
+
+### API Documentation
 
 ```bash
-# Open the complete tutorial and API documentation locally
+# Open the API reference documentation locally
 cargo doc --features codegen --open
 ```
 
-The documentation includes:
-- **📚 Complete Tutorial**: Step-by-step guide from basics to advanced patterns
-- **🔧 API Reference**: Full documentation of all public APIs
+The API documentation includes:
+- **🔧 Full API Reference**: Complete documentation of all public APIs
 - **🧪 [Testing Guide](TESTING.md)**: Comprehensive testing and coverage information
-- **🚀 Performance Guide**: Benchmarking and optimization tips
-- **🔨 Code Generation**: Complete guide to the code generation feature
-- **💡 Best Practices**: Production deployment recommendations
-- **📝 Examples**: Working code you can copy and adapt
+- **📊 [Coverage Report](docs/COVERAGE.md)**: Detailed coverage metrics

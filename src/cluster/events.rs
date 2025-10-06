@@ -64,6 +64,7 @@ impl ClusterEventBroadcaster {
         if self.tx.receiver_count() > 0 && self.tx.send(event).is_err() {
             let current_drops = self.drops.fetch_add(1, Ordering::SeqCst) + 1;
 
+            #[allow(unknown_lints, clippy::manual_is_multiple_of)]
             if current_drops % 100 == 0 {
                 let _ = self.tx.send(ClusterEvent::EventsDropped {
                     count: current_drops,

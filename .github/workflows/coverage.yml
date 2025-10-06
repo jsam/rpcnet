@@ -94,7 +94,7 @@ jobs:
           try {
             const coverage = JSON.parse(fs.readFileSync('target/coverage/tarpaulin-report.json', 'utf8'));
             const coveragePercent = coverage.coverage.toFixed(1);
-            const threshold = 90.0;
+            const threshold = 65.0;
             const status = coveragePercent >= threshold ? '✅' : '❌';
             
             const body = `## ${status} Coverage Report

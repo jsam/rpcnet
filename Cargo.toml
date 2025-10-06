@@ -1,6 +1,6 @@
 [package]
 name = "rpcnet"
-version = "0.2.0"
+version = "0.1.0"
 edition = "2021"
 authors = ["Sam Hart <contact@justsam.io>"]
 description = "RPC library based on QUIC+TLS encryption"

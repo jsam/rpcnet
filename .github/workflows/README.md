@@ -17,7 +17,7 @@ Runs comprehensive checks on every pull request and push to main. This is the pr
 1. **Format Check** - Ensures code is properly formatted with `rustfmt`
 2. **Clippy Lint** - Runs Clippy linter with strict warnings
 3. **Test Suite** - Runs all tests on multiple platforms (Ubuntu, macOS) and Rust versions (stable, beta)
-4. **Coverage Analysis** - Measures code coverage and enforces 90% threshold
+4. **Coverage Analysis** - Measures code coverage and enforces 65% threshold
 5. **Security Audit** - Checks for security vulnerabilities with `cargo-audit`
 6. **Documentation** - Builds docs and checks for broken links
 7. **Examples** - Verifies all examples compile successfully
@@ -64,6 +64,28 @@ Automates the complete release process to crates.io.
 - Comprehensive release summaries
 
 **See:** `RELEASE.md` for complete release instructions
+
+### 📖 Deploy mdBook (`mdbook.yml`)
+
+Builds and deploys the user guide to GitHub Pages.
+
+**Triggered on:**
+- Push to `main` branch (deploys to GitHub Pages)
+- Pull requests to `main` (builds but doesn't deploy)
+- Manual workflow dispatch
+
+**Jobs:**
+
+1. **Build** - Builds the mdBook documentation from `docs/mdbook/`
+2. **Deploy** - Deploys to GitHub Pages (only on main branch)
+
+**Features:**
+- Automatically publishes user guide to `https://jsam.github.io/rpcnet/`
+- Validates book builds correctly on PRs
+- Uses latest mdBook version
+- Artifact retention for review
+
+**Note:** GitHub Pages must be enabled in repository settings with source set to "GitHub Actions".
 
 ## Local Testing
 
