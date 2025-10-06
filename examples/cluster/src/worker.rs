@@ -21,7 +21,6 @@ struct WorkerHandler {
     worker_label: String,
     is_failed: Arc<AtomicBool>,
     failure_enabled: bool,
-    cluster: Arc<tokio::sync::RwLock<Option<Arc<rpcnet::cluster::ClusterMembership>>>>,
 }
 
 #[async_trait]
@@ -33,7 +32,6 @@ impl InferenceHandler for WorkerHandler {
         let name = self.worker_label.clone();
         let worker_label = self.worker_label.clone();
         let is_failed = self.is_failed.clone();
-        let cluster_holder = self.cluster.clone();
         
         if is_failed.load(Ordering::SeqCst) {
             error!("🚫 [{}] Rejecting request - worker is in failed state", name);
@@ -146,13 +144,10 @@ async fn main() -> Result<()> {
 
     let is_failed = Arc::new(AtomicBool::new(false));
     
-    let cluster_holder = Arc::new(tokio::sync::RwLock::new(None));
-    
     let handler = WorkerHandler {
         worker_label: worker_label.clone(),
         is_failed: is_failed.clone(),
         failure_enabled: worker_failure_enabled,
-        cluster: cluster_holder.clone(),
     };
     
     let mut server = InferenceServer::new(handler, config.clone());
@@ -170,25 +165,34 @@ async fn main() -> Result<()> {
     );
 
     info!("🌐 Enabling cluster, connecting to director at {}...", director_addr);
-    let cluster_config = ClusterConfig::default();
+    let cluster_config = ClusterConfig {
+        node_id: None,
+        gossip: rpcnet::cluster::GossipConfig::default()
+            .with_protocol_period(Duration::from_millis(500))
+            .with_ack_timeout(Duration::from_millis(200))
+            .with_indirect_timeout(Duration::from_millis(400)),
+        health: rpcnet::cluster::HealthCheckConfig {
+            check_interval: Duration::from_secs(1),
+            phi_threshold: 5.0,
+        },
+        pool: rpcnet::cluster::PoolConfig::default(),
+        bootstrap_timeout: Duration::from_secs(30),
+    };
     server.rpc_server
         .enable_cluster(cluster_config, vec![director_addr], quic_client)
         .await?;
     info!("✅ Cluster enabled, connected to director");
 
     let cluster = server.rpc_server.cluster().await.expect("Cluster should be enabled");
-    
-    *cluster_holder.write().await = Some(cluster.clone());
 
-    info!("🏷️  Tagging worker with role=worker, label={}, status=healthy...", worker_label);
+    info!("🏷️  Tagging worker with role=worker, label={}...", worker_label);
     cluster.update_tags([
         ("role", "worker"),
         ("label", worker_label.as_str()),
-        ("status", "healthy"),
     ]).await;
     
     info!(
-        "✅ Worker '{}' joined cluster with role=worker, label={}, status=healthy",
+        "✅ Worker '{}' joined cluster with role=worker, label={}",
         worker_label, worker_label
     );
 
@@ -202,10 +206,10 @@ async fn main() -> Result<()> {
     });
     
     if worker_failure_enabled {
-        info!("⚠️  [{}] Worker failure simulation enabled - will fail every 15-30s for 3-15s", worker_label);
+        info!("⚠️  [{}] Worker failure simulation enabled - will fail every 15-30s for 10-15s", worker_label);
         let failure_is_failed = is_failed.clone();
-        let failure_cluster = cluster.clone();
         let failure_label = worker_label.clone();
+        let failure_cluster = cluster.clone();
         tokio::spawn(async move {
             loop {
                 let healthy_duration = rand::thread_rng().gen_range(15..30);
@@ -213,23 +217,15 @@ async fn main() -> Result<()> {
                 sleep(Duration::from_secs(healthy_duration)).await;
                 
                 failure_is_failed.store(true, Ordering::SeqCst);
-                failure_cluster.update_tags([
-                    ("role", "worker"),
-                    ("label", failure_label.as_str()),
-                    ("status", "failed"),
-                ]).await;
-                let failed_duration = rand::thread_rng().gen_range(3..15);
-                error!("💥 [{}] Worker failed! Will recover in {}s...", failure_label, failed_duration);
+                failure_cluster.stop_heartbeats();
+                let failed_duration = rand::thread_rng().gen_range(10..15);
+                error!("💥 [{}] Worker failed! Blocking SWIM ACKs, will recover in {}s (SWIM should detect within 2s)", failure_label, failed_duration);
                 
                 sleep(Duration::from_secs(failed_duration)).await;
                 
                 failure_is_failed.store(false, Ordering::SeqCst);
-                failure_cluster.update_tags([
-                    ("role", "worker"),
-                    ("label", failure_label.as_str()),
-                    ("status", "healthy"),
-                ]).await;
-                info!("✅ [{}] Worker recovered and healthy again!", failure_label);
+                failure_cluster.resume_heartbeats();
+                info!("✅ [{}] Worker recovered - resumed sending SWIM ACKs, SWIM will mark as alive", failure_label);
             }
         });
     }

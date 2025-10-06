@@ -84,7 +84,6 @@ impl WorkerRegistry {
                     .filter(|node| {
                         node.state == crate::cluster::gossip::NodeState::Alive
                             && node.tags.get("role").map(|v| v.as_str()) == Some("worker")
-                            && node.tags.get("status").map(|v| v.as_str()) != Some("failed")
                     })
                     .collect();
                 

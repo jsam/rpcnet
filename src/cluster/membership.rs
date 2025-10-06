@@ -8,6 +8,7 @@ use s2n_quic::Client as QuicClient;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tokio::time::timeout;
@@ -62,6 +63,7 @@ pub struct ClusterMembership {
     event_broadcaster: ClusterEventBroadcaster,
     tags: Arc<RwLock<HashMap<String, String>>>,
     joined: Arc<tokio::sync::RwLock<bool>>,
+    swim_acks_blocked: Arc<AtomicBool>,
 }
 
 impl ClusterMembership {
@@ -117,6 +119,7 @@ impl ClusterMembership {
             event_broadcaster,
             tags: Arc::new(RwLock::new(HashMap::new())),
             joined: Arc::new(tokio::sync::RwLock::new(false)),
+            swim_acks_blocked: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -410,6 +413,18 @@ impl ClusterMembership {
             total_connections: pool_stats.total_connections,
             idle_connections: pool_stats.idle,
         }
+    }
+
+    pub fn stop_heartbeats(&self) {
+        self.swim_acks_blocked.store(true, Ordering::SeqCst);
+    }
+
+    pub fn resume_heartbeats(&self) {
+        self.swim_acks_blocked.store(false, Ordering::SeqCst);
+    }
+
+    pub fn should_block_swim_acks(&self) -> bool {
+        self.swim_acks_blocked.load(Ordering::SeqCst)
     }
 }
 

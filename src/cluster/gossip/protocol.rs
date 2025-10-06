@@ -62,12 +62,12 @@ impl SwimProtocol {
     async fn protocol_period(&self) {
         use tracing::debug;
         
-        let nodes = self.registry.alive_nodes();
+        let nodes = self.registry.all_nodes();
         
-        debug!("🔄 [SWIM] Protocol period: {} alive nodes in registry", nodes.len());
+        debug!("🔄 [SWIM] Protocol period: {} total nodes in registry", nodes.len());
         
         if nodes.is_empty() {
-            debug!("⚠️  [SWIM] No alive nodes to ping");
+            debug!("⚠️  [SWIM] No nodes to ping");
             return;
         }
 
@@ -113,7 +113,13 @@ impl SwimProtocol {
         )
         .await
         {
-            Ok(Ok(Some(SwimMessage::Ack { .. }))) => true,
+            Ok(Ok(Some(SwimMessage::Ack { .. }))) => {
+                let mut updated = target.clone();
+                updated.state = NodeState::Alive;
+                updated.last_seen = std::time::Instant::now();
+                self.registry.insert(updated);
+                true
+            },
             _ => false,
         }
     }
@@ -158,7 +164,12 @@ impl SwimProtocol {
             )
         });
 
-        if !ack_received {
+        if ack_received {
+            let mut updated = target.clone();
+            updated.state = NodeState::Alive;
+            updated.last_seen = std::time::Instant::now();
+            self.registry.insert(updated);
+        } else {
             self.mark_suspect(target).await;
         }
     }

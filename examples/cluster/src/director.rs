@@ -62,7 +62,19 @@ async fn main() -> Result<()> {
             .start()?,
     );
 
-    let cluster_config = ClusterConfig::default();
+    let cluster_config = ClusterConfig {
+        node_id: None,
+        gossip: rpcnet::cluster::GossipConfig::default()
+            .with_protocol_period(Duration::from_millis(500))
+            .with_ack_timeout(Duration::from_millis(200))
+            .with_indirect_timeout(Duration::from_millis(400)),
+        health: rpcnet::cluster::HealthCheckConfig {
+            check_interval: Duration::from_secs(1),
+            phi_threshold: 5.0,
+        },
+        pool: rpcnet::cluster::PoolConfig::default(),
+        bootstrap_timeout: Duration::from_secs(30),
+    };
     server
         .enable_cluster(cluster_config.clone(), vec![], quic_client.clone())
         .await?;

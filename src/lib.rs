@@ -622,6 +622,11 @@ impl RpcServer {
                   node_status.node_id, node_status.tags);
         }
 
+        if cluster.should_block_swim_acks() {
+            debug!("🚫 [SWIM] Node is simulating failure - blocking ACK response");
+            return;
+        }
+
         let self_status = cluster.registry().get(cluster.node_id());
         let my_updates = if let Some(status) = self_status {
             vec![NodeUpdate {
