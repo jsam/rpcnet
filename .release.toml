@@ -1,0 +1,30 @@
+# cargo-release configuration
+# https://github.com/crate-ci/cargo-release/blob/master/docs/reference.md
+
+# Don't push automatically
+push = false
+
+# Allow dirty working directory (for changelog generation)
+allow-branch = ["main", "release/*"]
+
+# Tag format
+tag-name = "{{version}}"
+tag-prefix = ""
+
+# Sign tags
+sign-tag = false
+
+# Consolidate commits
+consolidate-commits = true
+
+# Pre-release replacements
+pre-release-replacements = [
+  { file = "CHANGELOG.md", search = "## \\[Unreleased\\]", replace = "## [Unreleased]\n\n## [{{version}}] - {{date}}", exactly = 1 },
+  { file = "README.md", search = "rpcnet = \"[^\"]+\"", replace = "rpcnet = \"{{version}}\"" },
+]
+
+# Disable automatic push - we'll do it via PR
+push-remote = "origin"
+
+# Pre-release hook to ensure changelog is generated
+pre-release-hook = ["git", "cliff", "--tag", "{{version}}", "-o", "CHANGELOG.md"]

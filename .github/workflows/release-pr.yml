@@ -1,0 +1,156 @@
+name: Release PR
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, reopened ]
+
+jobs:
+  check-release:
+    name: Validate Release PR
+    runs-on: ubuntu-latest
+    if: startsWith(github.head_ref, 'release/')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Install git-cliff
+      run: cargo install git-cliff
+    
+    - name: Extract version from branch
+      id: version
+      run: |
+        BRANCH_NAME="${{ github.head_ref }}"
+        VERSION=${BRANCH_NAME#release/}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Release version: $VERSION"
+    
+    - name: Verify Cargo.toml version matches
+      run: |
+        CARGO_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        EXPECTED_VERSION="${{ steps.version.outputs.version }}"
+        
+        if [ "$CARGO_VERSION" != "$EXPECTED_VERSION" ]; then
+          echo "❌ Version mismatch!"
+          echo "   Cargo.toml: $CARGO_VERSION"
+          echo "   Expected:   $EXPECTED_VERSION"
+          exit 1
+        fi
+        
+        echo "✅ Version matches: $CARGO_VERSION"
+    
+    - name: Verify CHANGELOG.md exists and is updated
+      run: |
+        if [ ! -f "CHANGELOG.md" ]; then
+          echo "❌ CHANGELOG.md not found"
+          exit 1
+        fi
+        
+        VERSION="${{ steps.version.outputs.version }}"
+        if ! grep -q "## \[${VERSION}\]" CHANGELOG.md; then
+          echo "❌ CHANGELOG.md doesn't contain version ${VERSION}"
+          exit 1
+        fi
+        
+        echo "✅ CHANGELOG.md is updated"
+    
+    - name: Check for conventional commits
+      run: |
+        echo "Validating commit messages follow conventional commits..."
+        
+        # Get commits in this PR
+        git fetch origin main
+        COMMITS=$(git log origin/main..HEAD --pretty=format:"%s")
+        
+        # Simple validation (you can make this stricter)
+        echo "$COMMITS" | while read -r commit; do
+          if [[ ! "$commit" =~ ^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?!?:\ .+ ]]; then
+            echo "⚠️  Warning: Commit may not follow conventional commits: $commit"
+          fi
+        done
+        
+        echo "✅ Commit validation complete"
+    
+    - name: Verify version bump is valid
+      run: |
+        CURRENT_VERSION=$(git show origin/main:Cargo.toml | grep '^version = ' | head -1 | sed 's/version = "\(.*\)"/\1/')
+        NEW_VERSION="${{ steps.version.outputs.version }}"
+        
+        echo "Current version (main): $CURRENT_VERSION"
+        echo "New version: $NEW_VERSION"
+        
+        # Basic semver validation (major.minor.patch)
+        if [[ ! "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+          echo "❌ Invalid version format: $NEW_VERSION"
+          exit 1
+        fi
+        
+        echo "✅ Version format is valid"
+    
+    - name: Build and test
+      run: |
+        cargo check
+        cargo test --all-features
+    
+    - name: Post PR comment
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const version = '${{ steps.version.outputs.version }}';
+          const body = `## 🚀 Release PR for ${version}
+          
+          This PR prepares the release for version **${version}**.
+          
+          ### Checklist
+          - ✅ Version updated in \`Cargo.toml\`
+          - ✅ \`CHANGELOG.md\` generated
+          - ✅ All tests passing
+          
+          ### After Merge
+          Once this PR is merged to main:
+          1. Create and push the git tag: \`git tag ${version} && git push origin ${version}\`
+          2. The release workflow will automatically publish to crates.io
+          3. GitHub release will be created automatically
+          
+          ### Manual Release Commands
+          \`\`\`bash
+          # After merge to main
+          git checkout main
+          git pull
+          git tag ${version}
+          git push origin ${version}
+          \`\`\`
+          `;
+          
+          // Find existing comment to update or create new one
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          
+          const botComment = comments.find(comment => 
+            comment.user.type === 'Bot' && comment.body.includes('Release PR for')
+          );
+          
+          if (botComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: body
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+          }
