@@ -26,15 +26,15 @@ dashmap = "6"
 futures = "0.3"
 md5 = "0.7.0"
 pin-project = "1.1"
-quiche = "0.22.0"
+quiche = "0.24.5"
 rand = "0.8.5"
-ring = "0.17.8"
+ring = "0.17.13"
 s2n-quic = "1.52.0"
 serde = { version = "1.0.217", features = ["derive"]}
 serde_json = "1.0"
 statrs = "0.17"
 thiserror = "2.0.10"
-tokio = { version = "1.43.0", features = ["full"]}
+tokio = { version = "1.43.1", features = ["full"]}
 tokio-stream = "0.1"
 tracing = "0.1"
 
