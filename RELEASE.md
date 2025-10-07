@@ -70,15 +70,6 @@ Trigger the workflow manually from GitHub Actions:
 # 4. Choose dry run or actual publish
 ```
 
-## Version Format
-
-Tags must follow semantic versioning with a `v` prefix:
-- ✅ `v0.2.1` - Patch release
-- ✅ `v0.3.0` - Minor release
-- ✅ `v1.0.0` - Major release
-- ✅ `v0.2.1-beta.1` - Pre-release
-- ❌ `0.2.1` - Missing `v` prefix (won't trigger workflow)
-
 ## Pre-Release Checklist
 
 Before creating a release, ensure:
@@ -300,4 +291,16 @@ If you encounter issues:
 
 ---
 
-Happy releasing! 🚀
+# Cheat sheet
+
+  # 1. Prepare release (runs on local machine)
+  make release-prepare VERSION=0.2.0
+
+  # 2. Create PR (standard pr-checks.yml validates)
+  git push -u origin release/0.2.0
+
+  # 3. Merge PR to main
+
+  # 4. Tag release (triggers release.yml workflow)
+  git tag -a 0.2.0 -m "Release 0.2.0"
+  git push origin 0.2.0  # 🚀 Automatically publishes to crates.io
