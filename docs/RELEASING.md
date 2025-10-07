@@ -17,14 +17,12 @@ The process is designed to be simple, requiring just a single command to prepare
 
 ### Required Tools
 
-The release preparation script will automatically install missing tools, but you can install them manually:
+The release tooling uses `git-cliff` for changelog generation. The Makefile will automatically install it if missing, so no manual installation is required.
+
+If you want to install it manually:
 
 ```bash
-# Install git-cliff for changelog generation (required)
 cargo install git-cliff
-
-# Install cargo-release for version management (optional, not currently used)
-cargo install cargo-release
 ```
 
 ### Repository Requirements
@@ -39,40 +37,40 @@ The following files control the release process:
 
 | File | Purpose |
 |------|---------|
+| `Makefile` | Main entry point - use `make release-prepare` |
 | `cliff.toml` | Configures git-cliff for changelog generation |
-| `.release.toml` | Configures cargo-release (optional) |
-| `scripts/prepare-release.sh` | Main automation script for releases |
+| `scripts/prepare-release.sh` | Automation script (called by Makefile) |
 | `.github/workflows/release-pr.yml` | GitHub Actions workflow for PR validation |
 | `docs/RELEASING.md` | This document - release process guide |
 
 ## Quick Start
 
-For the impatient, here's the TL;DR:
+For the impatient, here's the complete release workflow:
 
 ```bash
-# Prepare release
+# 1. Prepare release
 make release-prepare VERSION=0.2.0
 
-# Push and create PR
+# 2. Push and create PR
 git push -u origin release/0.2.0
 
-# After PR merge
+# 3. After PR is reviewed and merged
 git checkout main && git pull
-git tag 0.2.0 && git push origin 0.2.0
+git tag -a 0.2.0 -m "Release 0.2.0"
+git push origin 0.2.0
+
+# 4. Publish (if not automatic)
+make publish
 ```
 
 ## Detailed Release Process
 
 ### 1. Prepare Release
 
-Run the automated release preparation script using the Makefile:
+Use the Makefile to prepare a release:
 
 ```bash
-# Using Makefile (recommended)
 make release-prepare VERSION=<new-version>
-
-# Or directly using the script
-./scripts/prepare-release.sh <new-version>
 ```
 
 **Examples:**
@@ -92,20 +90,27 @@ make release-prepare VERSION=0.2.0-beta.1
 make release-prepare VERSION=1.0.0-rc.1
 ```
 
-**What the script does:**
+**What this does:**
 
 1. ✅ Validates version format (semver)
-2. ✅ Creates release branch: `release/<version>`
-3. ✅ Generates/updates `CHANGELOG.md` from conventional commits
-4. ✅ Updates version in `Cargo.toml`
-5. ✅ Updates version references in `README.md`
-6. ✅ Updates `Cargo.lock`
-7. ✅ Creates a single commit with all changes
-8. ✅ Provides next steps instructions
+2. ✅ Installs `git-cliff` if not already installed
+3. ✅ Creates release branch: `release/<version>`
+4. ✅ Generates/updates `CHANGELOG.md` from conventional commits
+5. ✅ Updates version in `Cargo.toml`
+6. ✅ Updates version references in `README.md`
+7. ✅ Updates `Cargo.lock`
+8. ✅ Creates a single commit with all changes
 
-**Output Example:**
+**Example:**
+
+```bash
+make release-prepare VERSION=0.2.0
+```
+
+**Output:**
 
 ```
+Preparing release 0.2.0...
 Current version: 0.1.0
 Preparing release 0.2.0
 Creating release branch: release/0.2.0
@@ -132,33 +137,27 @@ Before pushing, review what was changed:
 # Review the commit
 git show
 
-# Check the diff
-git diff HEAD~1
-
 # Review the generated changelog
 cat CHANGELOG.md
-
-# Check updated files
-git status
 ```
 
-### 3. Create Release PR
+### 3. Push and Create PR
 
-Push the release branch and create a PR:
+Push the release branch:
 
 ```bash
-# Push the release branch
 git push -u origin release/<version>
+```
 
-# Example
+**Example:**
+```bash
 git push -u origin release/0.2.0
 ```
 
-Then create a Pull Request on GitHub:
+GitHub will automatically prompt you to create a Pull Request. Alternatively:
 1. Go to https://github.com/jsam/rpcnet/compare
-2. Select `main` as the base branch
-3. Select your `release/<version>` branch as the compare branch
-4. Create the pull request
+2. Select your `release/<version>` branch
+3. Create the pull request targeting `main`
 
 **Automated PR Checks:**
 
@@ -208,19 +207,14 @@ Once approved by maintainers, merge the PR to `main` using:
 - "Squash and merge" (recommended) - creates clean history
 - "Merge commit" - preserves all commits
 
-### 5. Create Git Tag
+### 5. Tag the Release
 
-**After the PR is merged** to main, create and push the version tag:
+**After the PR is merged**, create and push the version tag:
 
 ```bash
-# 1. Switch to main and pull latest
 git checkout main
 git pull origin main
-
-# 2. Create annotated tag with message
 git tag -a <version> -m "Release <version>"
-
-# 3. Push tag to trigger release workflow
 git push origin <version>
 ```
 
@@ -232,67 +226,42 @@ git tag -a 0.2.0 -m "Release 0.2.0"
 git push origin 0.2.0
 ```
 
-**What happens next:**
+### 6. Publish
 
-Pushing the tag will trigger:
-- 📦 Package creation
-- 🧪 Full test suite
-- 📤 Publication to crates.io (if workflow is configured)
-- 🎉 GitHub Release creation with changelog
-
-### 6. Publish to crates.io
-
-**Automatic Publication (if configured):**
-
-If the release workflow is set up with `CARGO_REGISTRY_TOKEN`, publication happens automatically when you push the tag.
-
-**Manual Publication:**
-
-If automatic publication isn't configured, publish manually:
+Publish to crates.io using the Makefile:
 
 ```bash
-# 1. Ensure you're on the tagged commit
-git checkout 0.2.0
-
-# 2. Run pre-publication checks
-make publish-check
-
-# 3. Dry run to verify package contents
-make publish-dry-run
-
-# 4. Publish to crates.io
 make publish
-# or
-cargo publish
-
-# 5. Verify on crates.io
-open https://crates.io/crates/rpcnet
 ```
 
-### 7. Verify Release
+This will:
+- Run all pre-publication checks (tests, linting, docs)
+- Package the crate
+- Publish to crates.io with confirmation
 
-After publishing, verify everything worked:
-
-**Checklist:**
-
-- [ ] Check crates.io: https://crates.io/crates/rpcnet
-- [ ] Verify docs.rs built: https://docs.rs/rpcnet
-- [ ] Check GitHub release: https://github.com/jsam/rpcnet/releases
-- [ ] Test installation: `cargo install rpcnet --version <version>`
-- [ ] Verify badge updates in README
-
-**Test Installation:**
+**Or use individual commands:**
 
 ```bash
-# Create test project
-cargo new test-rpcnet
-cd test-rpcnet
+# Check everything is ready
+make publish-check
 
-# Add dependency
-cargo add rpcnet@0.2.0
+# Dry run to verify package
+make publish-dry-run
 
-# Verify it works
-cargo build
+# Publish
+make publish
+```
+
+### 7. Verify
+
+After publishing, verify the release:
+
+```bash
+# Check crates.io
+open https://crates.io/crates/rpcnet
+
+# Test installation
+cargo install rpcnet --version 0.2.0
 ```
 
 ## Conventional Commit Format
@@ -362,46 +331,16 @@ Use pre-release versions for beta/alpha releases:
 
 ## Advanced Usage
 
-### Manual Changelog Generation
+### Generate Changelog Only
 
-Generate changelog manually without creating a release:
-
-```bash
-# Using Makefile
-make changelog                    # Generate for all changes
-make changelog VERSION=0.2.0      # Generate for specific version
-
-# Using git-cliff directly
-git-cliff -o CHANGELOG.md                  # All changes
-git-cliff --tag 0.2.0 -o CHANGELOG.md    # Specific version
-git-cliff --tag 0.2.0                    # Preview only (no file)
-git-cliff --unreleased                    # Only unreleased changes
-```
-
-### Preview Changelog Before Release
-
-Preview what will be in the changelog:
+Generate changelog without creating a release:
 
 ```bash
-# Preview unreleased changes
-git-cliff --unreleased
+# Generate for all changes
+make changelog
 
-# Preview changes for next version
-git-cliff --tag 0.2.0 --unreleased
-```
-
-### Updating Existing Releases
-
-If you need to regenerate the entire changelog:
-
-```bash
-# Regenerate complete changelog from all tags
-git-cliff --tag 0.2.0 -o CHANGELOG.md
-
-# Or manually edit CHANGELOG.md and commit
-vim CHANGELOG.md
-git add CHANGELOG.md
-git commit -m "docs: update changelog"
+# Generate for specific version
+make changelog VERSION=0.2.0
 ```
 
 ## Common Workflows
@@ -478,33 +417,31 @@ If the release PR checks fail with version mismatch:
 vim Cargo.toml
 
 # Regenerate changelog
-git-cliff --tag 0.2.0 -o CHANGELOG.md
+make changelog VERSION=0.2.0
 
 # Commit and push
 git add Cargo.toml CHANGELOG.md
 git commit --amend --no-edit
-git push -f
+git push -f origin release/0.2.0
 ```
 
 ### Missing Conventional Commits
 
-If commits don't follow conventional format, they won't appear in changelog:
+If commits don't follow conventional format, they won't appear in changelog. Check recent commits and rewrite if needed (before pushing):
 
 ```bash
 # Check recent commits
 git log --oneline -20
 
-# Check what will be in changelog
-git-cliff --unreleased
-
-# Rewrite commit messages if needed (before pushing)
+# Rewrite commit messages
 git rebase -i HEAD~5
-
-# Update each commit to use conventional format:
-# feat: add new feature
-# fix: resolve bug
-# docs: update documentation
 ```
+
+Use conventional format:
+- `feat:` for new features
+- `fix:` for bug fixes
+- `docs:` for documentation
+- `perf:` for performance improvements
 
 ### Uncommitted Changes
 
@@ -540,36 +477,32 @@ git commit --amend --no-edit
 git push -f origin release/0.2.0
 ```
 
-### Changelog not generated
+### Changelog Not Generated
 
 ```bash
-# Install/reinstall git-cliff
-cargo install git-cliff --force
-
-# Check configuration
-cat cliff.toml
-
-# Generate manually
-git-cliff --tag 0.2.0 -o CHANGELOG.md
+# The Makefile will install git-cliff automatically
+make changelog VERSION=0.2.0
 ```
 
-## Configuration Files
+## Makefile Commands Reference
 
-- `cliff.toml` - git-cliff configuration for changelog generation
-- `.release.toml` - cargo-release configuration (optional)
-- `scripts/prepare-release.sh` - Automated release preparation script
-- `.github/workflows/release-pr.yml` - Release PR validation workflow
-- `.github/workflows/release.yml` - Automated release publishing workflow
+All release operations use the Makefile:
+
+| Command | Description |
+|---------|-------------|
+| `make release-prepare VERSION=X.Y.Z` | Prepare a new release |
+| `make changelog [VERSION=X.Y.Z]` | Generate changelog only |
+| `make publish-check` | Run pre-publication checks |
+| `make publish-dry-run` | Test package creation |
+| `make publish` | Publish to crates.io |
 
 ## Best Practices
 
-1. **Always use conventional commits** - This ensures good changelogs
-2. **Write descriptive commit bodies** - Helps reviewers understand changes
-3. **Test before releasing** - Run `cargo test --all-features`
-4. **Review generated changelog** - Edit if needed before merging PR
-5. **Document breaking changes** - Use `BREAKING CHANGE:` in commit body
-6. **Keep main stable** - All releases go through PR review
-7. **Tag immediately after merge** - Don't delay tagging the release
+1. **Use Makefile commands** - Don't call scripts directly
+2. **Use conventional commits** - Ensures good changelogs
+3. **Test before releasing** - Run `make test`
+4. **Review generated changelog** - Check before pushing PR
+5. **Tag immediately after merge** - Don't delay tagging
 
 ## Complete Example: Version 0.2.0 Release
 
@@ -663,4 +596,3 @@ cargo install rpcnet --version 0.2.0
 - [Conventional Commits](https://www.conventionalcommits.org/)
 - [Semantic Versioning](https://semver.org/)
 - [git-cliff Documentation](https://git-cliff.org/)
-- [cargo-release Documentation](https://github.com/crate-ci/cargo-release)
