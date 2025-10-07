@@ -2,14 +2,14 @@
 
 # RpcNet
 
-[![PR Checks](https://github.com/jsam/rpcnet/workflows/PR%20Checks/badge.svg)](https://github.com/jsam/rpcnet/actions/workflows/pr-checks.yml)
-[![Coverage](https://codecov.io/gh/jsam/rpcnet/branch/main/graph/badge.svg)](https://codecov.io/gh/jsam/rpcnet)
-[![Crates.io](https://img.shields.io/crates/v/rpcnet.svg)](https://crates.io/crates/rpcnet)
-[![Documentation](https://docs.rs/rpcnet/badge.svg)](https://docs.rs/rpcnet)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/jsam/rpcnet#license)
-[![Rust Version](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org)
-[![Downloads](https://img.shields.io/crates/d/rpcnet.svg)](https://crates.io/crates/rpcnet)
-[![Stars](https://img.shields.io/github/stars/jsam/rpcnet?style=social)](https://github.com/jsam/rpcnet)
+[![PR Checks](https://img.shields.io/github/actions/workflow/status/jsam/rpcnet/pr-checks.yml?style=flat-square&label=checks)](https://github.com/jsam/rpcnet/actions/workflows/pr-checks.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/jsam/rpcnet?style=flat-square)](https://codecov.io/gh/jsam/rpcnet)
+[![Crates.io](https://img.shields.io/crates/v/rpcnet?style=flat-square)](https://crates.io/crates/rpcnet)
+[![Documentation](https://img.shields.io/docsrs/rpcnet?style=flat-square)](https://docs.rs/rpcnet)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue?style=flat-square)](https://github.com/jsam/rpcnet#license)
+[![Rust Version](https://img.shields.io/badge/rust-1.70%2B-orange?style=flat-square)](https://www.rust-lang.org)
+[![Downloads](https://img.shields.io/crates/d/rpcnet?style=flat-square)](https://crates.io/crates/rpcnet)
+[![Stars](https://img.shields.io/github/stars/jsam/rpcnet?style=flat-square)](https://github.com/jsam/rpcnet/stargazers)
 
 **A low latency RPC library for cluster building with full QUIC+TLS and SWIM support**
 
@@ -38,7 +38,6 @@
 - **🗣️ Gossip Protocol**: SWIM-based gossip for efficient cluster communication
 - **🏷️ Tag-Based Routing**: Route requests to workers by tags (role, zone, GPU/CPU, etc.)
 - **📡 Event System**: Real-time cluster events (NodeJoined, NodeLeft, NodeFailed)
-- **🔌 Connection Pooling**: Efficient connection reuse with configurable pool settings
 - **🔁 Auto-Discovery**: Workers automatically discovered via gossip protocol
 - **🛡️ Partition Detection**: Automatic detection and handling of network partitions
 
@@ -308,12 +307,6 @@ cargo bench --bench simple max_throughput  # Test maximum throughput
 cargo bench --bench simple concurrent      # Test concurrent operations
 ```
 
-**Performance Highlights:**
-- **172,000+ requests/second** with full QUIC+TLS encryption
-- **Sub-millisecond latency** (< 0.1ms overhead) for local connections
-- **10,000+ concurrent streams** per connection
-- **Optimized memory usage** with BytesMut buffers and optional jemalloc allocator
-
 ## Examples
 
 ### Basic Examples (No Setup Required)
@@ -379,7 +372,6 @@ DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
 - Load balancing strategies (Round Robin, Random, Least Connections)
 - Phi Accrual failure detection with simulated failures
 - Tag-based routing and filtering
-- Connection pooling and reuse
 - Zero-downtime worker failover and recovery
 
 **📚 For comprehensive tutorials and documentation, see `cargo doc --open`**
