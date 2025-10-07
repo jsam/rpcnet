@@ -39,6 +39,8 @@ help:
 	@echo "  clean           - Clean build artifacts and coverage reports"
 	@echo ""
 	@echo "Release:"
+	@echo "  release-prepare - Prepare a new release (version bump + changelog)"
+	@echo "  changelog       - Generate changelog from conventional commits"
 	@echo "  publish-check   - Run all pre-publication checks (tests, lint, docs)"
 	@echo "  publish-dry-run - Package and verify crate contents before publishing"
 	@echo "  publish         - Publish to crates.io (includes all checks + confirmation)"
@@ -213,6 +215,31 @@ clean:
 	cargo clean
 	@echo "Cleaning coverage reports..."
 	rm -rf target/tarpaulin target/llvm-cov coverage llvm-coverage.lcov
+
+# Release management commands
+release-prepare:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION not specified"; \
+		echo "Usage: make release-prepare VERSION=0.2.0"; \
+		exit 1; \
+	fi
+	@echo "Preparing release $(VERSION)..."
+	./scripts/prepare-release.sh $(VERSION)
+
+changelog:
+	@echo "Generating changelog..."
+	@command -v git-cliff >/dev/null 2>&1 || { \
+		echo "git-cliff not found. Installing..."; \
+		cargo install git-cliff; \
+	}
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Generating changelog for all changes..."; \
+		git-cliff -o CHANGELOG.md; \
+	else \
+		echo "Generating changelog for version $(VERSION)..."; \
+		git-cliff --tag "$(VERSION)" -o CHANGELOG.md; \
+	fi
+	@echo "✅ Changelog generated in CHANGELOG.md"
 
 publish-check:
 	@echo "=== Pre-Publication Checks ==="
