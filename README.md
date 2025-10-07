@@ -19,14 +19,6 @@
 
 ---
 
-## 🚀 Performance
-
-- **172K+ RPS**: Exceptional throughput with full encryption (exceeds HTTP/1.1 performance!)
-- **QUIC Protocol**: Modern transport with connection multiplexing and 0-RTT resumption
-- **Optimized**: Custom QUIC limits, efficient buffer management, and minimal allocations
-- **Concurrent**: Handle 10,000+ simultaneous streams per connection
-- **Low Latency**: Less than 0.1ms overhead
-
 ## Features
 
 ### Core Features
@@ -49,6 +41,14 @@
 - **🔌 Connection Pooling**: Efficient connection reuse with configurable pool settings
 - **🔁 Auto-Discovery**: Workers automatically discovered via gossip protocol
 - **🛡️ Partition Detection**: Automatic detection and handling of network partitions
+
+## 🚀 Performance
+
+- Exceptional throughput with full encryption (exceeds HTTP/1.1 performance!)
+- Modern transport with connection multiplexing and 0-RTT resumption
+- Custom QUIC limits, efficient buffer management, and minimal allocations
+- Handle 10k+ simultaneous streams per connection
+- Under 100µs RTT over TLS overhead
 
 ## Installation
 

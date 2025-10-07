@@ -180,10 +180,10 @@
 client, server, and type modules consumed by your application. This chapter
 covers installation, day-to-day usage, and automation patterns.</p>
 <h2 id="installing"><a class="header" href="#installing">Installing</a></h2>
-<p>Starting with v0.2.0, the CLI is included by default with rpcnet. Install it once and reuse it across workspaces:</p>
+<p>Starting with v0.1.0, the CLI is included by default with rpcnet. Install it once and reuse it across workspaces:</p>
 <pre><code class="language-bash">cargo install rpcnet
 </code></pre>
-<p>The CLI is always available - no feature flags needed! This is a major usability improvement over v0.1.x.</p>
+<p>The CLI is always available - no feature flags needed!</p>
 <p>Add <code>--locked</code> in CI to guarantee reproducible dependency resolution.</p>
 <h2 id="input-files-at-a-glance"><a class="header" href="#input-files-at-a-glance">Input Files at a Glance</a></h2>
 <p>Service definitions are ordinary Rust modules annotated with <code>#[rpcnet::service]</code>.
@@ -329,7 +329,7 @@ step: edit the <code>.rpc.rs</code> trait, regenerate, and keep building.</p>
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="cluster/overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="cluster-example.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -343,7 +343,7 @@ step: edit the <code>.rpc.rs</code> trait, regenerate, and keep building.</p>
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="cluster/overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="cluster-example.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

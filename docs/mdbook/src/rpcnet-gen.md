@@ -6,13 +6,13 @@ covers installation, day-to-day usage, and automation patterns.
 
 ## Installing
 
-Starting with v0.2.0, the CLI is included by default with rpcnet. Install it once and reuse it across workspaces:
+Starting with v0.1.0, the CLI is included by default with rpcnet. Install it once and reuse it across workspaces:
 
 ```bash
 cargo install rpcnet
 ```
 
-The CLI is always available - no feature flags needed! This is a major usability improvement over v0.1.x.
+The CLI is always available - no feature flags needed!
 
 Add `--locked` in CI to guarantee reproducible dependency resolution.
 

@@ -35,7 +35,7 @@ rpcnet/
 │   ├── basic_*/            # Basic examples
 │   ├── cluster/            # Cluster example with full setup
 │   └── */                  # Code generation examples
-└── benches/                # Performance benchmarks (172K+ RPS)
+└── benches/                # Performance benchmarks
 ```
 
 ### Test Types

@@ -177,7 +177,7 @@
                     <main>
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <blockquote>
-<p><strong>Version</strong>: 0.2.0 | <strong>Performance</strong>: 172K+ RPS | <strong>Features</strong>: Cluster Management, Streaming, Code Generation</p>
+<p><strong>Version</strong>: 0.1.0 | <strong>Features</strong>: Cluster Management, Streaming, Code Generation</p>
 </blockquote>
 <p>RpcNet is a high-performance QUIC-based RPC library built on <code>s2n-quic</code>. The library provides
 high-level server and client primitives, TLS configuration helpers, rich support for
@@ -192,20 +192,13 @@ centralizes the user-facing materials so you can learn RpcNet in one place.</p>
 <li>Structured error reporting through <code>RpcError</code></li>
 <li>Test-friendly abstractions that allow mocking QUIC streams</li>
 </ul>
-<h3 id="distributed-systems-v020"><a class="header" href="#distributed-systems-v020">Distributed Systems (v0.2.0+)</a></h3>
+<h3 id="distributed-systems-v010"><a class="header" href="#distributed-systems-v010">Distributed Systems (v0.1.0+)</a></h3>
 <ul>
 <li><strong>Cluster Management</strong>: Built-in gossip protocol (SWIM) for node discovery</li>
 <li><strong>Load Balancing</strong>: Multiple strategies (Round Robin, Random, Least Connections)</li>
 <li><strong>Health Checking</strong>: Phi Accrual failure detection</li>
-<li><strong>Connection Pooling</strong>: Efficient connection reuse</li>
 <li><strong>Tag-Based Routing</strong>: Route requests by worker capabilities</li>
 <li><strong>Auto-Failover</strong>: Zero-downtime worker replacement</li>
-</ul>
-<h3 id="performance"><a class="header" href="#performance">Performance</a></h3>
-<ul>
-<li><strong>172K+ RPS</strong>: Exceptional throughput with full QUIC+TLS encryption</li>
-<li><strong>Sub-millisecond latency</strong>: &lt; 0.1ms overhead</li>
-<li><strong>10K+ concurrent streams</strong>: Per connection</li>
 </ul>
 <h2 id="how-to-read-this-book"><a class="header" href="#how-to-read-this-book">How To Read This Book</a></h2>
 <ol>

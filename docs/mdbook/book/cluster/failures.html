@@ -593,7 +593,7 @@ async fn reconcile_application_state() -&gt; Result&lt;()&gt; {
 </span>// Client implementation with automatic failover
 struct ResilientClient {
     registry: Arc&lt;WorkerRegistry&gt;,
-    connection_pool: Arc&lt;ConnectionPool&gt;,
+    client: Arc&lt;ClusterClient&gt;,
 }
 
 impl ResilientClient {
@@ -817,7 +817,7 @@ async fn test_worker_failure() {
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../cluster/pooling.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../cluster/health.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
@@ -831,7 +831,7 @@ async fn test_worker_failure() {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../cluster/pooling.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../cluster/health.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 

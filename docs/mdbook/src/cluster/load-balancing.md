@@ -574,7 +574,6 @@ With Least Connections:            168K RPS (-2.3%)
 ## Next Steps
 
 - **[Health Checking](health.md)** - Ensure selected workers are healthy
-- **[Connection Pooling](pooling.md)** - Reuse connections efficiently
 - **[Failures](failures.md)** - Handle worker failures gracefully
 
 ## References

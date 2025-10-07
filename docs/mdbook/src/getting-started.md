@@ -28,7 +28,7 @@ opt out (e.g. another allocator is already selected), edit `Cargo.toml`:
 
 ```toml
 [dependencies]
-rpcnet = { version = "0.2", default-features = false }
+rpcnet = { version = "0.1", default-features = false }
 ```
 
 You will also want `serde` for request/response types, just like the example:
@@ -39,7 +39,7 @@ serde = { version = "1", features = ["derive"] }
 
 ## Step 3: Install the rpcnet-gen CLI
 
-Starting with v0.2.0, the CLI is included by default when you install rpcnet:
+Starting with v0.1.0, the CLI is included by default when you install rpcnet:
 
 ```bash
 cargo install rpcnet  # CLI automatically included!

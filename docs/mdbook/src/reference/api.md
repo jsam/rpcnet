@@ -153,35 +153,6 @@ let directors = nodes.iter()
 - `node_count()` - Count nodes
 - `subscribe()` - Subscribe to events
 
-### ConnectionPool
-
-Manages connection pooling for efficiency.
-
-```rust
-use rpcnet::cluster::{ConnectionPool, PoolConfig};
-
-// Create pool
-let config = PoolConfig::default()
-    .with_max_connections_per_host(20)
-    .with_max_idle_time(Duration::from_secs(90));
-let pool = Arc::new(ConnectionPool::new(config));
-
-// Get or create connection
-let addr = "worker.example.com:8080".parse()?;
-let conn = pool.get_or_connect(addr).await?;
-
-// Use connection
-let result = conn.call("method", args).await?;
-
-// Connection automatically returned to pool when dropped
-```
-
-**Key methods**:
-- `new(config)` - Create pool
-- `get_or_connect(addr)` - Get pooled or create new connection
-- `metrics()` - Get pool metrics
-- `active_connections()` - Count active connections
-
 ### ClusterClient
 
 High-level API for calling workers.
@@ -240,17 +211,6 @@ let config = ClusterConfig::default()
     .with_phi_threshold(8.0);
 ```
 
-### PoolConfig
-
-```rust
-use rpcnet::cluster::PoolConfig;
-
-let config = PoolConfig::default()
-    .with_max_connections_per_host(20)
-    .with_max_idle_time(Duration::from_secs(90))
-    .with_connect_timeout(Duration::from_secs(5))
-    .with_health_check_interval(Duration::from_secs(30));
-```
 
 ## Code Generation
 

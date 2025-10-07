@@ -85,7 +85,7 @@ let result = client.call_worker("compute", data, Some("role=worker")).await?;
 - ✅ Automatic discovery via gossip
 - ✅ Multiple load balancing strategies
 - ✅ Phi Accrual failure detection
-- ✅ Built-in connection pooling
+- ✅ Efficient connection management
 - ✅ Partition detection
 - ✅ **75% code reduction**
 
@@ -334,7 +334,7 @@ The old `connection_swap` example has been replaced by the `cluster` example whi
 | **Load Balancing** | Basic round-robin | Round Robin, Random, Least Connections |
 | **Health Checking** | Timeout-based ping | Phi Accrual algorithm |
 | **Failure Detection** | Simple timeout | Indirect probes + Phi |
-| **Connection Pooling** | Manual implementation | Built-in with tuning |
+| **Connection Management** | Manual implementation | Built-in optimization |
 | **Partition Detection** | Not available | Automatic |
 | **Code Complexity** | ~200 lines | ~50 lines |
 | **Maintenance** | High (custom code) | Low (battle-tested) |
@@ -551,12 +551,12 @@ if rand::random::<f64>() < 0.10 {  // 10% to new system
 **Before migration**:
 - Manual round-robin: ~100K RPS
 - Timeout-based health: 30s detection time
-- No connection pooling: 20-50ms latency
+- Manual connection handling: 20-50ms latency
 
 **After migration**:
 - Least Connections: 172K+ RPS (70% increase)
 - Phi Accrual: 6-8s detection time (better accuracy)
-- Built-in pooling: <1ms latency (98% reduction)
+- Built-in connection management: <1ms latency (98% reduction)
 
 ## Next Steps
 

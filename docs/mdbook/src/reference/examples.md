@@ -72,7 +72,6 @@ DIRECTOR_ADDR=127.0.0.1:61000 \
 - ✅ **Automatic Discovery**: Workers join via SWIM gossip protocol
 - ✅ **Load Balancing**: Uses `LeastConnections` strategy
 - ✅ **Health Checking**: Phi Accrual failure detection
-- ✅ **Connection Pooling**: Efficient connection reuse
 - ✅ **Failover**: Client handles worker failures gracefully
 - ✅ **Streaming**: Server-side streaming responses
 - ✅ **Tag-Based Routing**: Filter workers by role

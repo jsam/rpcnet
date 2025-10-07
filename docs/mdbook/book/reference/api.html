@@ -321,34 +321,6 @@ let directors = nodes.iter()
 <li><code>node_count()</code> - Count nodes</li>
 <li><code>subscribe()</code> - Subscribe to events</li>
 </ul>
-<h3 id="connectionpool"><a class="header" href="#connectionpool">ConnectionPool</a></h3>
-<p>Manages connection pooling for efficiency.</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use rpcnet::cluster::{ConnectionPool, PoolConfig};
-
-// Create pool
-let config = PoolConfig::default()
-    .with_max_connections_per_host(20)
-    .with_max_idle_time(Duration::from_secs(90));
-let pool = Arc::new(ConnectionPool::new(config));
-
-// Get or create connection
-let addr = "worker.example.com:8080".parse()?;
-let conn = pool.get_or_connect(addr).await?;
-
-// Use connection
-let result = conn.call("method", args).await?;
-
-// Connection automatically returned to pool when dropped
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Key methods</strong>:</p>
-<ul>
-<li><code>new(config)</code> - Create pool</li>
-<li><code>get_or_connect(addr)</code> - Get pooled or create new connection</li>
-<li><code>metrics()</code> - Get pool metrics</li>
-<li><code>active_connections()</code> - Count active connections</li>
-</ul>
 <h3 id="clusterclient"><a class="header" href="#clusterclient">ClusterClient</a></h3>
 <p>High-level API for calling workers.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -401,17 +373,6 @@ let config = ClusterConfig::default()
     .with_gossip_interval(Duration::from_secs(1))
     .with_health_check_interval(Duration::from_secs(2))
     .with_phi_threshold(8.0);
-<span class="boring">}</span></code></pre></pre>
-<h3 id="poolconfig"><a class="header" href="#poolconfig">PoolConfig</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use rpcnet::cluster::PoolConfig;
-
-let config = PoolConfig::default()
-    .with_max_connections_per_host(20)
-    .with_max_idle_time(Duration::from_secs(90))
-    .with_connect_timeout(Duration::from_secs(5))
-    .with_health_check_interval(Duration::from_secs(30));
 <span class="boring">}</span></code></pre></pre>
 <h2 id="code-generation"><a class="header" href="#code-generation">Code Generation</a></h2>
 <h3 id="rpc-trait-definition"><a class="header" href="#rpc-trait-definition">RPC Trait Definition</a></h3>

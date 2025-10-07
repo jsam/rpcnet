@@ -257,7 +257,7 @@ let result = client.call_worker("compute", data, Some("role=worker")).await?;
 <li>✅ Automatic discovery via gossip</li>
 <li>✅ Multiple load balancing strategies</li>
 <li>✅ Phi Accrual failure detection</li>
-<li>✅ Built-in connection pooling</li>
+<li>✅ Efficient connection management</li>
 <li>✅ Partition detection</li>
 <li>✅ <strong>75% code reduction</strong></li>
 </ul>
@@ -478,7 +478,7 @@ async fn main() -&gt; Result&lt;()&gt; {
 <tr><td><strong>Load Balancing</strong></td><td>Basic round-robin</td><td>Round Robin, Random, Least Connections</td></tr>
 <tr><td><strong>Health Checking</strong></td><td>Timeout-based ping</td><td>Phi Accrual algorithm</td></tr>
 <tr><td><strong>Failure Detection</strong></td><td>Simple timeout</td><td>Indirect probes + Phi</td></tr>
-<tr><td><strong>Connection Pooling</strong></td><td>Manual implementation</td><td>Built-in with tuning</td></tr>
+<tr><td><strong>Connection Management</strong></td><td>Manual implementation</td><td>Built-in optimization</td></tr>
 <tr><td><strong>Partition Detection</strong></td><td>Not available</td><td>Automatic</td></tr>
 <tr><td><strong>Code Complexity</strong></td><td>~200 lines</td><td>~50 lines</td></tr>
 <tr><td><strong>Maintenance</strong></td><td>High (custom code)</td><td>Low (battle-tested)</td></tr>
@@ -688,13 +688,13 @@ Update documentation</li>
 <ul>
 <li>Manual round-robin: ~100K RPS</li>
 <li>Timeout-based health: 30s detection time</li>
-<li>No connection pooling: 20-50ms latency</li>
+<li>Manual connection handling: 20-50ms latency</li>
 </ul>
 <p><strong>After migration</strong>:</p>
 <ul>
 <li>Least Connections: 172K+ RPS (70% increase)</li>
 <li>Phi Accrual: 6-8s detection time (better accuracy)</li>
-<li>Built-in pooling: &lt;1ms latency (98% reduction)</li>
+<li>Built-in connection management: &lt;1ms latency (98% reduction)</li>
 </ul>
 <h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
 <ul>
