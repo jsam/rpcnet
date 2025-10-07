@@ -40,7 +40,6 @@ The following files control the release process:
 | `Makefile` | Main entry point - use `make release-prepare` |
 | `cliff.toml` | Configures git-cliff for changelog generation |
 | `scripts/prepare-release.sh` | Automation script (called by Makefile) |
-| `.github/workflows/release-pr.yml` | GitHub Actions workflow for PR validation |
 | `docs/RELEASING.md` | This document - release process guide |
 
 ## Quick Start
@@ -159,37 +158,7 @@ GitHub will automatically prompt you to create a Pull Request. Alternatively:
 2. Select your `release/<version>` branch
 3. Create the pull request targeting `main`
 
-**Automated PR Checks:**
-
-The `.github/workflows/release-pr.yml` workflow will automatically:
-
-- ✅ Validate version consistency across files
-- ✅ Check that CHANGELOG.md exists and contains the new version
-- ✅ Verify conventional commit format
-- ✅ Run full test suite
-- ✅ Post helpful comment with:
-  - Release checklist
-  - Post-merge instructions
-  - Manual release commands
-
-**Example PR Comment:**
-
-```markdown
-## 🚀 Release PR for 0.2.0
-
-This PR prepares the release for version **0.2.0**.
-
-### Checklist
-- ✅ Version updated in `Cargo.toml`
-- ✅ `CHANGELOG.md` generated
-- ✅ All tests passing
-
-### After Merge
-Once this PR is merged to main:
-1. Create and push the git tag: `git tag 0.2.0 && git push origin 0.2.0`
-2. The release workflow will automatically publish to crates.io
-3. GitHub release will be created automatically
-```
+The standard PR checks workflow will run automatically to validate your changes.
 
 ### 4. Review and Merge
 
@@ -209,7 +178,7 @@ Once approved by maintainers, merge the PR to `main` using:
 
 ### 5. Tag the Release
 
-**After the PR is merged**, create and push the version tag:
+**After the PR is merged**, create and push the version tag. This will trigger the release workflow which publishes to crates.io:
 
 ```bash
 git checkout main
@@ -226,9 +195,17 @@ git tag -a 0.2.0 -m "Release 0.2.0"
 git push origin 0.2.0
 ```
 
+Pushing the tag triggers automatic publication to crates.io (if `CARGO_REGISTRY_TOKEN` is configured in GitHub secrets).
+
 ### 6. Publish
 
-Publish to crates.io using the Makefile:
+**Automatic (Recommended):**
+
+If `CARGO_REGISTRY_TOKEN` is configured in GitHub secrets, publishing happens automatically when you push the tag.
+
+**Manual (if needed):**
+
+If automatic publishing isn't set up:
 
 ```bash
 make publish
@@ -238,19 +215,6 @@ This will:
 - Run all pre-publication checks (tests, linting, docs)
 - Package the crate
 - Publish to crates.io with confirmation
-
-**Or use individual commands:**
-
-```bash
-# Check everything is ready
-make publish-check
-
-# Dry run to verify package
-make publish-dry-run
-
-# Publish
-make publish
-```
 
 ### 7. Verify
 
