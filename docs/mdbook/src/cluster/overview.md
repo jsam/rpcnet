@@ -23,11 +23,6 @@ A **cluster** in RpcNet is a group of interconnected nodes that work together to
 - Adapts to network conditions
 - Distinguishes between slow and failed nodes
 
-**Connection Pooling** 🏊
-- Reuses connections efficiently
-- Configurable pool sizes and timeouts
-- Automatic cleanup of stale connections
-
 **Tag-Based Routing** 🏷️
 - Route requests by node capabilities
 - Filter by zone, hardware type, role, etc.
@@ -47,17 +42,16 @@ RpcNet's cluster architecture consists of several key components that work toget
 │                    ClusterClient                             │
 │  - High-level API for cluster operations                    │
 │  - Load-balanced request routing                            │
-│  - Connection pooling integration                           │
+│  - Efficient request routing                               │
 └────────────────────────┬────────────────────────────────────┘
                          │
-        ┌────────────────┼────────────────┐
-        │                                 │
-┌───────▼─────────┐            ┌─────────▼──────────┐
-│ WorkerRegistry  │            │  ConnectionPool    │
-│  - Tracks nodes │            │  - Manages conns   │
-│  - Load balance │            │  - Reuses sockets  │
-│  - Filter tags  │            │  - Cleanup stale   │
-└───────┬─────────┘            └────────────────────┘
+        │
+┌───────▼─────────┐
+│ WorkerRegistry  │
+│  - Tracks nodes │
+│  - Load balance │
+│  - Filter tags  │
+└───────┬─────────┘
         │
 ┌───────▼─────────┐
 │  NodeRegistry   │
@@ -143,28 +137,7 @@ println!("Selected worker: {} at {}", worker.label, worker.addr);
 - Tracks active connections per worker
 - Automatic removal of failed workers
 
-### 4. ConnectionPool
-
-The **ConnectionPool** manages efficient connection reuse:
-
-```rust
-use rpcnet::cluster::ConnectionPool;
-
-let pool = Arc::new(ConnectionPool::new(config));
-
-// Get or create connection
-let conn = pool.get_or_connect(addr).await?;
-
-// Connection is returned to pool when dropped
-```
-
-**Features**:
-- Configurable pool size and timeouts
-- Automatic connection cleanup
-- Health checking of pooled connections
-- Thread-safe via `Arc` and interior mutability
-
-### 5. ClusterClient
+### 4. ClusterClient
 
 The **ClusterClient** provides a high-level API that combines all components:
 
@@ -180,7 +153,7 @@ let result = client.call_worker("compute", request, Some("role=worker")).await?;
 **Features**:
 - Automatic worker selection
 - Load-balanced request routing
-- Connection pooling integration
+- Efficient connection management
 - Retry logic for failed requests
 
 ## When to Use Clusters
@@ -307,7 +280,7 @@ RpcNet clusters maintain high performance while providing distributed coordinati
 ### Latency
 
 - **< 0.1ms** additional latency for load balancing
-- Connection pooling reduces handshake overhead
+- Efficient connection handling reduces overhead
 - QUIC's 0-RTT mode for warm connections
 
 ### Scalability
@@ -330,7 +303,6 @@ Now that you understand the cluster architecture, you can:
 2. **[Learn About Discovery](discovery.md)** - Deep dive into SWIM gossip protocol
 3. **[Explore Load Balancing](load-balancing.md)** - Choose the right strategy
 4. **[Understand Health Checking](health.md)** - How Phi Accrual works
-5. **[Configure Connection Pooling](pooling.md)** - Optimize connection reuse
 6. **[Handle Failures](failures.md)** - Partition detection and recovery
 
 Or jump directly to the **[Cluster Example](../cluster-example.md)** to see a complete working system.

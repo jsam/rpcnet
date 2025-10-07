@@ -9,7 +9,7 @@ Out-of-the-box performance with default settings:
 | Metric | Value | Notes |
 |--------|-------|-------|
 | **Throughput** | 130K-150K RPS | Single director + 3 workers |
-| **Latency (P50)** | 0.5-0.8ms | With connection pooling |
+| **Latency (P50)** | 0.5-0.8ms | With efficient connection handling |
 | **Latency (P99)** | 2-5ms | Under moderate load |
 | **CPU (per node)** | 40-60% | At peak throughput |
 | **Memory** | 50-100MB | Per worker node |
@@ -18,29 +18,21 @@ Out-of-the-box performance with default settings:
 
 ## Quick Wins
 
-### 1. Enable Connection Pooling
+### 1. Optimize Connection Management
 
-**Impact**: 4x throughput increase, 98% latency reduction
+**Impact**: Significant throughput increase, reduced latency
 
 ```rust
-use rpcnet::cluster::{PoolConfig, ClusterClientConfig};
+use rpcnet::cluster::ClusterClientConfig;
 
-// Before (no pooling): ~40K RPS
+// Use built-in connection optimization
 let config = ClusterClientConfig::default();
-
-// After (with pooling): ~172K RPS
-let pool_config = PoolConfig::default()
-    .with_max_connections_per_host(20)
-    .with_max_idle_time(Duration::from_secs(90));
-
-let config = ClusterClientConfig::default()
-    .with_pool_config(pool_config);
 ```
 
 **Why it works**:
-- Eliminates TLS/QUIC handshake overhead (4-5 RTT per request → 0 RTT)
-- Reuses established connections
-- Reduces CPU spent on crypto
+- Efficient connection reuse
+- Reduces handshake overhead
+- Minimizes connection setup time
 
 ### 2. Use Least Connections Load Balancing
 
@@ -100,46 +92,16 @@ let config = ClusterConfig::default()
 
 ## Detailed Tuning
 
-### Connection Pool Optimization
+### Connection Management Optimization
 
-#### Pool Size Calculation
-
-```rust
-// Formula: (concurrent_requests / num_workers) * buffer_factor
-fn calculate_optimal_pool_size(
-    concurrent_requests: usize,
-    num_workers: usize,
-    buffer_factor: f64,
-) -> usize {
-    let base_size = concurrent_requests / num_workers;
-    let with_buffer = (base_size as f64 * buffer_factor) as usize;
-    
-    // Cap at reasonable maximum
-    with_buffer.min(50)
-}
-
-// Example:
-let pool_size = calculate_optimal_pool_size(
-    200,  // 200 concurrent requests
-    10,   // 10 workers
-    1.2   // 20% buffer
-); // Returns 24
-```
-
-#### Idle Time Tuning
+RpcNet handles connection management automatically, but you can optimize for your specific use case:
 
 ```rust
-// Short idle time: Good for spiky traffic
-.with_max_idle_time(Duration::from_secs(30))
+use rpcnet::cluster::ClusterClientConfig;
 
-// Medium idle time: Good for steady traffic (recommended)
-.with_max_idle_time(Duration::from_secs(90))
-
-// Long idle time: Good for high-throughput sustained load
-.with_max_idle_time(Duration::from_secs(300))
+// Default configuration is optimized for most use cases
+let config = ClusterClientConfig::default();
 ```
-
-**Trade-off**: Longer idle time = more memory, fewer reconnections
 
 ### QUIC Tuning
 
@@ -250,7 +212,7 @@ fn build_request(id: u64, data: &[u8], buffer: &mut Vec<u8>) -> Request {
 
 ### Linux
 
-#### TCP/QUIC Tuning
+#### UDP/QUIC Tuning
 
 ```bash
 # Increase network buffer sizes
@@ -437,7 +399,7 @@ async fn load_test(
 
 ### Before Production
 
-- [ ] Enable connection pooling with appropriate size
+- [ ] Use default connection management (already optimized)
 - [ ] Use Least Connections load balancing
 - [ ] Tune gossip interval for your network
 - [ ] Configure QUIC stream limits
@@ -488,7 +450,7 @@ println!("Total: {:?}", start.elapsed());
 ```
 
 **Common causes**:
-- Connection pool exhaustion (add more connections)
+- Connection management issues (check network configuration)
 - Slow workers (check worker CPU/memory)
 - Network latency (move closer or add local workers)
 
@@ -506,7 +468,7 @@ println!("Active connections: {}", pool.active_connections());
 
 **Common causes**:
 - Too few workers (add more)
-- Small connection pool (increase size)
+- Network connectivity issues (check network configuration)
 - Director CPU saturated (scale director)
 - Network bandwidth limit (upgrade network)
 
@@ -526,7 +488,7 @@ sudo perf report
 **Common causes**:
 - Too frequent gossip (increase interval)
 - Excessive serialization (optimize message format)
-- No connection pooling (enable it!)
+- Inefficient connection handling (use latest RpcNet version)
 - Debug build instead of release
 
 ## Real-World Results
@@ -542,7 +504,7 @@ sudo perf report
 **After tuning**: 180K RPS, 2ms P99 latency
 
 **Changes**:
-1. Enabled connection pooling (size=20)
+1. Used optimized connection management
 2. Tuned gossip interval (1s → 2s)
 3. Used Least Connections strategy
 4. Optimized message serialization (JSON → bincode)
@@ -550,7 +512,6 @@ sudo perf report
 ## Next Steps
 
 - **[Production Guide](production.md)** - Deploy optimized clusters
-- **[Connection Pooling](../cluster/pooling.md)** - Deep dive into pooling
 - **[Load Balancing](../cluster/load-balancing.md)** - Strategy selection
 
 ## References

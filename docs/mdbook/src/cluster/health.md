@@ -566,7 +566,6 @@ fn get_phi_threshold(node: &Node) -> f64 {
 
 ## Next Steps
 
-- **[Connection Pooling](pooling.md)** - Reuse connections to healthy nodes
 - **[Failures](failures.md)** - Handle node failures and partitions
 - **[Discovery](discovery.md)** - How nodes discover each other via gossip
 

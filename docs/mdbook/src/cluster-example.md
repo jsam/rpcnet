@@ -287,8 +287,6 @@ Choose from:
 ### ✅ Failure Detection
 Phi Accrual algorithm provides accurate, adaptive health monitoring
 
-### ✅ Connection Pooling
-Efficient connection reuse with configurable settings
 
 ### ✅ Tag-Based Routing
 Route by worker capabilities (GPU, CPU, zone, etc.)

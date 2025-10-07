@@ -455,7 +455,7 @@ Clients should automatically failover to healthy workers:
 // Client implementation with automatic failover
 struct ResilientClient {
     registry: Arc<WorkerRegistry>,
-    connection_pool: Arc<ConnectionPool>,
+    client: Arc<ClusterClient>,
 }
 
 impl ResilientClient {

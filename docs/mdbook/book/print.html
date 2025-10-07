@@ -178,7 +178,7 @@
                     <main>
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <blockquote>
-<p><strong>Version</strong>: 0.2.0 | <strong>Performance</strong>: 172K+ RPS | <strong>Features</strong>: Cluster Management, Streaming, Code Generation</p>
+<p><strong>Version</strong>: 0.1.0 | <strong>Features</strong>: Cluster Management, Streaming, Code Generation</p>
 </blockquote>
 <p>RpcNet is a high-performance QUIC-based RPC library built on <code>s2n-quic</code>. The library provides
 high-level server and client primitives, TLS configuration helpers, rich support for
@@ -193,20 +193,13 @@ centralizes the user-facing materials so you can learn RpcNet in one place.</p>
 <li>Structured error reporting through <code>RpcError</code></li>
 <li>Test-friendly abstractions that allow mocking QUIC streams</li>
 </ul>
-<h3 id="distributed-systems-v020"><a class="header" href="#distributed-systems-v020">Distributed Systems (v0.2.0+)</a></h3>
+<h3 id="distributed-systems-v010"><a class="header" href="#distributed-systems-v010">Distributed Systems (v0.1.0+)</a></h3>
 <ul>
 <li><strong>Cluster Management</strong>: Built-in gossip protocol (SWIM) for node discovery</li>
 <li><strong>Load Balancing</strong>: Multiple strategies (Round Robin, Random, Least Connections)</li>
 <li><strong>Health Checking</strong>: Phi Accrual failure detection</li>
-<li><strong>Connection Pooling</strong>: Efficient connection reuse</li>
 <li><strong>Tag-Based Routing</strong>: Route requests by worker capabilities</li>
 <li><strong>Auto-Failover</strong>: Zero-downtime worker replacement</li>
-</ul>
-<h3 id="performance"><a class="header" href="#performance">Performance</a></h3>
-<ul>
-<li><strong>172K+ RPS</strong>: Exceptional throughput with full QUIC+TLS encryption</li>
-<li><strong>Sub-millisecond latency</strong>: &lt; 0.1ms overhead</li>
-<li><strong>10K+ concurrent streams</strong>: Per connection</li>
 </ul>
 <h2 id="how-to-read-this-book"><a class="header" href="#how-to-read-this-book">How To Read This Book</a></h2>
 <ol>
@@ -238,13 +231,13 @@ cd hello-rpc
 <p>RpcNet enables the high-performance <code>perf</code> feature by default. If you need to
 opt out (e.g. another allocator is already selected), edit <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-rpcnet = { version = "0.2", default-features = false }
+rpcnet = { version = "0.1", default-features = false }
 </code></pre>
 <p>You will also want <code>serde</code> for request/response types, just like the example:</p>
 <pre><code class="language-toml">serde = { version = "1", features = ["derive"] }
 </code></pre>
 <h2 id="step-3-install-the-rpcnet-gen-cli"><a class="header" href="#step-3-install-the-rpcnet-gen-cli">Step 3: Install the rpcnet-gen CLI</a></h2>
-<p>Starting with v0.2.0, the CLI is included by default when you install rpcnet:</p>
+<p>Starting with v0.1.0, the CLI is included by default when you install rpcnet:</p>
 <pre><code class="language-bash">cargo install rpcnet  # CLI automatically included!
 </code></pre>
 <p>Verify the install:</p>
@@ -631,7 +624,7 @@ server.register_streaming("uppercase", |mut reqs| async move {
     }
 }).await;
 <span class="boring">}</span></code></pre></pre>
-<h2 id="cluster-management-v020"><a class="header" href="#cluster-management-v020">Cluster Management (v0.2.0+)</a></h2>
+<h2 id="cluster-management-v010"><a class="header" href="#cluster-management-v010">Cluster Management (v0.1.0+)</a></h2>
 <p>RpcNet provides built-in distributed systems support for building scalable clusters with automatic discovery and failover.</p>
 <h3 id="architecture-components"><a class="header" href="#architecture-components">Architecture Components</a></h3>
 <h4 id="noderegistry"><a class="header" href="#noderegistry">NodeRegistry</a></h4>
@@ -674,18 +667,6 @@ health.start().await;
 
 // Automatically marks nodes as failed/recovered
 <span class="boring">}</span></code></pre></pre>
-<h4 id="connection-pooling"><a class="header" href="#connection-pooling">Connection Pooling</a></h4>
-<p>Efficient connection reuse with configurable pool sizes:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use rpcnet::cluster::{ConnectionPool, PoolConfig};
-
-let pool = ConnectionPool::new(PoolConfig {
-    max_connections: 100,
-    idle_timeout: Duration::from_secs(60),
-    ..Default::default()
-});
-<span class="boring">}</span></code></pre></pre>
 <h3 id="gossip-protocol"><a class="header" href="#gossip-protocol">Gossip Protocol</a></h3>
 <p>RpcNet uses SWIM (Scalable Weakly-consistent Infection-style Process Group Membership Protocol) for:</p>
 <ul>
@@ -718,10 +699,10 @@ let result = client.call_worker("compute", data, Some("role=worker")).await?;
 client, server, and type modules consumed by your application. This chapter
 covers installation, day-to-day usage, and automation patterns.</p>
 <h2 id="installing"><a class="header" href="#installing">Installing</a></h2>
-<p>Starting with v0.2.0, the CLI is included by default with rpcnet. Install it once and reuse it across workspaces:</p>
+<p>Starting with v0.1.0, the CLI is included by default with rpcnet. Install it once and reuse it across workspaces:</p>
 <pre><code class="language-bash">cargo install rpcnet
 </code></pre>
-<p>The CLI is always available - no feature flags needed! This is a major usability improvement over v0.1.x.</p>
+<p>The CLI is always available - no feature flags needed!</p>
 <p>Add <code>--locked</code> in CI to guarantee reproducible dependency resolution.</p>
 <h2 id="input-files-at-a-glance"><a class="header" href="#input-files-at-a-glance">Input Files at a Glance</a></h2>
 <p>Service definitions are ordinary Rust modules annotated with <code>#[rpcnet::service]</code>.
@@ -858,6 +839,336 @@ the same crate version so layouts match.</li>
 </ul>
 <p>With these workflows in place you can treat <code>rpcnet-gen</code> like any other build
 step: edit the <code>.rpc.rs</code> trait, regenerate, and keep building.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="cluster-example"><a class="header" href="#cluster-example">Cluster Example</a></h1>
+<p>This chapter demonstrates building a distributed RPC cluster with automatic worker discovery, load balancing, and failure detection using RpcNet's built-in cluster features.</p>
+<h2 id="architecture-overview"><a class="header" href="#architecture-overview">Architecture Overview</a></h2>
+<p>The cluster example showcases three main components working together:</p>
+<pre><code>                    ┌──────────────────────────┐
+                    │      Director            │
+                    │  (Coordinator Node)      │
+                    │                          │
+                    │  - WorkerRegistry        │
+                    │  - ClusterClient         │
+                    │  - Load Balancing        │
+                    └────────┬─────────────────┘
+                             │
+                    Gossip Protocol (SWIM)
+                             │
+            ┌────────────────┼────────────────┐
+            │                                 │
+    ┌───────▼────────┐              ┌────────▼───────┐
+    │   Worker A      │              │   Worker B      │
+    │                 │              │                 │
+    │  - Auto-join    │              │  - Auto-join    │
+    │  - Tag: worker  │              │  - Tag: worker  │
+    │  - Process tasks│              │  - Process tasks│
+    └─────────────────┘              └─────────────────┘
+</code></pre>
+<h3 id="components"><a class="header" href="#components">Components</a></h3>
+<p><strong>1. Director</strong> - Coordinator node that:</p>
+<ul>
+<li>Uses <code>WorkerRegistry</code> for automatic worker discovery</li>
+<li>Uses <code>ClusterClient</code> for load-balanced request routing</li>
+<li>Employs <code>LeastConnections</code> strategy by default</li>
+<li>Monitors worker pool status</li>
+<li>Routes client requests to healthy workers</li>
+</ul>
+<p><strong>2. Workers</strong> - Processing nodes that:</p>
+<ul>
+<li>Join cluster automatically via gossip protocol</li>
+<li>Tag themselves with <code>role=worker</code> for discovery</li>
+<li>Process compute tasks from clients</li>
+<li>Monitor cluster events (node joined/left/failed)</li>
+<li>Support simulated failures for testing</li>
+</ul>
+<p><strong>3. Client</strong> - Application that:</p>
+<ul>
+<li>Connects to director</li>
+<li>Gets worker assignment</li>
+<li>Establishes direct connection to worker</li>
+<li>Handles failover automatically</li>
+</ul>
+<h2 id="why-use-built-in-cluster-features"><a class="header" href="#why-use-built-in-cluster-features">Why Use Built-in Cluster Features?</a></h2>
+<p>Compared to manual worker management patterns:</p>
+<p><strong>Manual Approach</strong> ❌:</p>
+<ul>
+<li>Custom <code>HashMap&lt;Uuid, WorkerInfo&gt;</code> for tracking</li>
+<li>Manual round-robin selection logic</li>
+<li>Explicit RPC calls for worker registration</li>
+<li>Custom ping-based health checks</li>
+<li>~200 lines of boilerplate code</li>
+</ul>
+<p><strong>Built-in Cluster</strong> ✅:</p>
+<ul>
+<li>Built-in <code>WorkerRegistry</code> + <code>ClusterClient</code></li>
+<li>Multiple load balancing strategies (Round Robin, Random, Least Connections)</li>
+<li>Automatic discovery via SWIM gossip protocol</li>
+<li>Phi Accrual failure detection (accurate, adaptive)</li>
+<li>~50 lines to set up</li>
+<li><strong>75% code reduction!</strong></li>
+</ul>
+<h2 id="running-the-example"><a class="header" href="#running-the-example">Running the Example</a></h2>
+<h3 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h3>
+<p>Ensure test certificates exist:</p>
+<pre><code class="language-bash">ls certs/test_cert.pem certs/test_key.pem
+</code></pre>
+<p>All commands should be run from the <strong>project root directory</strong>.</p>
+<h3 id="basic-setup"><a class="header" href="#basic-setup">Basic Setup</a></h3>
+<p>Open four terminals and run each component:</p>
+<p><strong>Terminal 1 - Director:</strong></p>
+<pre><code class="language-bash">DIRECTOR_ADDR=127.0.0.1:61000 \
+  RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin director
+</code></pre>
+<p><strong>Terminal 2 - Worker A:</strong></p>
+<pre><code class="language-bash">WORKER_LABEL=worker-a \
+  WORKER_ADDR=127.0.0.1:62001 \
+  DIRECTOR_ADDR=127.0.0.1:61000 \
+  RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+</code></pre>
+<p><strong>Terminal 3 - Worker B:</strong></p>
+<pre><code class="language-bash">WORKER_LABEL=worker-b \
+  WORKER_ADDR=127.0.0.1:62002 \
+  DIRECTOR_ADDR=127.0.0.1:61000 \
+  RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+</code></pre>
+<p><strong>Terminal 4 - Client:</strong></p>
+<pre><code class="language-bash">DIRECTOR_ADDR=127.0.0.1:61000 \
+  RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin client
+</code></pre>
+<h3 id="what-youll-see"><a class="header" href="#what-youll-see">What You'll See</a></h3>
+<p><strong>Director Output:</strong></p>
+<pre><code>🎯 Starting Director at 127.0.0.1:61000
+📁 Loading certificates from "../../certs/test_cert.pem"
+✅ Director registered itself in cluster
+✅ Cluster enabled - Director is now discoverable
+🔄 Load balancing strategy: LeastConnections
+📊 Worker pool status: 2 workers available
+   - worker-a at 127.0.0.1:62001 (0 connections)
+   - worker-b at 127.0.0.1:62002 (0 connections)
+🚀 Director ready - listening on 127.0.0.1:61000
+</code></pre>
+<p><strong>Worker Output:</strong></p>
+<pre><code>👷 Starting Worker 'worker-a' at 127.0.0.1:62001
+🔌 Binding server to 127.0.0.1:62001...
+✅ Server bound successfully
+🌐 Enabling cluster, connecting to director at 127.0.0.1:61000...
+✅ Cluster enabled, connected to director
+🏷️  Tagging worker with role=worker and label=worker-a...
+✅ Worker 'worker-a' joined cluster with role=worker
+🚀 Worker 'worker-a' is running and ready to handle requests
+</code></pre>
+<p><strong>Client Output:</strong></p>
+<pre><code>📡 Starting Client - connecting to director at 127.0.0.1:61000
+✅ connected to director
+🔀 director assigned worker - establishing direct connection
+✅ direct connection established to worker
+📤 creating request stream
+🌊 stream opened successfully, starting to consume responses
+📦 received token (sequence=1, text="token-1", total=1)
+📦 received token (sequence=2, text="token-2", total=2)
+...
+</code></pre>
+<h2 id="testing-failure-scenarios"><a class="header" href="#testing-failure-scenarios">Testing Failure Scenarios</a></h2>
+<h3 id="simulated-worker-failures"><a class="header" href="#simulated-worker-failures">Simulated Worker Failures</a></h3>
+<p>Enable periodic failures to test automatic failover:</p>
+<p><strong>Worker with Failures:</strong></p>
+<pre><code class="language-bash">WORKER_LABEL=worker-a \
+  WORKER_ADDR=127.0.0.1:62001 \
+  DIRECTOR_ADDR=127.0.0.1:61000 \
+  WORKER_FAILURE_ENABLED=true \  # Enable failure simulation
+  RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+</code></pre>
+<p><strong>Failure Cycle</strong> (~18 seconds):</p>
+<ol>
+<li><strong>Run</strong>: 10 seconds of normal operation</li>
+<li><strong>Warning</strong>: "⚠️  Simulating worker failure in 3 seconds..."</li>
+<li><strong>Failed</strong>: 5 seconds in failed state - "💥 Worker failed!"</li>
+<li><strong>Recovery</strong>: "🔄 Worker recovering..."</li>
+<li><strong>Ready</strong>: "✅ Worker recovered and ready to serve!"</li>
+<li>Repeat</li>
+</ol>
+<p><strong>Client Behavior:</strong></p>
+<ul>
+<li>Detects failure via error response</li>
+<li>Returns to director for new worker assignment</li>
+<li>Switches to healthy worker seamlessly</li>
+<li>Streaming continues with minimal interruption</li>
+</ul>
+<h3 id="hard-kill-test"><a class="header" href="#hard-kill-test">Hard Kill Test</a></h3>
+<p>Test network-level failure detection:</p>
+<pre><code class="language-bash"># In a worker terminal, press Ctrl+C
+</code></pre>
+<p><strong>Observe:</strong></p>
+<ul>
+<li>Director detects failure via gossip protocol</li>
+<li><code>WorkerRegistry</code> removes worker from pool</li>
+<li>Client requests automatically route to remaining workers</li>
+<li>Zero downtime for ongoing operations</li>
+</ul>
+<h3 id="worker-restart-test"><a class="header" href="#worker-restart-test">Worker Restart Test</a></h3>
+<p>After killing a worker, restart it to see re-discovery:</p>
+<pre><code class="language-bash">WORKER_LABEL=worker-a \
+  WORKER_ADDR=127.0.0.1:62001 \
+  DIRECTOR_ADDR=127.0.0.1:61000 \
+  RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+</code></pre>
+<p><strong>Observe:</strong></p>
+<ul>
+<li>Worker automatically rejoins cluster</li>
+<li>Gossip spreads worker availability</li>
+<li>Director adds worker back to registry</li>
+<li>Client requests resume to all available workers</li>
+</ul>
+<h2 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h2>
+<h3 id="1-automatic-discovery"><a class="header" href="#1-automatic-discovery">1. Automatic Discovery</a></h3>
+<p>Workers don't manually register - they just join the cluster:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Worker code (simplified)
+let cluster = ClusterMembership::new(config).await?;
+cluster.join(vec![director_addr]).await?;
+
+// Tag for discovery
+cluster.set_tag("role", "worker");
+cluster.set_tag("label", worker_label);
+
+// That's it! Director discovers automatically via gossip
+<span class="boring">}</span></code></pre></pre>
+<h3 id="2-load-balancing"><a class="header" href="#2-load-balancing">2. Load Balancing</a></h3>
+<p>Director uses <code>WorkerRegistry</code> for automatic load balancing:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Director code
+let registry = Arc::new(WorkerRegistry::new(
+    cluster,
+    LoadBalancingStrategy::LeastConnections
+));
+registry.start().await;
+
+// Automatically tracks workers and balances load
+<span class="boring">}</span></code></pre></pre>
+<h3 id="3-failure-detection"><a class="header" href="#3-failure-detection">3. Failure Detection</a></h3>
+<p>Phi Accrual algorithm provides accurate health monitoring:</p>
+<ul>
+<li>Adapts to network conditions</li>
+<li>Distinguishes slow nodes from failed nodes</li>
+<li>No false positives from temporary delays</li>
+<li>Automatic recovery when nodes return</li>
+</ul>
+<h3 id="4-tag-based-routing"><a class="header" href="#4-tag-based-routing">4. Tag-Based Routing</a></h3>
+<p>Filter workers by capabilities:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Get only GPU workers
+let gpu_worker = registry.select_worker(Some("gpu=true")).await?;
+
+// Get any worker
+let any_worker = registry.select_worker(Some("role=worker")).await?;
+<span class="boring">}</span></code></pre></pre>
+<h2 id="key-cluster-features-demonstrated"><a class="header" href="#key-cluster-features-demonstrated">Key Cluster Features Demonstrated</a></h2>
+<h3 id="-automatic-discovery"><a class="header" href="#-automatic-discovery">✅ Automatic Discovery</a></h3>
+<p>No manual registration needed - gossip protocol handles everything</p>
+<h3 id="-load-balancing"><a class="header" href="#-load-balancing">✅ Load Balancing</a></h3>
+<p>Choose from:</p>
+<ul>
+<li><strong>Round Robin</strong>: Even distribution</li>
+<li><strong>Random</strong>: Stateless workload distribution</li>
+<li><strong>Least Connections</strong>: Balance based on current load (recommended)</li>
+</ul>
+<h3 id="-failure-detection"><a class="header" href="#-failure-detection">✅ Failure Detection</a></h3>
+<p>Phi Accrual algorithm provides accurate, adaptive health monitoring</p>
+<h3 id="-tag-based-routing"><a class="header" href="#-tag-based-routing">✅ Tag-Based Routing</a></h3>
+<p>Route by worker capabilities (GPU, CPU, zone, etc.)</p>
+<h3 id="-event-monitoring"><a class="header" href="#-event-monitoring">✅ Event Monitoring</a></h3>
+<p>Subscribe to cluster events:</p>
+<ul>
+<li><code>NodeJoined</code> - New worker available</li>
+<li><code>NodeLeft</code> - Worker gracefully departed</li>
+<li><code>NodeFailed</code> - Worker detected as failed</li>
+</ul>
+<h2 id="configuration-options"><a class="header" href="#configuration-options">Configuration Options</a></h2>
+<h3 id="environment-variables"><a class="header" href="#environment-variables">Environment Variables</a></h3>
+<p><strong>Director:</strong></p>
+<ul>
+<li><code>DIRECTOR_ADDR</code> - Bind address (default: <code>127.0.0.1:61000</code>)</li>
+<li><code>RUST_LOG</code> - Log level (e.g., <code>info</code>, <code>debug</code>)</li>
+</ul>
+<p><strong>Worker:</strong></p>
+<ul>
+<li><code>WORKER_LABEL</code> - Worker identifier (default: <code>worker-1</code>)</li>
+<li><code>WORKER_ADDR</code> - Bind address (default: <code>127.0.0.1:62001</code>)</li>
+<li><code>DIRECTOR_ADDR</code> - Director address (default: <code>127.0.0.1:61000</code>)</li>
+<li><code>WORKER_FAILURE_ENABLED</code> - Enable failure simulation (default: <code>false</code>)</li>
+<li><code>RUST_LOG</code> - Log level</li>
+</ul>
+<p><strong>Client:</strong></p>
+<ul>
+<li><code>DIRECTOR_ADDR</code> - Director address (default: <code>127.0.0.1:61000</code>)</li>
+<li><code>RUST_LOG</code> - Log level</li>
+</ul>
+<h3 id="load-balancing-strategies-1"><a class="header" href="#load-balancing-strategies-1">Load Balancing Strategies</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::cluster::LoadBalancingStrategy;
+
+// Options:
+LoadBalancingStrategy::RoundRobin       // Even distribution
+LoadBalancingStrategy::Random           // Random selection
+LoadBalancingStrategy::LeastConnections // Pick least loaded (recommended)
+<span class="boring">}</span></code></pre></pre>
+<h3 id="cluster-configuration"><a class="header" href="#cluster-configuration">Cluster Configuration</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use rpcnet::cluster::ClusterConfig;
+
+let config = ClusterConfig::default()
+    .with_gossip_interval(Duration::from_secs(1))
+    .with_health_check_interval(Duration::from_secs(2));
+<span class="boring">}</span></code></pre></pre>
+<h2 id="troubleshooting-1"><a class="header" href="#troubleshooting-1">Troubleshooting</a></h2>
+<p><strong>Workers not discovered:</strong></p>
+<ul>
+<li>Ensure director starts first (it's the seed node)</li>
+<li>Check firewall allows UDP for gossip</li>
+<li>Verify workers connect to correct director address</li>
+</ul>
+<p><strong>Requests failing:</strong></p>
+<ul>
+<li>Check worker has <code>role=worker</code> tag</li>
+<li>Verify compute handler is registered</li>
+<li>Check logs for connection errors</li>
+</ul>
+<p><strong>Slow failover:</strong></p>
+<ul>
+<li>Adjust health check interval in config</li>
+<li>Tune Phi Accrual threshold</li>
+<li>Check network latency</li>
+</ul>
+<h2 id="production-considerations"><a class="header" href="#production-considerations">Production Considerations</a></h2>
+<p>For production deployments:</p>
+<ol>
+<li><strong>TLS Certificates</strong>: Use proper certificates, not test certs</li>
+<li><strong>Monitoring</strong>: Integrate cluster events with your monitoring system</li>
+<li><strong>Scaling</strong>: Add more workers dynamically as needed</li>
+<li><strong>Persistence</strong>: Consider persisting cluster state if needed</li>
+<li><strong>Security</strong>: Add authentication and authorization</li>
+<li><strong>Network</strong>: Plan for network partitions and split-brain scenarios</li>
+</ol>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<ul>
+<li>Try different load balancing strategies</li>
+<li>Add more workers dynamically</li>
+<li>Test network partition scenarios</li>
+<li>Add custom tags for routing (zone, GPU, etc.)</li>
+<li>Integrate with your application logic</li>
+</ul>
+<p>For full source code, see <code>examples/cluster/</code> in the repository.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="cluster-overview"><a class="header" href="#cluster-overview">Cluster Overview</a></h1>
 <p>RpcNet provides built-in support for building distributed RPC clusters with automatic service discovery, intelligent load balancing, and robust failure detection. This chapter introduces the core concepts and components of RpcNet's cluster architecture.</p>
 <h2 id="what-is-a-cluster"><a class="header" href="#what-is-a-cluster">What is a Cluster?</a></h2>
@@ -881,12 +1192,6 @@ step: edit the <code>.rpc.rs</code> trait, regenerate, and keep building.</p>
 <li>Adapts to network conditions</li>
 <li>Distinguishes between slow and failed nodes</li>
 </ul>
-<p><strong>Connection Pooling</strong> 🏊</p>
-<ul>
-<li>Reuses connections efficiently</li>
-<li>Configurable pool sizes and timeouts</li>
-<li>Automatic cleanup of stale connections</li>
-</ul>
 <p><strong>Tag-Based Routing</strong> 🏷️</p>
 <ul>
 <li>Route requests by node capabilities</li>
@@ -904,17 +1209,16 @@ step: edit the <code>.rpc.rs</code> trait, regenerate, and keep building.</p>
 │                    ClusterClient                             │
 │  - High-level API for cluster operations                    │
 │  - Load-balanced request routing                            │
-│  - Connection pooling integration                           │
+│  - Efficient request routing                               │
 └────────────────────────┬────────────────────────────────────┘
                          │
-        ┌────────────────┼────────────────┐
-        │                                 │
-┌───────▼─────────┐            ┌─────────▼──────────┐
-│ WorkerRegistry  │            │  ConnectionPool    │
-│  - Tracks nodes │            │  - Manages conns   │
-│  - Load balance │            │  - Reuses sockets  │
-│  - Filter tags  │            │  - Cleanup stale   │
-└───────┬─────────┘            └────────────────────┘
+        │
+┌───────▼─────────┐
+│ WorkerRegistry  │
+│  - Tracks nodes │
+│  - Load balance │
+│  - Filter tags  │
+└───────┬─────────┘
         │
 ┌───────▼─────────┐
 │  NodeRegistry   │
@@ -997,27 +1301,7 @@ println!("Selected worker: {} at {}", worker.label, worker.addr);
 <li>Tracks active connections per worker</li>
 <li>Automatic removal of failed workers</li>
 </ul>
-<h3 id="4-connectionpool"><a class="header" href="#4-connectionpool">4. ConnectionPool</a></h3>
-<p>The <strong>ConnectionPool</strong> manages efficient connection reuse:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use rpcnet::cluster::ConnectionPool;
-
-let pool = Arc::new(ConnectionPool::new(config));
-
-// Get or create connection
-let conn = pool.get_or_connect(addr).await?;
-
-// Connection is returned to pool when dropped
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Features</strong>:</p>
-<ul>
-<li>Configurable pool size and timeouts</li>
-<li>Automatic connection cleanup</li>
-<li>Health checking of pooled connections</li>
-<li>Thread-safe via <code>Arc</code> and interior mutability</li>
-</ul>
-<h3 id="5-clusterclient"><a class="header" href="#5-clusterclient">5. ClusterClient</a></h3>
+<h3 id="4-clusterclient"><a class="header" href="#4-clusterclient">4. ClusterClient</a></h3>
 <p>The <strong>ClusterClient</strong> provides a high-level API that combines all components:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -1032,7 +1316,7 @@ let result = client.call_worker("compute", request, Some("role=worker")).await?;
 <ul>
 <li>Automatic worker selection</li>
 <li>Load-balanced request routing</li>
-<li>Connection pooling integration</li>
+<li>Efficient connection management</li>
 <li>Retry logic for failed requests</li>
 </ul>
 <h2 id="when-to-use-clusters"><a class="header" href="#when-to-use-clusters">When to Use Clusters</a></h2>
@@ -1149,7 +1433,7 @@ let result = client.call_worker("compute", request, Some("role=worker")).await?;
 <h3 id="latency"><a class="header" href="#latency">Latency</a></h3>
 <ul>
 <li><strong>&lt; 0.1ms</strong> additional latency for load balancing</li>
-<li>Connection pooling reduces handshake overhead</li>
+<li>Efficient connection handling reduces overhead</li>
 <li>QUIC's 0-RTT mode for warm connections</li>
 </ul>
 <h3 id="scalability"><a class="header" href="#scalability">Scalability</a></h3>
@@ -1164,14 +1448,13 @@ let result = client.call_worker("compute", request, Some("role=worker")).await?;
 <li><strong>Low CPU</strong>: &lt; 1% for gossip maintenance</li>
 <li><strong>Low network</strong>: ~1KB/s per node for gossip</li>
 </ul>
-<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<h2 id="next-steps-1"><a class="header" href="#next-steps-1">Next Steps</a></h2>
 <p>Now that you understand the cluster architecture, you can:</p>
 <ol>
 <li><strong><a href="cluster/tutorial.html">Follow the Tutorial</a></strong> - Build your first cluster step-by-step</li>
 <li><strong><a href="cluster/discovery.html">Learn About Discovery</a></strong> - Deep dive into SWIM gossip protocol</li>
 <li><strong><a href="cluster/load-balancing.html">Explore Load Balancing</a></strong> - Choose the right strategy</li>
 <li><strong><a href="cluster/health.html">Understand Health Checking</a></strong> - How Phi Accrual works</li>
-<li><strong><a href="cluster/pooling.html">Configure Connection Pooling</a></strong> - Optimize connection reuse</li>
 <li><strong><a href="cluster/failures.html">Handle Failures</a></strong> - Partition detection and recovery</li>
 </ol>
 <p>Or jump directly to the <strong><a href="cluster/../cluster-example.html">Cluster Example</a></strong> to see a complete working system.</p>
@@ -1187,7 +1470,7 @@ let result = client.call_worker("compute", request, Some("role=worker")).await?;
 </ul>
 <p><strong>Time</strong>: ~30 minutes<br />
 <strong>Difficulty</strong>: Intermediate</p>
-<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<h2 id="prerequisites-1"><a class="header" href="#prerequisites-1">Prerequisites</a></h2>
 <h3 id="1-install-rpcnet"><a class="header" href="#1-install-rpcnet">1. Install RpcNet</a></h3>
 <pre><code class="language-bash">cargo install rpcnet
 </code></pre>
@@ -1639,7 +1922,7 @@ path = "src/bin/client.rs"
 ✅ <strong>Failure Detection</strong>: Gossip protocol detects and handles node failures<br />
 ✅ <strong>Client Failover</strong>: Clients handle worker failures gracefully<br />
 ✅ <strong>Tag-Based Routing</strong>: Filter workers by role (<code>role=worker</code>)</p>
-<h2 id="next-steps-1"><a class="header" href="#next-steps-1">Next Steps</a></h2>
+<h2 id="next-steps-2"><a class="header" href="#next-steps-2">Next Steps</a></h2>
 <h3 id="add-more-workers"><a class="header" href="#add-more-workers">Add More Workers</a></h3>
 <p>Scale up by adding more workers with different labels:</p>
 <pre><code class="language-bash">WORKER_LABEL=worker-c \
@@ -1685,342 +1968,9 @@ while let Some(event) = events.recv().await {
 <li><strong><a href="cluster/discovery.html">Discovery</a></strong> - Learn how SWIM gossip protocol works</li>
 <li><strong><a href="cluster/load-balancing.html">Load Balancing</a></strong> - Deep dive into strategies</li>
 <li><strong><a href="cluster/health.html">Health Checking</a></strong> - Understand Phi Accrual algorithm</li>
-<li><strong><a href="cluster/pooling.html">Connection Pooling</a></strong> - Optimize connection reuse</li>
 <li><strong><a href="cluster/failures.html">Failure Handling</a></strong> - Advanced partition detection</li>
 </ul>
 <p>Or explore the <strong><a href="cluster/../cluster-example.html">Complete Cluster Example</a></strong> with streaming and advanced features.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="cluster-example"><a class="header" href="#cluster-example">Cluster Example</a></h1>
-<p>This chapter demonstrates building a distributed RPC cluster with automatic worker discovery, load balancing, and failure detection using RpcNet's built-in cluster features.</p>
-<h2 id="architecture-overview"><a class="header" href="#architecture-overview">Architecture Overview</a></h2>
-<p>The cluster example showcases three main components working together:</p>
-<pre><code>                    ┌──────────────────────────┐
-                    │      Director            │
-                    │  (Coordinator Node)      │
-                    │                          │
-                    │  - WorkerRegistry        │
-                    │  - ClusterClient         │
-                    │  - Load Balancing        │
-                    └────────┬─────────────────┘
-                             │
-                    Gossip Protocol (SWIM)
-                             │
-            ┌────────────────┼────────────────┐
-            │                                 │
-    ┌───────▼────────┐              ┌────────▼───────┐
-    │   Worker A      │              │   Worker B      │
-    │                 │              │                 │
-    │  - Auto-join    │              │  - Auto-join    │
-    │  - Tag: worker  │              │  - Tag: worker  │
-    │  - Process tasks│              │  - Process tasks│
-    └─────────────────┘              └─────────────────┘
-</code></pre>
-<h3 id="components"><a class="header" href="#components">Components</a></h3>
-<p><strong>1. Director</strong> - Coordinator node that:</p>
-<ul>
-<li>Uses <code>WorkerRegistry</code> for automatic worker discovery</li>
-<li>Uses <code>ClusterClient</code> for load-balanced request routing</li>
-<li>Employs <code>LeastConnections</code> strategy by default</li>
-<li>Monitors worker pool status</li>
-<li>Routes client requests to healthy workers</li>
-</ul>
-<p><strong>2. Workers</strong> - Processing nodes that:</p>
-<ul>
-<li>Join cluster automatically via gossip protocol</li>
-<li>Tag themselves with <code>role=worker</code> for discovery</li>
-<li>Process compute tasks from clients</li>
-<li>Monitor cluster events (node joined/left/failed)</li>
-<li>Support simulated failures for testing</li>
-</ul>
-<p><strong>3. Client</strong> - Application that:</p>
-<ul>
-<li>Connects to director</li>
-<li>Gets worker assignment</li>
-<li>Establishes direct connection to worker</li>
-<li>Handles failover automatically</li>
-</ul>
-<h2 id="why-use-built-in-cluster-features"><a class="header" href="#why-use-built-in-cluster-features">Why Use Built-in Cluster Features?</a></h2>
-<p>Compared to manual worker management patterns:</p>
-<p><strong>Manual Approach</strong> ❌:</p>
-<ul>
-<li>Custom <code>HashMap&lt;Uuid, WorkerInfo&gt;</code> for tracking</li>
-<li>Manual round-robin selection logic</li>
-<li>Explicit RPC calls for worker registration</li>
-<li>Custom ping-based health checks</li>
-<li>~200 lines of boilerplate code</li>
-</ul>
-<p><strong>Built-in Cluster</strong> ✅:</p>
-<ul>
-<li>Built-in <code>WorkerRegistry</code> + <code>ClusterClient</code></li>
-<li>Multiple load balancing strategies (Round Robin, Random, Least Connections)</li>
-<li>Automatic discovery via SWIM gossip protocol</li>
-<li>Phi Accrual failure detection (accurate, adaptive)</li>
-<li>~50 lines to set up</li>
-<li><strong>75% code reduction!</strong></li>
-</ul>
-<h2 id="running-the-example"><a class="header" href="#running-the-example">Running the Example</a></h2>
-<h3 id="prerequisites-1"><a class="header" href="#prerequisites-1">Prerequisites</a></h3>
-<p>Ensure test certificates exist:</p>
-<pre><code class="language-bash">ls certs/test_cert.pem certs/test_key.pem
-</code></pre>
-<p>All commands should be run from the <strong>project root directory</strong>.</p>
-<h3 id="basic-setup"><a class="header" href="#basic-setup">Basic Setup</a></h3>
-<p>Open four terminals and run each component:</p>
-<p><strong>Terminal 1 - Director:</strong></p>
-<pre><code class="language-bash">DIRECTOR_ADDR=127.0.0.1:61000 \
-  RUST_LOG=info \
-  cargo run --manifest-path examples/cluster/Cargo.toml --bin director
-</code></pre>
-<p><strong>Terminal 2 - Worker A:</strong></p>
-<pre><code class="language-bash">WORKER_LABEL=worker-a \
-  WORKER_ADDR=127.0.0.1:62001 \
-  DIRECTOR_ADDR=127.0.0.1:61000 \
-  RUST_LOG=info \
-  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
-</code></pre>
-<p><strong>Terminal 3 - Worker B:</strong></p>
-<pre><code class="language-bash">WORKER_LABEL=worker-b \
-  WORKER_ADDR=127.0.0.1:62002 \
-  DIRECTOR_ADDR=127.0.0.1:61000 \
-  RUST_LOG=info \
-  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
-</code></pre>
-<p><strong>Terminal 4 - Client:</strong></p>
-<pre><code class="language-bash">DIRECTOR_ADDR=127.0.0.1:61000 \
-  RUST_LOG=info \
-  cargo run --manifest-path examples/cluster/Cargo.toml --bin client
-</code></pre>
-<h3 id="what-youll-see"><a class="header" href="#what-youll-see">What You'll See</a></h3>
-<p><strong>Director Output:</strong></p>
-<pre><code>🎯 Starting Director at 127.0.0.1:61000
-📁 Loading certificates from "../../certs/test_cert.pem"
-✅ Director registered itself in cluster
-✅ Cluster enabled - Director is now discoverable
-🔄 Load balancing strategy: LeastConnections
-📊 Worker pool status: 2 workers available
-   - worker-a at 127.0.0.1:62001 (0 connections)
-   - worker-b at 127.0.0.1:62002 (0 connections)
-🚀 Director ready - listening on 127.0.0.1:61000
-</code></pre>
-<p><strong>Worker Output:</strong></p>
-<pre><code>👷 Starting Worker 'worker-a' at 127.0.0.1:62001
-🔌 Binding server to 127.0.0.1:62001...
-✅ Server bound successfully
-🌐 Enabling cluster, connecting to director at 127.0.0.1:61000...
-✅ Cluster enabled, connected to director
-🏷️  Tagging worker with role=worker and label=worker-a...
-✅ Worker 'worker-a' joined cluster with role=worker
-🚀 Worker 'worker-a' is running and ready to handle requests
-</code></pre>
-<p><strong>Client Output:</strong></p>
-<pre><code>📡 Starting Client - connecting to director at 127.0.0.1:61000
-✅ connected to director
-🔀 director assigned worker - establishing direct connection
-✅ direct connection established to worker
-📤 creating request stream
-🌊 stream opened successfully, starting to consume responses
-📦 received token (sequence=1, text="token-1", total=1)
-📦 received token (sequence=2, text="token-2", total=2)
-...
-</code></pre>
-<h2 id="testing-failure-scenarios"><a class="header" href="#testing-failure-scenarios">Testing Failure Scenarios</a></h2>
-<h3 id="simulated-worker-failures"><a class="header" href="#simulated-worker-failures">Simulated Worker Failures</a></h3>
-<p>Enable periodic failures to test automatic failover:</p>
-<p><strong>Worker with Failures:</strong></p>
-<pre><code class="language-bash">WORKER_LABEL=worker-a \
-  WORKER_ADDR=127.0.0.1:62001 \
-  DIRECTOR_ADDR=127.0.0.1:61000 \
-  WORKER_FAILURE_ENABLED=true \  # Enable failure simulation
-  RUST_LOG=info \
-  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
-</code></pre>
-<p><strong>Failure Cycle</strong> (~18 seconds):</p>
-<ol>
-<li><strong>Run</strong>: 10 seconds of normal operation</li>
-<li><strong>Warning</strong>: "⚠️  Simulating worker failure in 3 seconds..."</li>
-<li><strong>Failed</strong>: 5 seconds in failed state - "💥 Worker failed!"</li>
-<li><strong>Recovery</strong>: "🔄 Worker recovering..."</li>
-<li><strong>Ready</strong>: "✅ Worker recovered and ready to serve!"</li>
-<li>Repeat</li>
-</ol>
-<p><strong>Client Behavior:</strong></p>
-<ul>
-<li>Detects failure via error response</li>
-<li>Returns to director for new worker assignment</li>
-<li>Switches to healthy worker seamlessly</li>
-<li>Streaming continues with minimal interruption</li>
-</ul>
-<h3 id="hard-kill-test"><a class="header" href="#hard-kill-test">Hard Kill Test</a></h3>
-<p>Test network-level failure detection:</p>
-<pre><code class="language-bash"># In a worker terminal, press Ctrl+C
-</code></pre>
-<p><strong>Observe:</strong></p>
-<ul>
-<li>Director detects failure via gossip protocol</li>
-<li><code>WorkerRegistry</code> removes worker from pool</li>
-<li>Client requests automatically route to remaining workers</li>
-<li>Zero downtime for ongoing operations</li>
-</ul>
-<h3 id="worker-restart-test"><a class="header" href="#worker-restart-test">Worker Restart Test</a></h3>
-<p>After killing a worker, restart it to see re-discovery:</p>
-<pre><code class="language-bash">WORKER_LABEL=worker-a \
-  WORKER_ADDR=127.0.0.1:62001 \
-  DIRECTOR_ADDR=127.0.0.1:61000 \
-  RUST_LOG=info \
-  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
-</code></pre>
-<p><strong>Observe:</strong></p>
-<ul>
-<li>Worker automatically rejoins cluster</li>
-<li>Gossip spreads worker availability</li>
-<li>Director adds worker back to registry</li>
-<li>Client requests resume to all available workers</li>
-</ul>
-<h2 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h2>
-<h3 id="1-automatic-discovery"><a class="header" href="#1-automatic-discovery">1. Automatic Discovery</a></h3>
-<p>Workers don't manually register - they just join the cluster:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Worker code (simplified)
-let cluster = ClusterMembership::new(config).await?;
-cluster.join(vec![director_addr]).await?;
-
-// Tag for discovery
-cluster.set_tag("role", "worker");
-cluster.set_tag("label", worker_label);
-
-// That's it! Director discovers automatically via gossip
-<span class="boring">}</span></code></pre></pre>
-<h3 id="2-load-balancing"><a class="header" href="#2-load-balancing">2. Load Balancing</a></h3>
-<p>Director uses <code>WorkerRegistry</code> for automatic load balancing:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Director code
-let registry = Arc::new(WorkerRegistry::new(
-    cluster,
-    LoadBalancingStrategy::LeastConnections
-));
-registry.start().await;
-
-// Automatically tracks workers and balances load
-<span class="boring">}</span></code></pre></pre>
-<h3 id="3-failure-detection"><a class="header" href="#3-failure-detection">3. Failure Detection</a></h3>
-<p>Phi Accrual algorithm provides accurate health monitoring:</p>
-<ul>
-<li>Adapts to network conditions</li>
-<li>Distinguishes slow nodes from failed nodes</li>
-<li>No false positives from temporary delays</li>
-<li>Automatic recovery when nodes return</li>
-</ul>
-<h3 id="4-tag-based-routing"><a class="header" href="#4-tag-based-routing">4. Tag-Based Routing</a></h3>
-<p>Filter workers by capabilities:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Get only GPU workers
-let gpu_worker = registry.select_worker(Some("gpu=true")).await?;
-
-// Get any worker
-let any_worker = registry.select_worker(Some("role=worker")).await?;
-<span class="boring">}</span></code></pre></pre>
-<h2 id="key-cluster-features-demonstrated"><a class="header" href="#key-cluster-features-demonstrated">Key Cluster Features Demonstrated</a></h2>
-<h3 id="-automatic-discovery"><a class="header" href="#-automatic-discovery">✅ Automatic Discovery</a></h3>
-<p>No manual registration needed - gossip protocol handles everything</p>
-<h3 id="-load-balancing"><a class="header" href="#-load-balancing">✅ Load Balancing</a></h3>
-<p>Choose from:</p>
-<ul>
-<li><strong>Round Robin</strong>: Even distribution</li>
-<li><strong>Random</strong>: Stateless workload distribution</li>
-<li><strong>Least Connections</strong>: Balance based on current load (recommended)</li>
-</ul>
-<h3 id="-failure-detection"><a class="header" href="#-failure-detection">✅ Failure Detection</a></h3>
-<p>Phi Accrual algorithm provides accurate, adaptive health monitoring</p>
-<h3 id="-connection-pooling"><a class="header" href="#-connection-pooling">✅ Connection Pooling</a></h3>
-<p>Efficient connection reuse with configurable settings</p>
-<h3 id="-tag-based-routing"><a class="header" href="#-tag-based-routing">✅ Tag-Based Routing</a></h3>
-<p>Route by worker capabilities (GPU, CPU, zone, etc.)</p>
-<h3 id="-event-monitoring"><a class="header" href="#-event-monitoring">✅ Event Monitoring</a></h3>
-<p>Subscribe to cluster events:</p>
-<ul>
-<li><code>NodeJoined</code> - New worker available</li>
-<li><code>NodeLeft</code> - Worker gracefully departed</li>
-<li><code>NodeFailed</code> - Worker detected as failed</li>
-</ul>
-<h2 id="configuration-options"><a class="header" href="#configuration-options">Configuration Options</a></h2>
-<h3 id="environment-variables"><a class="header" href="#environment-variables">Environment Variables</a></h3>
-<p><strong>Director:</strong></p>
-<ul>
-<li><code>DIRECTOR_ADDR</code> - Bind address (default: <code>127.0.0.1:61000</code>)</li>
-<li><code>RUST_LOG</code> - Log level (e.g., <code>info</code>, <code>debug</code>)</li>
-</ul>
-<p><strong>Worker:</strong></p>
-<ul>
-<li><code>WORKER_LABEL</code> - Worker identifier (default: <code>worker-1</code>)</li>
-<li><code>WORKER_ADDR</code> - Bind address (default: <code>127.0.0.1:62001</code>)</li>
-<li><code>DIRECTOR_ADDR</code> - Director address (default: <code>127.0.0.1:61000</code>)</li>
-<li><code>WORKER_FAILURE_ENABLED</code> - Enable failure simulation (default: <code>false</code>)</li>
-<li><code>RUST_LOG</code> - Log level</li>
-</ul>
-<p><strong>Client:</strong></p>
-<ul>
-<li><code>DIRECTOR_ADDR</code> - Director address (default: <code>127.0.0.1:61000</code>)</li>
-<li><code>RUST_LOG</code> - Log level</li>
-</ul>
-<h3 id="load-balancing-strategies-1"><a class="header" href="#load-balancing-strategies-1">Load Balancing Strategies</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use rpcnet::cluster::LoadBalancingStrategy;
-
-// Options:
-LoadBalancingStrategy::RoundRobin       // Even distribution
-LoadBalancingStrategy::Random           // Random selection
-LoadBalancingStrategy::LeastConnections // Pick least loaded (recommended)
-<span class="boring">}</span></code></pre></pre>
-<h3 id="cluster-configuration"><a class="header" href="#cluster-configuration">Cluster Configuration</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use rpcnet::cluster::ClusterConfig;
-
-let config = ClusterConfig::default()
-    .with_gossip_interval(Duration::from_secs(1))
-    .with_health_check_interval(Duration::from_secs(2));
-<span class="boring">}</span></code></pre></pre>
-<h2 id="troubleshooting-1"><a class="header" href="#troubleshooting-1">Troubleshooting</a></h2>
-<p><strong>Workers not discovered:</strong></p>
-<ul>
-<li>Ensure director starts first (it's the seed node)</li>
-<li>Check firewall allows UDP for gossip</li>
-<li>Verify workers connect to correct director address</li>
-</ul>
-<p><strong>Requests failing:</strong></p>
-<ul>
-<li>Check worker has <code>role=worker</code> tag</li>
-<li>Verify compute handler is registered</li>
-<li>Check logs for connection errors</li>
-</ul>
-<p><strong>Slow failover:</strong></p>
-<ul>
-<li>Adjust health check interval in config</li>
-<li>Tune Phi Accrual threshold</li>
-<li>Check network latency</li>
-</ul>
-<h2 id="production-considerations"><a class="header" href="#production-considerations">Production Considerations</a></h2>
-<p>For production deployments:</p>
-<ol>
-<li><strong>TLS Certificates</strong>: Use proper certificates, not test certs</li>
-<li><strong>Monitoring</strong>: Integrate cluster events with your monitoring system</li>
-<li><strong>Scaling</strong>: Add more workers dynamically as needed</li>
-<li><strong>Persistence</strong>: Consider persisting cluster state if needed</li>
-<li><strong>Security</strong>: Add authentication and authorization</li>
-<li><strong>Network</strong>: Plan for network partitions and split-brain scenarios</li>
-</ol>
-<h2 id="next-steps-2"><a class="header" href="#next-steps-2">Next Steps</a></h2>
-<ul>
-<li>Try different load balancing strategies</li>
-<li>Add more workers dynamically</li>
-<li>Test network partition scenarios</li>
-<li>Add custom tags for routing (zone, GPU, etc.)</li>
-<li>Integrate with your application logic</li>
-</ul>
-<p>For full source code, see <code>examples/cluster/</code> in the repository.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="automatic-discovery"><a class="header" href="#automatic-discovery">Automatic Discovery</a></h1>
 <p>RpcNet uses the <strong>SWIM (Scalable Weakly-consistent Infection-style Process Group Membership)</strong> protocol for automatic node discovery. This chapter explains how nodes find each other without central coordination or manual registration.</p>
 <h2 id="how-discovery-works"><a class="header" href="#how-discovery-works">How Discovery Works</a></h2>
@@ -3064,7 +3014,6 @@ With Least Connections:            168K RPS (-2.3%)
 <h2 id="next-steps-4"><a class="header" href="#next-steps-4">Next Steps</a></h2>
 <ul>
 <li><strong><a href="cluster/health.html">Health Checking</a></strong> - Ensure selected workers are healthy</li>
-<li><strong><a href="cluster/pooling.html">Connection Pooling</a></strong> - Reuse connections efficiently</li>
 <li><strong><a href="cluster/failures.html">Failures</a></strong> - Handle worker failures gracefully</li>
 </ul>
 <h2 id="references-1"><a class="header" href="#references-1">References</a></h2>
@@ -3573,7 +3522,6 @@ impl CompositeHealthCheck {
 <span class="boring">}</span></code></pre></pre>
 <h2 id="next-steps-5"><a class="header" href="#next-steps-5">Next Steps</a></h2>
 <ul>
-<li><strong><a href="cluster/pooling.html">Connection Pooling</a></strong> - Reuse connections to healthy nodes</li>
 <li><strong><a href="cluster/failures.html">Failures</a></strong> - Handle node failures and partitions</li>
 <li><strong><a href="cluster/discovery.html">Discovery</a></strong> - How nodes discover each other via gossip</li>
 </ul>
@@ -3582,532 +3530,6 @@ impl CompositeHealthCheck {
 <li><a href="https://citeseerx.ist.psu.edu/document?repid=rep1&amp;type=pdf&amp;doi=babf246cf6753ad12ce97ae47e64c9d4ff85c6f7">Phi Accrual Paper</a> - Original algorithm</li>
 <li><a href="https://cassandra.apache.org/doc/latest/cassandra/architecture/failure_detection.html">Cassandra Failure Detection</a> - Production implementation</li>
 <li><a href="https://doc.akka.io/docs/akka/current/typed/failure-detector.html">Akka Cluster Phi</a> - Akka's usage</li>
-</ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="connection-pooling-1"><a class="header" href="#connection-pooling-1">Connection Pooling</a></h1>
-<p>Connection pooling reuses existing connections instead of creating new ones for each request, dramatically improving performance and reducing resource usage. This chapter explains how RpcNet's connection pooling works and how to configure it.</p>
-<h2 id="why-connection-pooling"><a class="header" href="#why-connection-pooling">Why Connection Pooling?</a></h2>
-<h3 id="without-pooling"><a class="header" href="#without-pooling">Without Pooling</a></h3>
-<p>Every request creates a new connection:</p>
-<pre><code>Request 1:
-  1. TCP handshake (1 RTT)
-  2. TLS handshake (2-3 RTT)
-  3. QUIC handshake (1 RTT)
-  4. Send request + receive response
-  5. Close connection
-  
-Total: 4-5 RTT + request time (~20-50ms overhead per request)
-</code></pre>
-<p><strong>Problems</strong>:</p>
-<ul>
-<li>High latency (multiple round trips)</li>
-<li>High CPU (crypto for each handshake)</li>
-<li>Port exhaustion (limited local ports)</li>
-<li>Resource waste (sockets, memory)</li>
-</ul>
-<h3 id="with-pooling"><a class="header" href="#with-pooling">With Pooling</a></h3>
-<p>Connections are reused:</p>
-<pre><code>Request 1:
-  1. Create connection (4-5 RTT)
-  2. Send request + receive response
-  3. Return connection to pool
-  
-Request 2:
-  1. Get connection from pool (instant)
-  2. Send request + receive response
-  3. Return connection to pool
-  
-Total: One-time setup + instant reuse
-</code></pre>
-<p><strong>Benefits</strong>:</p>
-<ul>
-<li>✅ <strong>98% latency reduction</strong> for pooled connections</li>
-<li>✅ <strong>80% CPU savings</strong> (no repeated handshakes)</li>
-<li>✅ <strong>10x higher throughput</strong> (172K+ RPS achieved)</li>
-<li>✅ <strong>Better resource utilization</strong> (fewer sockets)</li>
-</ul>
-<h2 id="rpcnets-connectionpool"><a class="header" href="#rpcnets-connectionpool">RpcNet's ConnectionPool</a></h2>
-<h3 id="architecture"><a class="header" href="#architecture">Architecture</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>pub struct ConnectionPool {
-    pools: Arc&lt;RwLock&lt;HashMap&lt;SocketAddr, Vec&lt;Connection&gt;&gt;&gt;&gt;,
-    config: PoolConfig,
-    metrics: PoolMetrics,
-}
-
-pub struct PoolConfig {
-    max_connections_per_host: usize,    // Max pooled per endpoint
-    max_idle_time: Duration,            // Drop idle connections after
-    connect_timeout: Duration,          // New connection timeout
-    health_check_interval: Duration,    // Check pooled connections
-}
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Per-host pools</strong>:</p>
-<pre><code>Pool for 192.168.1.10:8080: [conn1, conn2, conn3]
-Pool for 192.168.1.11:8080: [conn1, conn2]
-Pool for 192.168.1.12:8080: [conn1, conn2, conn3, conn4]
-</code></pre>
-<h3 id="usage"><a class="header" href="#usage">Usage</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use rpcnet::cluster::{ConnectionPool, PoolConfig};
-use std::sync::Arc;
-
-// Create pool
-let config = PoolConfig::default()
-    .with_max_connections_per_host(10)
-    .with_max_idle_time(Duration::from_secs(60))
-    .with_connect_timeout(Duration::from_secs(5));
-
-let pool = Arc::new(ConnectionPool::new(config));
-
-// Get or create connection
-let addr = "worker.example.com:8080".parse()?;
-let conn = pool.get_or_connect(addr).await?;
-
-// Use connection
-let result = conn.call("compute", request).await?;
-
-// Connection automatically returned to pool when dropped
-drop(conn);
-<span class="boring">}</span></code></pre></pre>
-<h2 id="configuration-2"><a class="header" href="#configuration-2">Configuration</a></h2>
-<h3 id="max-connections-per-host"><a class="header" href="#max-connections-per-host">Max Connections Per Host</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>.with_max_connections_per_host(10)  // Pool up to 10 connections per worker
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Guidelines</strong>:</p>
-<ul>
-<li><strong>Small values (1-5)</strong>: Low memory, limited concurrency</li>
-<li><strong>Medium values (10-20)</strong>: Balanced, good for most use cases</li>
-<li><strong>Large values (50+)</strong>: High concurrency, more memory</li>
-</ul>
-<p><strong>Example sizing</strong>:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Calculation: concurrent_requests / expected_workers
-let concurrent_requests = 100;
-let num_workers = 5;
-let pool_size = concurrent_requests / num_workers; // 20
-<span class="boring">}</span></code></pre></pre>
-<h3 id="max-idle-time"><a class="header" href="#max-idle-time">Max Idle Time</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>.with_max_idle_time(Duration::from_secs(60))  // Drop idle connections after 60s
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Guidelines</strong>:</p>
-<ul>
-<li><strong>Short (10-30s)</strong>: Aggressive cleanup, lower memory</li>
-<li><strong>Medium (60-120s)</strong>: Balanced, recommended</li>
-<li><strong>Long (300s+)</strong>: Keep connections warm, higher memory</li>
-</ul>
-<p><strong>Trade-offs</strong>:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Short idle time
-+ Less memory usage
-+ Fewer stale connections
-- More reconnections under variable load
-
-// Long idle time  
-+ Fewer reconnections
-+ Better performance under variable load
-- More memory usage
-- More stale connections if nodes restart
-<span class="boring">}</span></code></pre></pre>
-<h3 id="connect-timeout"><a class="header" href="#connect-timeout">Connect Timeout</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>.with_connect_timeout(Duration::from_secs(5))  // Fail if connection takes &gt; 5s
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Guidelines</strong>:</p>
-<ul>
-<li><strong>Local network</strong>: 1-2 seconds</li>
-<li><strong>Cross-region</strong>: 5-10 seconds</li>
-<li><strong>Satellite/high-latency</strong>: 15-30 seconds</li>
-</ul>
-<h3 id="health-check-interval"><a class="header" href="#health-check-interval">Health Check Interval</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>.with_health_check_interval(Duration::from_secs(30))  // Verify pooled connections every 30s
-<span class="boring">}</span></code></pre></pre>
-<p><strong>What it does</strong>:</p>
-<ul>
-<li>Periodically pings pooled connections</li>
-<li>Removes dead/stale connections</li>
-<li>Prevents using broken connections</li>
-</ul>
-<p><strong>Guidelines</strong>:</p>
-<ul>
-<li><strong>Frequent (10-15s)</strong>: Detect failures quickly, more overhead</li>
-<li><strong>Moderate (30-60s)</strong>: Balanced, recommended</li>
-<li><strong>Infrequent (120s+)</strong>: Less overhead, slower failure detection</li>
-</ul>
-<h2 id="integration-with-clusterclient"><a class="header" href="#integration-with-clusterclient">Integration with ClusterClient</a></h2>
-<p><code>ClusterClient</code> automatically uses <code>ConnectionPool</code>:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use rpcnet::cluster::{ClusterClient, ClusterClientConfig};
-
-// Configure pooling via ClusterClientConfig
-let config = ClusterClientConfig::default()
-    .with_pool_config(
-        PoolConfig::default()
-            .with_max_connections_per_host(20)
-            .with_max_idle_time(Duration::from_secs(90))
-    );
-
-let client = Arc::new(ClusterClient::new(registry, config));
-
-// All requests automatically use pooled connections
-let result = client.call_worker("compute", request, Some("role=worker")).await?;
-<span class="boring">}</span></code></pre></pre>
-<h2 id="performance-impact-1"><a class="header" href="#performance-impact-1">Performance Impact</a></h2>
-<h3 id="latency-comparison"><a class="header" href="#latency-comparison">Latency Comparison</a></h3>
-<p>Measured with 3 workers, 10K requests:</p>
-<div class="table-wrapper"><table><thead><tr><th>Scenario</th><th>Avg Latency</th><th>P99 Latency</th></tr></thead><tbody>
-<tr><td><strong>No pooling</strong></td><td>28ms</td><td>45ms</td></tr>
-<tr><td><strong>Pooling (cold)</strong></td><td>27ms</td><td>44ms</td></tr>
-<tr><td><strong>Pooling (warm)</strong></td><td>0.6ms</td><td>1.2ms</td></tr>
-</tbody></table>
-</div>
-<p><strong>Key insight</strong>: First request pays connection cost, all subsequent requests are ~98% faster.</p>
-<h3 id="throughput-comparison"><a class="header" href="#throughput-comparison">Throughput Comparison</a></h3>
-<p>Measured over 60 seconds:</p>
-<div class="table-wrapper"><table><thead><tr><th>Configuration</th><th>Throughput</th><th>CPU Usage</th></tr></thead><tbody>
-<tr><td><strong>No pooling</strong></td><td>42K RPS</td><td>85%</td></tr>
-<tr><td><strong>Pooling (size=5)</strong></td><td>145K RPS</td><td>45%</td></tr>
-<tr><td><strong>Pooling (size=10)</strong></td><td>172K RPS</td><td>38%</td></tr>
-<tr><td><strong>Pooling (size=20)</strong></td><td>175K RPS</td><td>37%</td></tr>
-</tbody></table>
-</div>
-<p><strong>Key insight</strong>: Pool size of 10 per host provides 172K+ RPS with minimal CPU overhead.</p>
-<h3 id="resource-usage-1"><a class="header" href="#resource-usage-1">Resource Usage</a></h3>
-<p>Measured with 10 workers, 100 concurrent requests:</p>
-<div class="table-wrapper"><table><thead><tr><th>Pool Size</th><th>Memory (MB)</th><th>Sockets</th><th>Ports Used</th></tr></thead><tbody>
-<tr><td><strong>0 (no pool)</strong></td><td>45</td><td>0 idle</td><td>100 active</td></tr>
-<tr><td><strong>5</strong></td><td>52 (+15%)</td><td>50 idle</td><td>50-100 active</td></tr>
-<tr><td><strong>10</strong></td><td>61 (+35%)</td><td>100 idle</td><td>20-100 active</td></tr>
-<tr><td><strong>20</strong></td><td>78 (+73%)</td><td>200 idle</td><td>10-100 active</td></tr>
-</tbody></table>
-</div>
-<p><strong>Key insight</strong>: Pooling increases memory slightly but dramatically reduces port churn.</p>
-<h2 id="connection-lifecycle"><a class="header" href="#connection-lifecycle">Connection Lifecycle</a></h2>
-<h3 id="1-get-connection"><a class="header" href="#1-get-connection">1. Get Connection</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let conn = pool.get_or_connect(addr).await?;
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Steps</strong>:</p>
-<ol>
-<li>Check if pool has available connection for <code>addr</code></li>
-<li>If yes: Remove from pool, verify it's still healthy, return</li>
-<li>If no: Create new connection, return</li>
-</ol>
-<h3 id="2-use-connection"><a class="header" href="#2-use-connection">2. Use Connection</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let result = conn.call("method", args).await?;
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Connection remains owned</strong> by caller during use.</p>
-<h3 id="3-return-connection"><a class="header" href="#3-return-connection">3. Return Connection</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>drop(conn);  // Automatically returned when dropped
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Steps</strong>:</p>
-<ol>
-<li>Check if pool is full for this addr</li>
-<li>If not full: Add connection back to pool</li>
-<li>If full: Close connection immediately</li>
-</ol>
-<h3 id="4-background-cleanup"><a class="header" href="#4-background-cleanup">4. Background Cleanup</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Runs automatically in background
-loop {
-    tokio::time::sleep(health_check_interval).await;
-    
-    for (addr, connections) in pools.iter_mut() {
-        connections.retain(|conn| {
-            // Remove if idle too long
-            if conn.idle_time() &gt; max_idle_time {
-                return false;
-            }
-            
-            // Remove if health check fails
-            if !conn.is_healthy() {
-                return false;
-            }
-            
-            true
-        });
-    }
-}
-<span class="boring">}</span></code></pre></pre>
-<h2 id="best-practices-3"><a class="header" href="#best-practices-3">Best Practices</a></h2>
-<h3 id="1-size-pools-appropriately"><a class="header" href="#1-size-pools-appropriately">1. Size Pools Appropriately</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Calculate based on concurrency
-fn calculate_pool_size(concurrent_requests: usize, num_workers: usize) -&gt; usize {
-    let per_worker = concurrent_requests / num_workers;
-    
-    // Add 20% buffer for load spikes
-    let with_buffer = (per_worker as f64 * 1.2) as usize;
-    
-    // Cap at reasonable maximum
-    with_buffer.min(50)
-}
-
-let pool_size = calculate_pool_size(200, 10); // 24
-let config = PoolConfig::default()
-    .with_max_connections_per_host(pool_size);
-<span class="boring">}</span></code></pre></pre>
-<h3 id="2-monitor-pool-usage"><a class="header" href="#2-monitor-pool-usage">2. Monitor Pool Usage</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Expose metrics
-async fn monitor_pool(pool: Arc&lt;ConnectionPool&gt;) {
-    loop {
-        tokio::time::sleep(Duration::from_secs(10)).await;
-        
-        let metrics = pool.metrics();
-        
-        println!("Pool stats:");
-        println!("  Total pooled: {}", metrics.total_pooled);
-        println!("  Active: {}", metrics.active_connections);
-        println!("  Idle: {}", metrics.idle_connections);
-        println!("  Hit rate: {:.1}%", metrics.hit_rate() * 100.0);
-        
-        // Export to monitoring system
-        metrics::gauge!("pool.total", metrics.total_pooled as f64);
-        metrics::gauge!("pool.active", metrics.active_connections as f64);
-        metrics::gauge!("pool.idle", metrics.idle_connections as f64);
-        metrics::gauge!("pool.hit_rate", metrics.hit_rate());
-    }
-}
-<span class="boring">}</span></code></pre></pre>
-<h3 id="3-handle-pool-exhaustion"><a class="header" href="#3-handle-pool-exhaustion">3. Handle Pool Exhaustion</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Don't fail if pool is full - create new connection
-async fn get_connection_with_fallback(
-    pool: Arc&lt;ConnectionPool&gt;,
-    addr: SocketAddr,
-) -&gt; Result&lt;Connection&gt; {
-    match pool.get_or_connect(addr).await {
-        Ok(conn) =&gt; Ok(conn),
-        Err(e) if e.is_pool_exhausted() =&gt; {
-            log::warn!("Pool exhausted, creating transient connection");
-            Connection::new(addr).await  // Create non-pooled connection
-        }
-        Err(e) =&gt; Err(e),
-    }
-}
-<span class="boring">}</span></code></pre></pre>
-<h3 id="4-tune-for-your-workload"><a class="header" href="#4-tune-for-your-workload">4. Tune for Your Workload</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Long-lived connections (streaming, websockets)
-let streaming_config = PoolConfig::default()
-    .with_max_connections_per_host(50)        // More concurrent streams
-    .with_max_idle_time(Duration::from_secs(300))  // Keep warm longer
-    .with_health_check_interval(Duration::from_secs(60));
-
-// Short-lived connections (REST-like RPC)
-let rpc_config = PoolConfig::default()
-    .with_max_connections_per_host(10)        // Lower concurrency
-    .with_max_idle_time(Duration::from_secs(30))   // Aggressive cleanup
-    .with_health_check_interval(Duration::from_secs(15));
-
-// Variable load (auto-scaling)
-let variable_config = PoolConfig::default()
-    .with_max_connections_per_host(20)
-    .with_max_idle_time(Duration::from_secs(60))   // Balanced
-    .with_health_check_interval(Duration::from_secs(30));
-<span class="boring">}</span></code></pre></pre>
-<h3 id="5-pre-warm-pools"><a class="header" href="#5-pre-warm-pools">5. Pre-warm Pools</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Establish connections before first request
-async fn prewarm_pool(
-    pool: Arc&lt;ConnectionPool&gt;,
-    workers: Vec&lt;SocketAddr&gt;,
-    connections_per_worker: usize,
-) -&gt; Result&lt;()&gt; {
-    for addr in workers {
-        for _ in 0..connections_per_worker {
-            let conn = pool.get_or_connect(addr).await?;
-            // Connection returned to pool when dropped
-            drop(conn);
-        }
-    }
-    Ok(())
-}
-
-// Usage
-prewarm_pool(pool.clone(), worker_addrs, 5).await?;
-<span class="boring">}</span></code></pre></pre>
-<h2 id="troubleshooting-5"><a class="header" href="#troubleshooting-5">Troubleshooting</a></h2>
-<h3 id="connection-pool-exhaustion"><a class="header" href="#connection-pool-exhaustion">Connection Pool Exhaustion</a></h3>
-<p><strong>Symptom</strong>: Errors like "Pool exhausted for host X"</p>
-<p><strong>Debug</strong>:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let metrics = pool.metrics_for_host(addr).await;
-println!("Pool for {}: {} active, {} idle, {} max",
-    addr, metrics.active, metrics.idle, metrics.max);
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Solutions</strong>:</p>
-<ul>
-<li>Increase <code>max_connections_per_host</code></li>
-<li>Ensure connections are returned promptly (check for leaks)</li>
-<li>Add more workers to distribute load</li>
-</ul>
-<h3 id="stale-connections"><a class="header" href="#stale-connections">Stale Connections</a></h3>
-<p><strong>Symptom</strong>: Requests fail with "Connection reset" or "Broken pipe"</p>
-<p><strong>Debug</strong>:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Check connection age
-for (addr, conns) in pool.all_connections().await {
-    for conn in conns {
-        println!("Connection to {}: age = {:?}, idle = {:?}",
-            addr, conn.age(), conn.idle_time());
-    }
-}
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Solutions</strong>:</p>
-<ul>
-<li>Reduce <code>max_idle_time</code> to close stale connections faster</li>
-<li>Reduce <code>health_check_interval</code> for more frequent checks</li>
-<li>Ensure workers don't close connections unilaterally</li>
-</ul>
-<h3 id="memory-growth-1"><a class="header" href="#memory-growth-1">Memory Growth</a></h3>
-<p><strong>Symptom</strong>: Memory usage grows over time</p>
-<p><strong>Debug</strong>:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Monitor pool sizes
-let total_connections = pool.total_connections().await;
-let total_memory = total_connections * CONNECTION_SIZE_BYTES;
-println!("Pool using ~{} MB", total_memory / 1_000_000);
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Solutions</strong>:</p>
-<ul>
-<li>Reduce <code>max_connections_per_host</code></li>
-<li>Reduce <code>max_idle_time</code> for more aggressive cleanup</li>
-<li>Verify connections are actually being returned to pool</li>
-</ul>
-<h3 id="poor-hit-rate"><a class="header" href="#poor-hit-rate">Poor Hit Rate</a></h3>
-<p><strong>Symptom</strong>: Low pool hit rate (&lt; 50%)</p>
-<p><strong>Debug</strong>:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>let metrics = pool.metrics();
-println!("Hit rate: {:.1}% ({} hits / {} total)",
-    metrics.hit_rate() * 100.0,
-    metrics.pool_hits,
-    metrics.total_requests);
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Solutions</strong>:</p>
-<ul>
-<li>Increase <code>max_connections_per_host</code> (pool too small)</li>
-<li>Increase <code>max_idle_time</code> (connections being evicted too quickly)</li>
-<li>Check if workers are being selected evenly (load balancing issue)</li>
-</ul>
-<h2 id="advanced-topics-1"><a class="header" href="#advanced-topics-1">Advanced Topics</a></h2>
-<h3 id="per-worker-pool-sizing"><a class="header" href="#per-worker-pool-sizing">Per-Worker Pool Sizing</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Different pool sizes based on worker capacity
-fn get_pool_size_for_worker(worker: &amp;Worker) -&gt; usize {
-    match worker.tags.get("instance_type") {
-        Some("large") =&gt; 30,
-        Some("xlarge") =&gt; 50,
-        Some("small") =&gt; 10,
-        _ =&gt; 20,  // default
-    }
-}
-<span class="boring">}</span></code></pre></pre>
-<h3 id="connection-affinity"><a class="header" href="#connection-affinity">Connection Affinity</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Route same client to same connection for caching benefits
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-
-async fn get_affinity_connection(
-    pool: Arc&lt;ConnectionPool&gt;,
-    client_id: &amp;str,
-    addr: SocketAddr,
-) -&gt; Result&lt;Connection&gt; {
-    // Hash client ID to pick specific connection
-    let mut hasher = DefaultHasher::new();
-    client_id.hash(&amp;mut hasher);
-    let hash = hasher.finish();
-    
-    pool.get_or_connect_with_affinity(addr, hash).await
-}
-<span class="boring">}</span></code></pre></pre>
-<h3 id="dynamic-pool-sizing"><a class="header" href="#dynamic-pool-sizing">Dynamic Pool Sizing</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Adjust pool size based on load
-async fn auto_tune_pool(pool: Arc&lt;ConnectionPool&gt;) {
-    loop {
-        tokio::time::sleep(Duration::from_secs(60)).await;
-        
-        let metrics = pool.metrics();
-        let hit_rate = metrics.hit_rate();
-        
-        if hit_rate &lt; 0.5 {
-            // Low hit rate - increase pool size
-            pool.increase_max_connections(5).await;
-            log::info!("Increased pool size due to low hit rate");
-        } else if hit_rate &gt; 0.95 &amp;&amp; metrics.idle_connections &gt; metrics.active_connections * 2 {
-            // High hit rate + many idle - decrease pool size
-            pool.decrease_max_connections(5).await;
-            log::info!("Decreased pool size due to excess idle connections");
-        }
-    }
-}
-<span class="boring">}</span></code></pre></pre>
-<h2 id="comparison-to-alternatives-1"><a class="header" href="#comparison-to-alternatives-1">Comparison to Alternatives</a></h2>
-<h3 id="vs-no-pooling"><a class="header" href="#vs-no-pooling">vs No Pooling</a></h3>
-<div class="table-wrapper"><table><thead><tr><th>Metric</th><th>No Pooling</th><th>With Pooling</th><th>Improvement</th></tr></thead><tbody>
-<tr><td>Latency (warm)</td><td>28ms</td><td>0.6ms</td><td><strong>98% faster</strong></td></tr>
-<tr><td>Throughput</td><td>42K RPS</td><td>172K RPS</td><td><strong>4x higher</strong></td></tr>
-<tr><td>CPU</td><td>85%</td><td>38%</td><td><strong>55% reduction</strong></td></tr>
-<tr><td>Memory</td><td>45 MB</td><td>61 MB</td><td>35% increase</td></tr>
-</tbody></table>
-</div>
-<h3 id="vs-http-keep-alive"><a class="header" href="#vs-http-keep-alive">vs HTTP Keep-Alive</a></h3>
-<pre><code>HTTP Keep-Alive:
-  ✓ Reuses TCP connection
-  ✗ Still re-negotiates TLS per request
-  ✗ No connection health checking
-  ✗ Limited to HTTP protocol
-
-RpcNet Connection Pool:
-  ✓ Reuses full QUIC+TLS connection
-  ✓ Zero overhead after initial handshake
-  ✓ Built-in health checking
-  ✓ Protocol-agnostic
-</code></pre>
-<h2 id="next-steps-6"><a class="header" href="#next-steps-6">Next Steps</a></h2>
-<ul>
-<li><strong><a href="cluster/failures.html">Failures</a></strong> - Handle connection failures and retries</li>
-<li><strong><a href="cluster/load-balancing.html">Load Balancing</a></strong> - Distribute load across pooled connections</li>
-<li><strong><a href="cluster/health.html">Health Checking</a></strong> - Ensure pooled connections are healthy</li>
-</ul>
-<h2 id="references-3"><a class="header" href="#references-3">References</a></h2>
-<ul>
-<li><a href="https://en.wikipedia.org/wiki/Connection_pool">Connection Pooling Best Practices</a> - General concepts</li>
-<li><a href="https://datatracker.ietf.org/doc/html/rfc9000">QUIC Protocol</a> - Why QUIC connections are faster</li>
-<li><a href="https://github.com/brettwooldridge/HikariCP">HikariCP</a> - High-performance connection pool (Java)</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="failure-handling"><a class="header" href="#failure-handling">Failure Handling</a></h1>
 <p>Distributed systems must gracefully handle node failures, network partitions, and other failure scenarios. This chapter explains how RpcNet detects and recovers from failures in cluster deployments.</p>
@@ -4527,7 +3949,7 @@ async fn reconcile_application_state() -&gt; Result&lt;()&gt; {
 </span>// Client implementation with automatic failover
 struct ResilientClient {
     registry: Arc&lt;WorkerRegistry&gt;,
-    connection_pool: Arc&lt;ConnectionPool&gt;,
+    client: Arc&lt;ClusterClient&gt;,
 }
 
 impl ResilientClient {
@@ -4660,7 +4082,7 @@ async fn monitor_failures(cluster: Arc&lt;ClusterMembership&gt;) {
     )
 }
 <span class="boring">}</span></code></pre></pre>
-<h2 id="best-practices-4"><a class="header" href="#best-practices-4">Best Practices</a></h2>
+<h2 id="best-practices-3"><a class="header" href="#best-practices-3">Best Practices</a></h2>
 <h3 id="1-design-for-failure"><a class="header" href="#1-design-for-failure">1. Design for Failure</a></h3>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -4734,13 +4156,13 @@ async fn test_worker_failure() {
     assert!(result.is_ok());
 }
 <span class="boring">}</span></code></pre></pre>
-<h2 id="next-steps-7"><a class="header" href="#next-steps-7">Next Steps</a></h2>
+<h2 id="next-steps-6"><a class="header" href="#next-steps-6">Next Steps</a></h2>
 <ul>
 <li><strong><a href="cluster/discovery.html">Discovery</a></strong> - Understand how nodes discover failures</li>
 <li><strong><a href="cluster/health.html">Health Checking</a></strong> - Learn about Phi Accrual detection</li>
 <li><strong><a href="cluster/../advanced/production.html">Production Guide</a></strong> - Deploy resilient clusters</li>
 </ul>
-<h2 id="references-4"><a class="header" href="#references-4">References</a></h2>
+<h2 id="references-3"><a class="header" href="#references-3">References</a></h2>
 <ul>
 <li><a href="https://en.wikipedia.org/wiki/Fallacies_of_distributed_computing">Fallacies of Distributed Computing</a> - Common mistakes</li>
 <li><a href="https://en.wikipedia.org/wiki/CAP_theorem">CAP Theorem</a> - Consistency vs Availability trade-offs</li>
@@ -5154,7 +4576,7 @@ match your production needs.</li>
 <p>Out-of-the-box performance with default settings:</p>
 <div class="table-wrapper"><table><thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead><tbody>
 <tr><td><strong>Throughput</strong></td><td>130K-150K RPS</td><td>Single director + 3 workers</td></tr>
-<tr><td><strong>Latency (P50)</strong></td><td>0.5-0.8ms</td><td>With connection pooling</td></tr>
+<tr><td><strong>Latency (P50)</strong></td><td>0.5-0.8ms</td><td>With efficient connection handling</td></tr>
 <tr><td><strong>Latency (P99)</strong></td><td>2-5ms</td><td>Under moderate load</td></tr>
 <tr><td><strong>CPU (per node)</strong></td><td>40-60%</td><td>At peak throughput</td></tr>
 <tr><td><strong>Memory</strong></td><td>50-100MB</td><td>Per worker node</td></tr>
@@ -5162,28 +4584,20 @@ match your production needs.</li>
 </div>
 <p><strong>Target after tuning</strong>: 172K+ RPS, &lt; 0.5ms P50 latency, &lt; 35% CPU</p>
 <h2 id="quick-wins"><a class="header" href="#quick-wins">Quick Wins</a></h2>
-<h3 id="1-enable-connection-pooling"><a class="header" href="#1-enable-connection-pooling">1. Enable Connection Pooling</a></h3>
-<p><strong>Impact</strong>: 4x throughput increase, 98% latency reduction</p>
+<h3 id="1-optimize-connection-management"><a class="header" href="#1-optimize-connection-management">1. Optimize Connection Management</a></h3>
+<p><strong>Impact</strong>: Significant throughput increase, reduced latency</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>use rpcnet::cluster::{PoolConfig, ClusterClientConfig};
+</span>use rpcnet::cluster::ClusterClientConfig;
 
-// Before (no pooling): ~40K RPS
+// Use built-in connection optimization
 let config = ClusterClientConfig::default();
-
-// After (with pooling): ~172K RPS
-let pool_config = PoolConfig::default()
-    .with_max_connections_per_host(20)
-    .with_max_idle_time(Duration::from_secs(90));
-
-let config = ClusterClientConfig::default()
-    .with_pool_config(pool_config);
 <span class="boring">}</span></code></pre></pre>
 <p><strong>Why it works</strong>:</p>
 <ul>
-<li>Eliminates TLS/QUIC handshake overhead (4-5 RTT per request → 0 RTT)</li>
-<li>Reuses established connections</li>
-<li>Reduces CPU spent on crypto</li>
+<li>Efficient connection reuse</li>
+<li>Reduces handshake overhead</li>
+<li>Minimizes connection setup time</li>
 </ul>
 <h3 id="2-use-least-connections-load-balancing"><a class="header" href="#2-use-least-connections-load-balancing">2. Use Least Connections Load Balancing</a></h3>
 <p><strong>Impact</strong>: 15-20% throughput increase under variable load</p>
@@ -5239,43 +4653,15 @@ let config = ClusterConfig::default()
 <li>Ensure network bandwidth sufficient</li>
 </ul>
 <h2 id="detailed-tuning"><a class="header" href="#detailed-tuning">Detailed Tuning</a></h2>
-<h3 id="connection-pool-optimization"><a class="header" href="#connection-pool-optimization">Connection Pool Optimization</a></h3>
-<h4 id="pool-size-calculation"><a class="header" href="#pool-size-calculation">Pool Size Calculation</a></h4>
+<h3 id="connection-management-optimization"><a class="header" href="#connection-management-optimization">Connection Management Optimization</a></h3>
+<p>RpcNet handles connection management automatically, but you can optimize for your specific use case:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>// Formula: (concurrent_requests / num_workers) * buffer_factor
-fn calculate_optimal_pool_size(
-    concurrent_requests: usize,
-    num_workers: usize,
-    buffer_factor: f64,
-) -&gt; usize {
-    let base_size = concurrent_requests / num_workers;
-    let with_buffer = (base_size as f64 * buffer_factor) as usize;
-    
-    // Cap at reasonable maximum
-    with_buffer.min(50)
-}
+</span>use rpcnet::cluster::ClusterClientConfig;
 
-// Example:
-let pool_size = calculate_optimal_pool_size(
-    200,  // 200 concurrent requests
-    10,   // 10 workers
-    1.2   // 20% buffer
-); // Returns 24
+// Default configuration is optimized for most use cases
+let config = ClusterClientConfig::default();
 <span class="boring">}</span></code></pre></pre>
-<h4 id="idle-time-tuning"><a class="header" href="#idle-time-tuning">Idle Time Tuning</a></h4>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Short idle time: Good for spiky traffic
-.with_max_idle_time(Duration::from_secs(30))
-
-// Medium idle time: Good for steady traffic (recommended)
-.with_max_idle_time(Duration::from_secs(90))
-
-// Long idle time: Good for high-throughput sustained load
-.with_max_idle_time(Duration::from_secs(300))
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Trade-off</strong>: Longer idle time = more memory, fewer reconnections</p>
 <h3 id="quic-tuning"><a class="header" href="#quic-tuning">QUIC Tuning</a></h3>
 <h4 id="stream-limits"><a class="header" href="#stream-limits">Stream Limits</a></h4>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -5373,7 +4759,7 @@ fn build_request(id: u64, data: &amp;[u8], buffer: &amp;mut Vec&lt;u8&gt;) -&gt;
 <span class="boring">}</span></code></pre></pre>
 <h2 id="platform-specific-optimizations"><a class="header" href="#platform-specific-optimizations">Platform-Specific Optimizations</a></h2>
 <h3 id="linux"><a class="header" href="#linux">Linux</a></h3>
-<h4 id="tcpquic-tuning"><a class="header" href="#tcpquic-tuning">TCP/QUIC Tuning</a></h4>
+<h4 id="udpquic-tuning"><a class="header" href="#udpquic-tuning">UDP/QUIC Tuning</a></h4>
 <pre><code class="language-bash"># Increase network buffer sizes
 sudo sysctl -w net.core.rmem_max=536870912
 sudo sysctl -w net.core.wmem_max=536870912
@@ -5538,7 +4924,7 @@ async fn load_test(
 <h3 id="before-production"><a class="header" href="#before-production">Before Production</a></h3>
 <ul>
 <li><input disabled="" type="checkbox"/>
-Enable connection pooling with appropriate size</li>
+Use default connection management (already optimized)</li>
 <li><input disabled="" type="checkbox"/>
 Use Least Connections load balancing</li>
 <li><input disabled="" type="checkbox"/>
@@ -5595,7 +4981,7 @@ println!("Total: {:?}", start.elapsed());
 <span class="boring">}</span></code></pre></pre>
 <p><strong>Common causes</strong>:</p>
 <ul>
-<li>Connection pool exhaustion (add more connections)</li>
+<li>Connection management issues (check network configuration)</li>
 <li>Slow workers (check worker CPU/memory)</li>
 <li>Network latency (move closer or add local workers)</li>
 </ul>
@@ -5612,7 +4998,7 @@ println!("Active connections: {}", pool.active_connections());
 <p><strong>Common causes</strong>:</p>
 <ul>
 <li>Too few workers (add more)</li>
-<li>Small connection pool (increase size)</li>
+<li>Network connectivity issues (check network configuration)</li>
 <li>Director CPU saturated (scale director)</li>
 <li>Network bandwidth limit (upgrade network)</li>
 </ul>
@@ -5629,7 +5015,7 @@ sudo perf report
 <ul>
 <li>Too frequent gossip (increase interval)</li>
 <li>Excessive serialization (optimize message format)</li>
-<li>No connection pooling (enable it!)</li>
+<li>Inefficient connection handling (use latest RpcNet version)</li>
 <li>Debug build instead of release</li>
 </ul>
 <h2 id="real-world-results"><a class="header" href="#real-world-results">Real-World Results</a></h2>
@@ -5644,18 +5030,17 @@ sudo perf report
 <strong>After tuning</strong>: 180K RPS, 2ms P99 latency</p>
 <p><strong>Changes</strong>:</p>
 <ol>
-<li>Enabled connection pooling (size=20)</li>
+<li>Used optimized connection management</li>
 <li>Tuned gossip interval (1s → 2s)</li>
 <li>Used Least Connections strategy</li>
 <li>Optimized message serialization (JSON → bincode)</li>
 </ol>
-<h2 id="next-steps-8"><a class="header" href="#next-steps-8">Next Steps</a></h2>
+<h2 id="next-steps-7"><a class="header" href="#next-steps-7">Next Steps</a></h2>
 <ul>
 <li><strong><a href="advanced/production.html">Production Guide</a></strong> - Deploy optimized clusters</li>
-<li><strong><a href="advanced/../cluster/pooling.html">Connection Pooling</a></strong> - Deep dive into pooling</li>
 <li><strong><a href="advanced/../cluster/load-balancing.html">Load Balancing</a></strong> - Strategy selection</li>
 </ul>
-<h2 id="references-5"><a class="header" href="#references-5">References</a></h2>
+<h2 id="references-4"><a class="header" href="#references-4">References</a></h2>
 <ul>
 <li><a href="https://datatracker.ietf.org/doc/html/rfc9000">QUIC Performance</a> - Protocol optimizations</li>
 <li><a href="https://wwwx.cs.unc.edu/~sparkst/howto/network_tuning.php">Linux Network Tuning</a> - OS-level tuning</li>
@@ -6424,13 +5809,13 @@ Verify backups working</li>
 <li><input disabled="" type="checkbox"/>
 Update documentation</li>
 </ul>
-<h2 id="next-steps-9"><a class="header" href="#next-steps-9">Next Steps</a></h2>
+<h2 id="next-steps-8"><a class="header" href="#next-steps-8">Next Steps</a></h2>
 <ul>
 <li><strong><a href="advanced/performance.html">Performance Tuning</a></strong> - Optimize for production load</li>
 <li><strong><a href="advanced/../cluster/failures.html">Failure Handling</a></strong> - Handle production incidents</li>
 <li><strong><a href="advanced/migration.html">Migration Guide</a></strong> - Migrate existing systems</li>
 </ul>
-<h2 id="references-6"><a class="header" href="#references-6">References</a></h2>
+<h2 id="references-5"><a class="header" href="#references-5">References</a></h2>
 <ul>
 <li><a href="https://kubernetes.io/docs/concepts/configuration/overview/">Kubernetes Best Practices</a> - K8s configuration</li>
 <li><a href="https://prometheus.io/docs/practices/naming/">Prometheus Monitoring</a> - Metrics best practices</li>
@@ -6518,7 +5903,7 @@ let result = client.call_worker("compute", data, Some("role=worker")).await?;
 <li>✅ Automatic discovery via gossip</li>
 <li>✅ Multiple load balancing strategies</li>
 <li>✅ Phi Accrual failure detection</li>
-<li>✅ Built-in connection pooling</li>
+<li>✅ Efficient connection management</li>
 <li>✅ Partition detection</li>
 <li>✅ <strong>75% code reduction</strong></li>
 </ul>
@@ -6739,7 +6124,7 @@ async fn main() -&gt; Result&lt;()&gt; {
 <tr><td><strong>Load Balancing</strong></td><td>Basic round-robin</td><td>Round Robin, Random, Least Connections</td></tr>
 <tr><td><strong>Health Checking</strong></td><td>Timeout-based ping</td><td>Phi Accrual algorithm</td></tr>
 <tr><td><strong>Failure Detection</strong></td><td>Simple timeout</td><td>Indirect probes + Phi</td></tr>
-<tr><td><strong>Connection Pooling</strong></td><td>Manual implementation</td><td>Built-in with tuning</td></tr>
+<tr><td><strong>Connection Management</strong></td><td>Manual implementation</td><td>Built-in optimization</td></tr>
 <tr><td><strong>Partition Detection</strong></td><td>Not available</td><td>Automatic</td></tr>
 <tr><td><strong>Code Complexity</strong></td><td>~200 lines</td><td>~50 lines</td></tr>
 <tr><td><strong>Maintenance</strong></td><td>High (custom code)</td><td>Low (battle-tested)</td></tr>
@@ -6944,26 +6329,26 @@ Remove old worker pool code</li>
 <li><input disabled="" type="checkbox"/>
 Update documentation</li>
 </ul>
-<h2 id="performance-impact-2"><a class="header" href="#performance-impact-2">Performance Impact</a></h2>
+<h2 id="performance-impact-1"><a class="header" href="#performance-impact-1">Performance Impact</a></h2>
 <p><strong>Before migration</strong>:</p>
 <ul>
 <li>Manual round-robin: ~100K RPS</li>
 <li>Timeout-based health: 30s detection time</li>
-<li>No connection pooling: 20-50ms latency</li>
+<li>Manual connection handling: 20-50ms latency</li>
 </ul>
 <p><strong>After migration</strong>:</p>
 <ul>
 <li>Least Connections: 172K+ RPS (70% increase)</li>
 <li>Phi Accrual: 6-8s detection time (better accuracy)</li>
-<li>Built-in pooling: &lt;1ms latency (98% reduction)</li>
+<li>Built-in connection management: &lt;1ms latency (98% reduction)</li>
 </ul>
-<h2 id="next-steps-10"><a class="header" href="#next-steps-10">Next Steps</a></h2>
+<h2 id="next-steps-9"><a class="header" href="#next-steps-9">Next Steps</a></h2>
 <ul>
 <li><strong><a href="advanced/../cluster/tutorial.html">Cluster Tutorial</a></strong> - Build cluster from scratch</li>
 <li><strong><a href="advanced/production.html">Production Guide</a></strong> - Deploy migrated cluster</li>
 <li><strong><a href="advanced/performance.html">Performance Tuning</a></strong> - Optimize new setup</li>
 </ul>
-<h2 id="references-7"><a class="header" href="#references-7">References</a></h2>
+<h2 id="references-6"><a class="header" href="#references-6">References</a></h2>
 <ul>
 <li><strong><a href="https://github.com/yourusername/rpcnet/tree/main/examples/cluster">Cluster Example</a></strong> - Complete working example</li>
 <li><strong><a href="https://www.cs.cornell.edu/projects/Quicksilver/public_pdfs/SWIM.pdf">SWIM Paper</a></strong> - Gossip protocol details</li>
@@ -7115,34 +6500,6 @@ let directors = nodes.iter()
 <li><code>node_count()</code> - Count nodes</li>
 <li><code>subscribe()</code> - Subscribe to events</li>
 </ul>
-<h3 id="connectionpool"><a class="header" href="#connectionpool">ConnectionPool</a></h3>
-<p>Manages connection pooling for efficiency.</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use rpcnet::cluster::{ConnectionPool, PoolConfig};
-
-// Create pool
-let config = PoolConfig::default()
-    .with_max_connections_per_host(20)
-    .with_max_idle_time(Duration::from_secs(90));
-let pool = Arc::new(ConnectionPool::new(config));
-
-// Get or create connection
-let addr = "worker.example.com:8080".parse()?;
-let conn = pool.get_or_connect(addr).await?;
-
-// Use connection
-let result = conn.call("method", args).await?;
-
-// Connection automatically returned to pool when dropped
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Key methods</strong>:</p>
-<ul>
-<li><code>new(config)</code> - Create pool</li>
-<li><code>get_or_connect(addr)</code> - Get pooled or create new connection</li>
-<li><code>metrics()</code> - Get pool metrics</li>
-<li><code>active_connections()</code> - Count active connections</li>
-</ul>
 <h3 id="clusterclient-1"><a class="header" href="#clusterclient-1">ClusterClient</a></h3>
 <p>High-level API for calling workers.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -7161,7 +6518,7 @@ let result = client.call_worker("compute", request, Some("role=worker")).await?;
 <li><code>new(registry, config)</code> - Create cluster client</li>
 <li><code>call_worker(method, data, filter)</code> - Call any worker matching filter</li>
 </ul>
-<h2 id="configuration-3"><a class="header" href="#configuration-3">Configuration</a></h2>
+<h2 id="configuration-2"><a class="header" href="#configuration-2">Configuration</a></h2>
 <h3 id="serverconfig"><a class="header" href="#serverconfig">ServerConfig</a></h3>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -7195,17 +6552,6 @@ let config = ClusterConfig::default()
     .with_gossip_interval(Duration::from_secs(1))
     .with_health_check_interval(Duration::from_secs(2))
     .with_phi_threshold(8.0);
-<span class="boring">}</span></code></pre></pre>
-<h3 id="poolconfig"><a class="header" href="#poolconfig">PoolConfig</a></h3>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use rpcnet::cluster::PoolConfig;
-
-let config = PoolConfig::default()
-    .with_max_connections_per_host(20)
-    .with_max_idle_time(Duration::from_secs(90))
-    .with_connect_timeout(Duration::from_secs(5))
-    .with_health_check_interval(Duration::from_secs(30));
 <span class="boring">}</span></code></pre></pre>
 <h2 id="code-generation"><a class="header" href="#code-generation">Code Generation</a></h2>
 <h3 id="rpc-trait-definition"><a class="header" href="#rpc-trait-definition">RPC Trait Definition</a></h3>
@@ -7475,7 +6821,7 @@ async fn main() -&gt; Result&lt;()&gt; {
     println!("Response: {}", response);
     Ok(())
 }</code></pre></pre>
-<h2 id="next-steps-11"><a class="header" href="#next-steps-11">Next Steps</a></h2>
+<h2 id="next-steps-10"><a class="header" href="#next-steps-10">Next Steps</a></h2>
 <ul>
 <li><strong><a href="reference/examples.html">Examples</a></strong> - Complete example programs</li>
 <li><strong><a href="reference/../cluster/tutorial.html">Cluster Tutorial</a></strong> - Build a cluster</li>
@@ -7545,7 +6891,6 @@ DIRECTOR_ADDR=127.0.0.1:61000 \
 <li>✅ <strong>Automatic Discovery</strong>: Workers join via SWIM gossip protocol</li>
 <li>✅ <strong>Load Balancing</strong>: Uses <code>LeastConnections</code> strategy</li>
 <li>✅ <strong>Health Checking</strong>: Phi Accrual failure detection</li>
-<li>✅ <strong>Connection Pooling</strong>: Efficient connection reuse</li>
 <li>✅ <strong>Failover</strong>: Client handles worker failures gracefully</li>
 <li>✅ <strong>Streaming</strong>: Server-side streaming responses</li>
 <li>✅ <strong>Tag-Based Routing</strong>: Filter workers by role</li>
@@ -7802,7 +7147,7 @@ DIRECTOR_ADDR=127.0.0.1:61001 cargo run --bin director
 <li>Custom load balancing strategy</li>
 <li>Monitoring and metrics integration</li>
 </ul>
-<h2 id="next-steps-12"><a class="header" href="#next-steps-12">Next Steps</a></h2>
+<h2 id="next-steps-11"><a class="header" href="#next-steps-11">Next Steps</a></h2>
 <ul>
 <li><strong><a href="reference/../cluster/tutorial.html">Cluster Tutorial</a></strong> - Build cluster from scratch</li>
 <li><strong><a href="reference/api.html">API Reference</a></strong> - API documentation</li>

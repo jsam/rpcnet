@@ -600,7 +600,6 @@ while let Some(event) = events.recv().await {
 - **[Discovery](discovery.md)** - Learn how SWIM gossip protocol works
 - **[Load Balancing](load-balancing.md)** - Deep dive into strategies
 - **[Health Checking](health.md)** - Understand Phi Accrual algorithm
-- **[Connection Pooling](pooling.md)** - Optimize connection reuse
 - **[Failure Handling](failures.md)** - Advanced partition detection
 
 Or explore the **[Complete Cluster Example](../cluster-example.md)** with streaming and advanced features.

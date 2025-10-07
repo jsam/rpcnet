@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Quick Start - RpcNet Guide</title>
+        <title>Getting Started - RpcNet Guide</title>
 
 
         <!-- Custom HTML head -->
@@ -195,13 +195,13 @@ cd hello-rpc
 <p>RpcNet enables the high-performance <code>perf</code> feature by default. If you need to
 opt out (e.g. another allocator is already selected), edit <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-rpcnet = { version = "0.2", default-features = false }
+rpcnet = { version = "0.1", default-features = false }
 </code></pre>
 <p>You will also want <code>serde</code> for request/response types, just like the example:</p>
 <pre><code class="language-toml">serde = { version = "1", features = ["derive"] }
 </code></pre>
 <h2 id="step-3-install-the-rpcnet-gen-cli"><a class="header" href="#step-3-install-the-rpcnet-gen-cli">Step 3: Install the rpcnet-gen CLI</a></h2>
-<p>Starting with v0.2.0, the CLI is included by default when you install rpcnet:</p>
+<p>Starting with v0.1.0, the CLI is included by default when you install rpcnet:</p>
 <pre><code class="language-bash">cargo install rpcnet  # CLI automatically included!
 </code></pre>
 <p>Verify the install:</p>

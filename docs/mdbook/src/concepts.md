@@ -248,7 +248,7 @@ server.register_streaming("uppercase", |mut reqs| async move {
 }).await;
 ```
 
-## Cluster Management (v0.2.0+)
+## Cluster Management (v0.1.0+)
 
 RpcNet provides built-in distributed systems support for building scalable clusters with automatic discovery and failover.
 
@@ -300,19 +300,6 @@ health.start().await;
 // Automatically marks nodes as failed/recovered
 ```
 
-#### Connection Pooling
-
-Efficient connection reuse with configurable pool sizes:
-
-```rust
-use rpcnet::cluster::{ConnectionPool, PoolConfig};
-
-let pool = ConnectionPool::new(PoolConfig {
-    max_connections: 100,
-    idle_timeout: Duration::from_secs(60),
-    ..Default::default()
-});
-```
 
 ### Gossip Protocol
 

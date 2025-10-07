@@ -198,12 +198,6 @@
 <li>Adapts to network conditions</li>
 <li>Distinguishes between slow and failed nodes</li>
 </ul>
-<p><strong>Connection Pooling</strong> 🏊</p>
-<ul>
-<li>Reuses connections efficiently</li>
-<li>Configurable pool sizes and timeouts</li>
-<li>Automatic cleanup of stale connections</li>
-</ul>
 <p><strong>Tag-Based Routing</strong> 🏷️</p>
 <ul>
 <li>Route requests by node capabilities</li>
@@ -221,17 +215,16 @@
 │                    ClusterClient                             │
 │  - High-level API for cluster operations                    │
 │  - Load-balanced request routing                            │
-│  - Connection pooling integration                           │
+│  - Efficient request routing                               │
 └────────────────────────┬────────────────────────────────────┘
                          │
-        ┌────────────────┼────────────────┐
-        │                                 │
-┌───────▼─────────┐            ┌─────────▼──────────┐
-│ WorkerRegistry  │            │  ConnectionPool    │
-│  - Tracks nodes │            │  - Manages conns   │
-│  - Load balance │            │  - Reuses sockets  │
-│  - Filter tags  │            │  - Cleanup stale   │
-└───────┬─────────┘            └────────────────────┘
+        │
+┌───────▼─────────┐
+│ WorkerRegistry  │
+│  - Tracks nodes │
+│  - Load balance │
+│  - Filter tags  │
+└───────┬─────────┘
         │
 ┌───────▼─────────┐
 │  NodeRegistry   │
@@ -314,27 +307,7 @@ println!("Selected worker: {} at {}", worker.label, worker.addr);
 <li>Tracks active connections per worker</li>
 <li>Automatic removal of failed workers</li>
 </ul>
-<h3 id="4-connectionpool"><a class="header" href="#4-connectionpool">4. ConnectionPool</a></h3>
-<p>The <strong>ConnectionPool</strong> manages efficient connection reuse:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use rpcnet::cluster::ConnectionPool;
-
-let pool = Arc::new(ConnectionPool::new(config));
-
-// Get or create connection
-let conn = pool.get_or_connect(addr).await?;
-
-// Connection is returned to pool when dropped
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Features</strong>:</p>
-<ul>
-<li>Configurable pool size and timeouts</li>
-<li>Automatic connection cleanup</li>
-<li>Health checking of pooled connections</li>
-<li>Thread-safe via <code>Arc</code> and interior mutability</li>
-</ul>
-<h3 id="5-clusterclient"><a class="header" href="#5-clusterclient">5. ClusterClient</a></h3>
+<h3 id="4-clusterclient"><a class="header" href="#4-clusterclient">4. ClusterClient</a></h3>
 <p>The <strong>ClusterClient</strong> provides a high-level API that combines all components:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -349,7 +322,7 @@ let result = client.call_worker("compute", request, Some("role=worker")).await?;
 <ul>
 <li>Automatic worker selection</li>
 <li>Load-balanced request routing</li>
-<li>Connection pooling integration</li>
+<li>Efficient connection management</li>
 <li>Retry logic for failed requests</li>
 </ul>
 <h2 id="when-to-use-clusters"><a class="header" href="#when-to-use-clusters">When to Use Clusters</a></h2>
@@ -466,7 +439,7 @@ let result = client.call_worker("compute", request, Some("role=worker")).await?;
 <h3 id="latency"><a class="header" href="#latency">Latency</a></h3>
 <ul>
 <li><strong>&lt; 0.1ms</strong> additional latency for load balancing</li>
-<li>Connection pooling reduces handshake overhead</li>
+<li>Efficient connection handling reduces overhead</li>
 <li>QUIC's 0-RTT mode for warm connections</li>
 </ul>
 <h3 id="scalability"><a class="header" href="#scalability">Scalability</a></h3>
@@ -488,7 +461,6 @@ let result = client.call_worker("compute", request, Some("role=worker")).await?;
 <li><strong><a href="discovery.html">Learn About Discovery</a></strong> - Deep dive into SWIM gossip protocol</li>
 <li><strong><a href="load-balancing.html">Explore Load Balancing</a></strong> - Choose the right strategy</li>
 <li><strong><a href="health.html">Understand Health Checking</a></strong> - How Phi Accrual works</li>
-<li><strong><a href="pooling.html">Configure Connection Pooling</a></strong> - Optimize connection reuse</li>
 <li><strong><a href="failures.html">Handle Failures</a></strong> - Partition detection and recovery</li>
 </ol>
 <p>Or jump directly to the <strong><a href="../cluster-example.html">Cluster Example</a></strong> to see a complete working system.</p>
@@ -497,7 +469,7 @@ let result = client.call_worker("compute", request, Some("role=worker")).await?;
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../rpcnet-gen.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../cluster-example.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
@@ -511,7 +483,7 @@ let result = client.call_worker("compute", request, Some("role=worker")).await?;
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../rpcnet-gen.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../cluster-example.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 

@@ -1,6 +1,6 @@
 # Introduction
 
-> **Version**: 0.2.0 | **Performance**: 172K+ RPS | **Features**: Cluster Management, Streaming, Code Generation
+> **Version**: 0.1.0 | **Features**: Cluster Management, Streaming, Code Generation
 
 RpcNet is a high-performance QUIC-based RPC library built on `s2n-quic`. The library provides
 high-level server and client primitives, TLS configuration helpers, rich support for
@@ -16,18 +16,13 @@ centralizes the user-facing materials so you can learn RpcNet in one place.
 - Structured error reporting through `RpcError`
 - Test-friendly abstractions that allow mocking QUIC streams
 
-### Distributed Systems (v0.2.0+)
+### Distributed Systems (v0.1.0+)
 - **Cluster Management**: Built-in gossip protocol (SWIM) for node discovery
 - **Load Balancing**: Multiple strategies (Round Robin, Random, Least Connections)
 - **Health Checking**: Phi Accrual failure detection
-- **Connection Pooling**: Efficient connection reuse
 - **Tag-Based Routing**: Route requests by worker capabilities
 - **Auto-Failover**: Zero-downtime worker replacement
 
-### Performance
-- **172K+ RPS**: Exceptional throughput with full QUIC+TLS encryption
-- **Sub-millisecond latency**: < 0.1ms overhead
-- **10K+ concurrent streams**: Per connection
 
 ## How To Read This Book
 

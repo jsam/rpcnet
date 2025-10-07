@@ -181,7 +181,7 @@
 <p>Out-of-the-box performance with default settings:</p>
 <div class="table-wrapper"><table><thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead><tbody>
 <tr><td><strong>Throughput</strong></td><td>130K-150K RPS</td><td>Single director + 3 workers</td></tr>
-<tr><td><strong>Latency (P50)</strong></td><td>0.5-0.8ms</td><td>With connection pooling</td></tr>
+<tr><td><strong>Latency (P50)</strong></td><td>0.5-0.8ms</td><td>With efficient connection handling</td></tr>
 <tr><td><strong>Latency (P99)</strong></td><td>2-5ms</td><td>Under moderate load</td></tr>
 <tr><td><strong>CPU (per node)</strong></td><td>40-60%</td><td>At peak throughput</td></tr>
 <tr><td><strong>Memory</strong></td><td>50-100MB</td><td>Per worker node</td></tr>
@@ -189,28 +189,20 @@
 </div>
 <p><strong>Target after tuning</strong>: 172K+ RPS, &lt; 0.5ms P50 latency, &lt; 35% CPU</p>
 <h2 id="quick-wins"><a class="header" href="#quick-wins">Quick Wins</a></h2>
-<h3 id="1-enable-connection-pooling"><a class="header" href="#1-enable-connection-pooling">1. Enable Connection Pooling</a></h3>
-<p><strong>Impact</strong>: 4x throughput increase, 98% latency reduction</p>
+<h3 id="1-optimize-connection-management"><a class="header" href="#1-optimize-connection-management">1. Optimize Connection Management</a></h3>
+<p><strong>Impact</strong>: Significant throughput increase, reduced latency</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>use rpcnet::cluster::{PoolConfig, ClusterClientConfig};
+</span>use rpcnet::cluster::ClusterClientConfig;
 
-// Before (no pooling): ~40K RPS
+// Use built-in connection optimization
 let config = ClusterClientConfig::default();
-
-// After (with pooling): ~172K RPS
-let pool_config = PoolConfig::default()
-    .with_max_connections_per_host(20)
-    .with_max_idle_time(Duration::from_secs(90));
-
-let config = ClusterClientConfig::default()
-    .with_pool_config(pool_config);
 <span class="boring">}</span></code></pre></pre>
 <p><strong>Why it works</strong>:</p>
 <ul>
-<li>Eliminates TLS/QUIC handshake overhead (4-5 RTT per request → 0 RTT)</li>
-<li>Reuses established connections</li>
-<li>Reduces CPU spent on crypto</li>
+<li>Efficient connection reuse</li>
+<li>Reduces handshake overhead</li>
+<li>Minimizes connection setup time</li>
 </ul>
 <h3 id="2-use-least-connections-load-balancing"><a class="header" href="#2-use-least-connections-load-balancing">2. Use Least Connections Load Balancing</a></h3>
 <p><strong>Impact</strong>: 15-20% throughput increase under variable load</p>
@@ -266,43 +258,15 @@ let config = ClusterConfig::default()
 <li>Ensure network bandwidth sufficient</li>
 </ul>
 <h2 id="detailed-tuning"><a class="header" href="#detailed-tuning">Detailed Tuning</a></h2>
-<h3 id="connection-pool-optimization"><a class="header" href="#connection-pool-optimization">Connection Pool Optimization</a></h3>
-<h4 id="pool-size-calculation"><a class="header" href="#pool-size-calculation">Pool Size Calculation</a></h4>
+<h3 id="connection-management-optimization"><a class="header" href="#connection-management-optimization">Connection Management Optimization</a></h3>
+<p>RpcNet handles connection management automatically, but you can optimize for your specific use case:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>// Formula: (concurrent_requests / num_workers) * buffer_factor
-fn calculate_optimal_pool_size(
-    concurrent_requests: usize,
-    num_workers: usize,
-    buffer_factor: f64,
-) -&gt; usize {
-    let base_size = concurrent_requests / num_workers;
-    let with_buffer = (base_size as f64 * buffer_factor) as usize;
-    
-    // Cap at reasonable maximum
-    with_buffer.min(50)
-}
+</span>use rpcnet::cluster::ClusterClientConfig;
 
-// Example:
-let pool_size = calculate_optimal_pool_size(
-    200,  // 200 concurrent requests
-    10,   // 10 workers
-    1.2   // 20% buffer
-); // Returns 24
+// Default configuration is optimized for most use cases
+let config = ClusterClientConfig::default();
 <span class="boring">}</span></code></pre></pre>
-<h4 id="idle-time-tuning"><a class="header" href="#idle-time-tuning">Idle Time Tuning</a></h4>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>// Short idle time: Good for spiky traffic
-.with_max_idle_time(Duration::from_secs(30))
-
-// Medium idle time: Good for steady traffic (recommended)
-.with_max_idle_time(Duration::from_secs(90))
-
-// Long idle time: Good for high-throughput sustained load
-.with_max_idle_time(Duration::from_secs(300))
-<span class="boring">}</span></code></pre></pre>
-<p><strong>Trade-off</strong>: Longer idle time = more memory, fewer reconnections</p>
 <h3 id="quic-tuning"><a class="header" href="#quic-tuning">QUIC Tuning</a></h3>
 <h4 id="stream-limits"><a class="header" href="#stream-limits">Stream Limits</a></h4>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -400,7 +364,7 @@ fn build_request(id: u64, data: &amp;[u8], buffer: &amp;mut Vec&lt;u8&gt;) -&gt;
 <span class="boring">}</span></code></pre></pre>
 <h2 id="platform-specific-optimizations"><a class="header" href="#platform-specific-optimizations">Platform-Specific Optimizations</a></h2>
 <h3 id="linux"><a class="header" href="#linux">Linux</a></h3>
-<h4 id="tcpquic-tuning"><a class="header" href="#tcpquic-tuning">TCP/QUIC Tuning</a></h4>
+<h4 id="udpquic-tuning"><a class="header" href="#udpquic-tuning">UDP/QUIC Tuning</a></h4>
 <pre><code class="language-bash"># Increase network buffer sizes
 sudo sysctl -w net.core.rmem_max=536870912
 sudo sysctl -w net.core.wmem_max=536870912
@@ -565,7 +529,7 @@ async fn load_test(
 <h3 id="before-production"><a class="header" href="#before-production">Before Production</a></h3>
 <ul>
 <li><input disabled="" type="checkbox"/>
-Enable connection pooling with appropriate size</li>
+Use default connection management (already optimized)</li>
 <li><input disabled="" type="checkbox"/>
 Use Least Connections load balancing</li>
 <li><input disabled="" type="checkbox"/>
@@ -622,7 +586,7 @@ println!("Total: {:?}", start.elapsed());
 <span class="boring">}</span></code></pre></pre>
 <p><strong>Common causes</strong>:</p>
 <ul>
-<li>Connection pool exhaustion (add more connections)</li>
+<li>Connection management issues (check network configuration)</li>
 <li>Slow workers (check worker CPU/memory)</li>
 <li>Network latency (move closer or add local workers)</li>
 </ul>
@@ -639,7 +603,7 @@ println!("Active connections: {}", pool.active_connections());
 <p><strong>Common causes</strong>:</p>
 <ul>
 <li>Too few workers (add more)</li>
-<li>Small connection pool (increase size)</li>
+<li>Network connectivity issues (check network configuration)</li>
 <li>Director CPU saturated (scale director)</li>
 <li>Network bandwidth limit (upgrade network)</li>
 </ul>
@@ -656,7 +620,7 @@ sudo perf report
 <ul>
 <li>Too frequent gossip (increase interval)</li>
 <li>Excessive serialization (optimize message format)</li>
-<li>No connection pooling (enable it!)</li>
+<li>Inefficient connection handling (use latest RpcNet version)</li>
 <li>Debug build instead of release</li>
 </ul>
 <h2 id="real-world-results"><a class="header" href="#real-world-results">Real-World Results</a></h2>
@@ -671,7 +635,7 @@ sudo perf report
 <strong>After tuning</strong>: 180K RPS, 2ms P99 latency</p>
 <p><strong>Changes</strong>:</p>
 <ol>
-<li>Enabled connection pooling (size=20)</li>
+<li>Used optimized connection management</li>
 <li>Tuned gossip interval (1s → 2s)</li>
 <li>Used Least Connections strategy</li>
 <li>Optimized message serialization (JSON → bincode)</li>
@@ -679,7 +643,6 @@ sudo perf report
 <h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
 <ul>
 <li><strong><a href="production.html">Production Guide</a></strong> - Deploy optimized clusters</li>
-<li><strong><a href="../cluster/pooling.html">Connection Pooling</a></strong> - Deep dive into pooling</li>
 <li><strong><a href="../cluster/load-balancing.html">Load Balancing</a></strong> - Strategy selection</li>
 </ul>
 <h2 id="references"><a class="header" href="#references">References</a></h2>

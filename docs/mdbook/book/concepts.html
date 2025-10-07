@@ -381,7 +381,7 @@ server.register_streaming("uppercase", |mut reqs| async move {
     }
 }).await;
 <span class="boring">}</span></code></pre></pre>
-<h2 id="cluster-management-v020"><a class="header" href="#cluster-management-v020">Cluster Management (v0.2.0+)</a></h2>
+<h2 id="cluster-management-v010"><a class="header" href="#cluster-management-v010">Cluster Management (v0.1.0+)</a></h2>
 <p>RpcNet provides built-in distributed systems support for building scalable clusters with automatic discovery and failover.</p>
 <h3 id="architecture-components"><a class="header" href="#architecture-components">Architecture Components</a></h3>
 <h4 id="noderegistry"><a class="header" href="#noderegistry">NodeRegistry</a></h4>
@@ -423,18 +423,6 @@ let health = HealthChecker::new(cluster, config);
 health.start().await;
 
 // Automatically marks nodes as failed/recovered
-<span class="boring">}</span></code></pre></pre>
-<h4 id="connection-pooling"><a class="header" href="#connection-pooling">Connection Pooling</a></h4>
-<p>Efficient connection reuse with configurable pool sizes:</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use rpcnet::cluster::{ConnectionPool, PoolConfig};
-
-let pool = ConnectionPool::new(PoolConfig {
-    max_connections: 100,
-    idle_timeout: Duration::from_secs(60),
-    ..Default::default()
-});
 <span class="boring">}</span></code></pre></pre>
 <h3 id="gossip-protocol"><a class="header" href="#gossip-protocol">Gossip Protocol</a></h3>
 <p>RpcNet uses SWIM (Scalable Weakly-consistent Infection-style Process Group Membership Protocol) for:</p>
