@@ -17,6 +17,10 @@ struct Cli {
     #[arg(short, long, default_value = "src/generated")]
     output: PathBuf,
 
+    /// Generate Python bindings instead of Rust code
+    #[arg(long)]
+    python: bool,
+
     /// Generate only server code
     #[arg(long)]
     server_only: bool,
@@ -48,7 +52,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get service name from the parsed definition
     let service_name = definition.service_name().to_string();
 
-    // Generate code
+    // Generate Python bindings if --python flag is set
+    #[cfg(all(feature = "codegen", feature = "python"))]
+    if cli.python {
+        println!("🐍 Generating Python bindings for service: {}", service_name);
+
+        let generator = rpcnet::codegen::PythonGenerator::new(definition);
+        generator.write_to_dir(&cli.output)?;
+
+        println!("  ✅ Generated Python client");
+        println!("  ✅ Generated Python server");
+        println!("  ✅ Generated Python types");
+        println!("\n✨ Python bindings generated!");
+        println!("\n📝 To use the generated Python code:");
+        println!("    import {}", service_name.to_lowercase());
+        println!("    client = await {}.{}Client.connect(...)",
+            service_name.to_lowercase(),
+            service_name);
+
+        return Ok(());
+    }
+
+    #[cfg(not(all(feature = "codegen", feature = "python")))]
+    if cli.python {
+        eprintln!("Error: Python code generation requires both 'codegen' and 'python' features");
+        eprintln!("Rebuild with: cargo build --features codegen,python");
+        std::process::exit(1);
+    }
+
+    // Generate Rust code (existing logic)
     let generator = rpcnet::codegen::CodeGenerator::new(definition);
 
     // Create output directory

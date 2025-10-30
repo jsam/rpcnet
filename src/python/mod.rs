@@ -11,6 +11,8 @@ pub mod config;
 pub mod client;
 #[cfg(feature = "python")]
 pub mod server;
+#[cfg(feature = "python")]
+pub mod serde;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
@@ -31,6 +33,10 @@ fn _rpcnet(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("TimeoutError", py.get_type_bound::<error::PyTimeoutError>())?;
     m.add("SerializationError", py.get_type_bound::<error::PySerializationError>())?;
     m.add("TlsError", py.get_type_bound::<error::PyTlsError>())?;
+
+    // Register serialization functions
+    m.add_function(wrap_pyfunction!(serde::python_to_bincode_py, m)?)?;
+    m.add_function(wrap_pyfunction!(serde::bincode_to_python_py, m)?)?;
 
     Ok(())
 }
