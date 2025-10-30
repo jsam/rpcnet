@@ -80,6 +80,9 @@ pub mod cluster;
 #[cfg(feature = "codegen")]
 pub mod codegen;
 
+#[cfg(feature = "python")]
+pub mod python;
+
 #[cfg(not(test))]
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 

@@ -12,6 +12,10 @@ readme = "README.md"
 keywords = ["rpc", "quic", "async", "networking", "codegen"]
 categories = ["network-programming", "asynchronous", "web-programming"]
 
+[lib]
+name = "rpcnet"
+crate-type = ["rlib", "cdylib"]  # cdylib for Python extension module
+
 [[bin]]
 name = "rpcnet-gen"
 path = "src/bin/rpcnet-gen.rs"
@@ -56,9 +60,14 @@ proc-macro2 = { version = "1.0" }
 prettyplease = { version = "0.2" }
 clap = { version = "4.0", features = ["derive"] }
 
+# Python bindings (optional)
+pyo3 = { version = "0.22", features = ["extension-module"], optional = true }
+pyo3-async-runtimes = { version = "0.22", features = ["tokio-runtime"], optional = true }
+
 [features]
 default = ["codegen", "perf"]
 codegen = []
+python = ["pyo3", "pyo3-async-runtimes"]
 
 # High-performance features for benchmarking
 perf = ["jemallocator"]
