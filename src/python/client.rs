@@ -98,6 +98,48 @@ impl PyRpcClient {
         })
     }
 
+    /// Call an RPC method with a custom timeout (async)
+    ///
+    /// Args:
+    ///     method: Method name to call
+    ///     params: Request data as bytes
+    ///     timeout_secs: Timeout in seconds (overrides config timeout)
+    ///
+    /// Returns:
+    ///     bytes: Response data
+    ///
+    /// Raises:
+    ///     TimeoutError: If request times out
+    ///     ConnectionError: If connection is lost
+    ///     RpcError: For other RPC errors
+    ///
+    /// Example:
+    ///     >>> request = b"..."
+    ///     >>> response = await client.call_with_timeout("add", request, 5.0)
+    fn call_with_timeout<'py>(
+        &self,
+        py: Python<'py>,
+        method: String,
+        params: Vec<u8>,
+        timeout_secs: f64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        let timeout_duration = std::time::Duration::from_secs_f64(timeout_secs);
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            // Wrap the call in a timeout
+            let result = tokio::time::timeout(
+                timeout_duration,
+                client.call(&method, params)
+            )
+            .await
+            .map_err(|_| to_py_err(crate::RpcError::Timeout))?
+            .map_err(to_py_err)?;
+
+            Ok(Python::with_gil(|py| PyBytes::new_bound(py, &result).into_py(py)))
+        })
+    }
+
     fn __repr__(&self) -> String {
         "RpcClient(connected)".to_string()
     }

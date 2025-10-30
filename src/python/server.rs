@@ -69,7 +69,8 @@ impl PyRpcServer {
             let handler_fn = move |params: Vec<u8>| {
                 let handler = Python::with_gil(|py| handler.clone_ref(py));
                 async move {
-                    Python::with_gil(|py| -> Result<Vec<u8>, crate::RpcError> {
+                    // Create coroutine and convert to Rust future in one step
+                    let future = Python::with_gil(|py| -> Result<_, crate::RpcError> {
                         let params_bytes = PyBytes::new_bound(py, &params);
 
                         // Call Python async function
@@ -78,20 +79,20 @@ impl PyRpcServer {
                             .map_err(|e| crate::RpcError::InternalError(format!("Failed to call handler: {}", e)))?;
 
                         // Convert Python coroutine to Rust future
-                        let future = pyo3_async_runtimes::tokio::into_future(coroutine.into_bound(py))
-                            .map_err(|e| crate::RpcError::InternalError(format!("Failed to convert coroutine: {}", e)))?;
+                        pyo3_async_runtimes::tokio::into_future(coroutine.into_bound(py))
+                            .map_err(|e| crate::RpcError::InternalError(format!("Failed to convert coroutine: {}", e)))
+                    })?;
 
-                        // Wait for the future
-                        let result_obj = pyo3_async_runtimes::tokio::get_runtime()
-                            .block_on(future)
-                            .map_err(|e| crate::RpcError::InternalError(format!("Handler failed: {}", e)))?;
+                    // Await the future properly (non-blocking)
+                    let result_obj = future
+                        .await
+                        .map_err(|e| crate::RpcError::InternalError(format!("Handler failed: {}", e)))?;
 
-                        // Extract bytes from result
-                        Python::with_gil(|py| {
-                            result_obj
-                                .extract::<Vec<u8>>(py)
-                                .map_err(|e| crate::RpcError::InternalError(format!("Handler must return bytes: {}", e)))
-                        })
+                    // Extract bytes from result
+                    Python::with_gil(|py| {
+                        result_obj
+                            .extract::<Vec<u8>>(py)
+                            .map_err(|e| crate::RpcError::InternalError(format!("Handler must return bytes: {}", e)))
                     })
                 }
             };
