@@ -3,10 +3,12 @@
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use crate::RpcClient;
-use super::{config::PyRpcConfig, error::to_py_err};
+use super::{config::PyRpcConfig, error::to_py_err, streaming::PyAsyncStream};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+use futures::stream::StreamExt;
+use async_stream::stream;
 
 /// Python wrapper for RPC client
 ///
@@ -137,6 +139,156 @@ impl PyRpcClient {
             .map_err(to_py_err)?;
 
             Ok(Python::with_gil(|py| PyBytes::new_bound(py, &result).into_py(py)))
+        })
+    }
+
+    /// Call a server streaming RPC method (one request, multiple responses)
+    ///
+    /// Server streaming means the client sends one request and receives
+    /// multiple response messages as a stream.
+    ///
+    /// Args:
+    ///     method: Method name to call
+    ///     params: Request data as bytes
+    ///
+    /// Returns:
+    ///     AsyncStream: Async iterator over response messages
+    ///
+    /// Raises:
+    ///     TimeoutError: If request times out
+    ///     ConnectionError: If connection is lost
+    ///     RpcError: For other RPC errors
+    ///
+    /// Example:
+    ///     >>> stream = await client.call_server_streaming("list_items", request_bytes)
+    ///     >>> async for item_bytes in stream:
+    ///     ...     item = deserialize(item_bytes)
+    ///     ...     print(item)
+    fn call_server_streaming<'py>(
+        &self,
+        py: Python<'py>,
+        method: String,
+        params: Vec<u8>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let response_stream = client
+                .call_server_streaming(&method, params)
+                .await
+                .map_err(to_py_err)?;
+
+            // Map StreamError to RpcError
+            let mapped_stream = response_stream.map(|result| {
+                result.map_err(|stream_err| match stream_err {
+                    crate::streaming::StreamError::Timeout => crate::RpcError::Timeout,
+                    crate::streaming::StreamError::Transport(e) => e,
+                    crate::streaming::StreamError::Item(e) => e,
+                })
+            });
+
+            Ok(PyAsyncStream::new(Box::pin(mapped_stream)))
+        })
+    }
+
+    /// Call a client streaming RPC method (multiple requests, one response)
+    ///
+    /// Client streaming means the client sends multiple request messages
+    /// and receives a single response.
+    ///
+    /// Args:
+    ///     method: Method name to call
+    ///     request_list: List of request data as bytes
+    ///
+    /// Returns:
+    ///     bytes: Single response data
+    ///
+    /// Raises:
+    ///     TimeoutError: If request times out
+    ///     ConnectionError: If connection is lost
+    ///     RpcError: For other RPC errors
+    ///
+    /// Example:
+    ///     >>> requests = [b"chunk1", b"chunk2", b"chunk3"]
+    ///     >>> response = await client.call_client_streaming("upload", requests)
+    fn call_client_streaming<'py>(
+        &self,
+        py: Python<'py>,
+        method: String,
+        request_list: Vec<Vec<u8>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            // Convert Vec to async stream (Stream<Item = Vec<u8>>)
+            let request_stream = stream! {
+                for data in request_list {
+                    yield data;
+                }
+            };
+
+            let response = client
+                .call_client_streaming(&method, request_stream)
+                .await
+                .map_err(to_py_err)?;
+
+            Ok(Python::with_gil(|py| PyBytes::new_bound(py, &response).into_py(py)))
+        })
+    }
+
+    /// Call a bidirectional streaming RPC method (multiple requests, multiple responses)
+    ///
+    /// Bidirectional streaming means both client and server send multiple messages.
+    ///
+    /// Args:
+    ///     method: Method name to call
+    ///     request_list: List of request data as bytes
+    ///
+    /// Returns:
+    ///     AsyncStream: Async iterator over response messages
+    ///
+    /// Raises:
+    ///     TimeoutError: If request times out
+    ///     ConnectionError: If connection is lost
+    ///     RpcError: For other RPC errors
+    ///
+    /// Example:
+    ///     >>> requests = [b"msg1", b"msg2", b"msg3"]
+    ///     >>> stream = await client.call_streaming("chat", requests)
+    ///     >>> async for response_bytes in stream:
+    ///     ...     response = deserialize(response_bytes)
+    ///     ...     print(response)
+    fn call_streaming<'py>(
+        &self,
+        py: Python<'py>,
+        method: String,
+        request_list: Vec<Vec<u8>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            // Convert Vec to async stream (Stream<Item = Vec<u8>>)
+            let request_stream = stream! {
+                for data in request_list {
+                    yield data;
+                }
+            };
+
+            let response_stream = client
+                .call_streaming(&method, request_stream)
+                .await
+                .map_err(to_py_err)?;
+
+            // Map StreamError to RpcError
+            let mapped_stream = response_stream.map(|result| {
+                result.map_err(|stream_err| match stream_err {
+                    crate::streaming::StreamError::Timeout => crate::RpcError::Timeout,
+                    crate::streaming::StreamError::Transport(e) => e,
+                    crate::streaming::StreamError::Item(e) => e,
+                })
+            });
+
+            Ok(PyAsyncStream::new(Box::pin(mapped_stream)))
         })
     }
 

@@ -13,6 +13,8 @@ pub mod client;
 pub mod server;
 #[cfg(feature = "python")]
 pub mod serde;
+#[cfg(feature = "python")]
+pub mod streaming;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
@@ -26,6 +28,7 @@ fn _rpcnet(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<config::PyRpcConfig>()?;
     m.add_class::<client::PyRpcClient>()?;
     m.add_class::<server::PyRpcServer>()?;
+    m.add_class::<streaming::PyAsyncStream>()?;
 
     // Register exception types
     m.add("RpcError", py.get_type_bound::<error::PyRpcError>())?;
