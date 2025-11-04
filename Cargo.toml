@@ -66,6 +66,9 @@ clap = { version = "4.0", features = ["derive"] }
 pyo3 = { version = "0.22", features = ["extension-module"], optional = true }
 pyo3-async-runtimes = { version = "0.22", features = ["tokio-runtime"], optional = true }
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("gil-refs"))'] }
+
 [features]
 default = ["codegen", "perf"]
 codegen = []
