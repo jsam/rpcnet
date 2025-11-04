@@ -33,5 +33,5 @@ Documentation = "https://docs.rs/rpcnet"
 Repository = "https://github.com/jsam/rpcnet"
 
 [tool.maturin]
-features = ["python"]
+features = ["extension-module"]
 module-name = "rpcnet._rpcnet"

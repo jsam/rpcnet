@@ -1,5 +1,7 @@
 //! Python wrapper for RpcClient
 
+#![allow(clippy::useless_conversion)]
+
 use super::{config::PyRpcConfig, error::to_py_err, streaming::PyAsyncStream};
 use crate::RpcClient;
 use async_stream::stream;

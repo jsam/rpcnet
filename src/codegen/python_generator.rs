@@ -185,7 +185,7 @@ impl PythonGenerator {
         // Generate method for each RPC method
         for method in self.definition.methods() {
             code.push_str(&self.generate_client_method(method));
-            code.push_str("\n");
+            code.push('\n');
         }
 
         code
@@ -1001,7 +1001,7 @@ mod tests {
         let definition = ServiceDefinition::parse(streaming_input).expect("Failed to parse");
         let methods = definition.methods();
         assert_eq!(methods.len(), 1);
-        assert!(is_streaming_method(&methods[0]));
+        assert!(is_streaming_method(methods[0]));
     }
 
     /// Test regular method detection (non-streaming)
@@ -1025,7 +1025,7 @@ mod tests {
         let definition = ServiceDefinition::parse(input).expect("Failed to parse");
         let methods = definition.methods();
         assert_eq!(methods.len(), 1);
-        assert!(!is_streaming_method(&methods[0]));
+        assert!(!is_streaming_method(methods[0]));
     }
 
     /// Test streaming client method generation

@@ -1,5 +1,7 @@
 //! Python wrapper for RpcServer
 
+#![allow(clippy::useless_conversion)]
+
 use super::{config::PyRpcConfig, error::to_py_err};
 use crate::RpcServer;
 use pyo3::prelude::*;

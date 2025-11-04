@@ -3,6 +3,9 @@
 //! This module provides Python bindings for streaming operations, allowing
 //! Python code to consume Rust streams as async iterators.
 
+#![allow(clippy::useless_conversion)]
+#![allow(clippy::type_complexity)]
+
 use super::error::to_py_err;
 use futures::stream::{Stream, StreamExt};
 use pyo3::prelude::*;
@@ -10,6 +13,9 @@ use pyo3::types::PyBytes;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+/// Type alias for the inner stream type
+type InnerStream = Arc<Mutex<Pin<Box<dyn Stream<Item = Result<Vec<u8>, crate::RpcError>> + Send>>>>;
 
 /// Python wrapper for async stream (async iterator)
 ///
@@ -20,7 +26,7 @@ use tokio::sync::Mutex;
 /// ```
 #[pyclass(name = "AsyncStream")]
 pub struct PyAsyncStream {
-    inner: Arc<Mutex<Pin<Box<dyn Stream<Item = Result<Vec<u8>, crate::RpcError>> + Send>>>>,
+    inner: InnerStream,
 }
 
 impl PyAsyncStream {

@@ -376,7 +376,8 @@ pre-commit:
 # CI/CD commands (used by continuous integration)
 ci-test:
 	@echo "Running CI tests..."
-	cargo test --all-targets --all-features
+	@echo "Note: Testing without extension-module feature (PyO3 linking issue)"
+	cargo test --all-targets --features "codegen,perf,python"
 
 ci-coverage:
 	@echo "Running CI coverage..."

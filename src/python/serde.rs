@@ -2,6 +2,8 @@
 //!
 //! This module provides utilities to convert between Python objects and bincode-serialized bytes.
 
+#![allow(clippy::useless_conversion)]
+
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
 use serde::{Deserialize, Serialize};

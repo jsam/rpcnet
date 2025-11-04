@@ -63,7 +63,10 @@ prettyplease = { version = "0.2" }
 clap = { version = "4.0", features = ["derive"] }
 
 # Python bindings (optional)
-pyo3 = { version = "0.22", features = ["extension-module"], optional = true }
+# Note: extension-module is required for building the Python module, but breaks cargo test.
+# We use auto-initialize for testing, which allows tests to run without linking issues.
+# TODO: Upgrade to PyO3 0.27+ for Python 3.13-3.14 support (requires API migration)
+pyo3 = { version = "0.22", features = ["auto-initialize"], optional = true }
 pyo3-async-runtimes = { version = "0.22", features = ["tokio-runtime"], optional = true }
 
 [lints.rust]
@@ -72,7 +75,10 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("gil-refs"
 [features]
 default = ["codegen", "perf"]
 codegen = []
+# Python bindings - use this for testing (without extension-module)
 python = ["pyo3", "pyo3-async-runtimes"]
+# Python extension module - automatically enabled by maturin, breaks cargo test
+extension-module = ["python", "pyo3/extension-module"]
 
 # High-performance features for benchmarking
 perf = ["jemallocator"]
