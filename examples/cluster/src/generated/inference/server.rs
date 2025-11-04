@@ -43,13 +43,28 @@ impl<H: InferenceHandler> InferenceServer<H> {
                             use futures::StreamExt;
                             let typed_request_stream = request_stream
                                 .map(|bytes| {
-                                    bincode::deserialize::<InferenceRequest>(&bytes).unwrap()
+                                    // Use MessagePack for Python interop instead of bincode
+                                    rmp_serde::from_slice::<InferenceRequest>(&bytes)
+                                        .expect("Failed to deserialize InferenceRequest from MessagePack")
                                 });
                             match handler.generate(Box::pin(typed_request_stream)).await
                             {
                                 Ok(response_stream) => {
                                     let byte_response_stream = response_stream
-                                        .map(|item| { Ok(bincode::serialize(&item).unwrap()) });
+                                        .map(|item| {
+                                            // Unwrap the Result<InferenceResponse, InferenceError>
+                                            match item {
+                                                Ok(response) => {
+                                                    // Use MessagePack for Python interop instead of bincode
+                                                    Ok(rmp_serde::to_vec(&response)
+                                                        .expect("Failed to serialize InferenceResponse to MessagePack"))
+                                                }
+                                                Err(e) => {
+                                                    // Convert InferenceError to RpcError
+                                                    Err(RpcError::StreamError(format!("Inference error: {:?}", e)))
+                                                }
+                                            }
+                                        });
                                     Box::pin(byte_response_stream)
                                         as Pin<
                                             Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>,

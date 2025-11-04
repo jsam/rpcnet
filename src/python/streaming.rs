@@ -95,3 +95,166 @@ impl PyAsyncStream {
         "AsyncStream()".to_string()
     }
 }
+
+#[cfg(all(test, feature = "python"))]
+mod tests {
+    use super::*;
+    use futures::stream;
+    use crate::RpcError;
+
+    #[test]
+    fn test_repr() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|_py| {
+            let stream = stream::iter(vec![Ok(vec![1, 2, 3])]);
+            let py_stream = PyAsyncStream::new(Box::pin(stream));
+
+            assert_eq!(py_stream.__repr__(), "AsyncStream()");
+        });
+    }
+
+    #[test]
+    fn test_new_creates_stream() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|_py| {
+            let stream = stream::iter(vec![
+                Ok(vec![1, 2, 3]),
+                Ok(vec![4, 5, 6]),
+            ]);
+            let py_stream = PyAsyncStream::new(Box::pin(stream));
+
+            // Just verify it was created successfully
+            assert_eq!(py_stream.__repr__(), "AsyncStream()");
+        });
+    }
+
+    #[tokio::test]
+    async fn test_stream_with_single_item() {
+        pyo3::prepare_freethreaded_python();
+
+        let stream = stream::iter(vec![Ok(vec![42u8])]);
+        let py_stream = PyAsyncStream::new(Box::pin(stream));
+
+        // Manually pull one item
+        let mut stream_guard = py_stream.inner.lock().await;
+        let item = stream_guard.next().await;
+
+        assert!(item.is_some());
+        let result = item.unwrap();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), vec![42u8]);
+    }
+
+    #[tokio::test]
+    async fn test_stream_with_multiple_items() {
+        pyo3::prepare_freethreaded_python();
+
+        let stream = stream::iter(vec![
+            Ok(vec![1u8, 2u8]),
+            Ok(vec![3u8, 4u8]),
+            Ok(vec![5u8, 6u8]),
+        ]);
+        let py_stream = PyAsyncStream::new(Box::pin(stream));
+
+        let mut stream_guard = py_stream.inner.lock().await;
+
+        // First item
+        let item1 = stream_guard.next().await.unwrap().unwrap();
+        assert_eq!(item1, vec![1u8, 2u8]);
+
+        // Second item
+        let item2 = stream_guard.next().await.unwrap().unwrap();
+        assert_eq!(item2, vec![3u8, 4u8]);
+
+        // Third item
+        let item3 = stream_guard.next().await.unwrap().unwrap();
+        assert_eq!(item3, vec![5u8, 6u8]);
+
+        // Stream should be exhausted
+        let item4 = stream_guard.next().await;
+        assert!(item4.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_stream_with_error() {
+        pyo3::prepare_freethreaded_python();
+
+        let stream = stream::iter(vec![
+            Ok(vec![1u8, 2u8]),
+            Err(RpcError::StreamError("test error".to_string())),
+            Ok(vec![3u8, 4u8]),
+        ]);
+        let py_stream = PyAsyncStream::new(Box::pin(stream));
+
+        let mut stream_guard = py_stream.inner.lock().await;
+
+        // First item should succeed
+        let item1 = stream_guard.next().await.unwrap();
+        assert!(item1.is_ok());
+
+        // Second item should be an error
+        let item2 = stream_guard.next().await.unwrap();
+        assert!(item2.is_err());
+        let err = item2.unwrap_err();
+        assert!(matches!(err, RpcError::StreamError(_)));
+
+        // Third item should still be accessible
+        let item3 = stream_guard.next().await.unwrap();
+        assert!(item3.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_empty_stream() {
+        pyo3::prepare_freethreaded_python();
+
+        let stream: Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>> =
+            Box::pin(stream::iter(vec![]));
+        let py_stream = PyAsyncStream::new(stream);
+
+        let mut stream_guard = py_stream.inner.lock().await;
+
+        // Should be immediately exhausted
+        let item = stream_guard.next().await;
+        assert!(item.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_stream_with_large_data() {
+        pyo3::prepare_freethreaded_python();
+
+        let large_data = vec![42u8; 10_000];
+        let stream = stream::iter(vec![Ok(large_data.clone())]);
+        let py_stream = PyAsyncStream::new(Box::pin(stream));
+
+        let mut stream_guard = py_stream.inner.lock().await;
+        let item = stream_guard.next().await.unwrap().unwrap();
+
+        assert_eq!(item.len(), 10_000);
+        assert_eq!(item, large_data);
+    }
+
+    #[tokio::test]
+    async fn test_stream_mutex_isolation() {
+        pyo3::prepare_freethreaded_python();
+
+        let stream = stream::iter(vec![
+            Ok(vec![1u8]),
+            Ok(vec![2u8]),
+        ]);
+        let py_stream = PyAsyncStream::new(Box::pin(stream));
+
+        // Lock the stream
+        let mut guard1 = py_stream.inner.lock().await;
+
+        // Try to lock again (should wait, but we'll just verify the first lock works)
+        let item = guard1.next().await.unwrap().unwrap();
+        assert_eq!(item, vec![1u8]);
+
+        drop(guard1); // Release lock
+
+        // Now we can lock again
+        let mut guard2 = py_stream.inner.lock().await;
+        let item = guard2.next().await.unwrap().unwrap();
+        assert_eq!(item, vec![2u8]);
+    }
+}

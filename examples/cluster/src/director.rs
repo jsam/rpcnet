@@ -95,10 +95,11 @@ async fn main() -> Result<()> {
 
     info!("🔄 Load balancing strategy: LeastConnections");
 
-    let get_worker_registry = worker_registry.clone();
-    server
-        .register_typed("DirectorRegistry.get_worker", move |request: GetWorkerRequest| {
-            let registry = get_worker_registry.clone();
+    // Shared handler for both bincode (Rust clients) and MessagePack (Python clients)
+    let handler = {
+        let registry = worker_registry.clone();
+        move |request: GetWorkerRequest| {
+            let registry = registry.clone();
             async move {
                 let connection_id = request.connection_id.unwrap_or_else(|| {
                     format!("conn-{}", Uuid::new_v4())
@@ -114,7 +115,7 @@ async fn main() -> Result<()> {
                         worker.increment_connections();
                         let worker_label = worker.node_id.as_str().to_string();
                         let worker_addr = worker.addr.to_string();
-                        
+
                         let response = GetWorkerResponse {
                             success: true,
                             worker_addr: Some(worker_addr.clone()),
@@ -122,7 +123,7 @@ async fn main() -> Result<()> {
                             connection_id: connection_id.clone(),
                             message: None,
                         };
-                        
+
                         info!(
                             connection.id = %connection_id,
                             worker = %worker_label,
@@ -130,7 +131,7 @@ async fn main() -> Result<()> {
                             connections = worker.connection_count(),
                             "✅ assigned worker to client"
                         );
-                        
+
                         Ok(response)
                     }
                     None => {
@@ -138,7 +139,7 @@ async fn main() -> Result<()> {
                             connection.id = %connection_id,
                             "⚠️  no workers available"
                         );
-                        
+
                         let response = GetWorkerResponse {
                             success: false,
                             worker_addr: None,
@@ -146,13 +147,16 @@ async fn main() -> Result<()> {
                             connection_id: connection_id.clone(),
                             message: Some("No workers available".to_string()),
                         };
-                        
+
                         Ok(response)
                     }
                 }
             }
-        })
-        .await;
+        }
+    };
+
+    // Register with polyglot support (accepts both bincode from Rust and MessagePack from Python)
+    server.register_typed_polyglot("DirectorRegistry.get_worker", handler).await;
 
     let stats_registry = worker_registry.clone();
     tokio::spawn(async move {

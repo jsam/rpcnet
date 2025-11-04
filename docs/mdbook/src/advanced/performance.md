@@ -162,25 +162,27 @@ let config = ServerConfig::builder()
 #### Use Efficient Formats
 
 ```rust
-// Fastest: bincode (binary)
+// Fastest: bincode (binary) - for Rust-to-Rust communication
 use bincode;
 let bytes = bincode::serialize(&data)?;
 
-// Fast: rmp-serde (MessagePack)
+// Fast: rmp-serde (MessagePack) - for Python-to-Rust or cross-language
 use rmp_serde;
 let bytes = rmp_serde::to_vec(&data)?;
 
-// Slower: serde_json (human-readable, but slower)
+// Slower: serde_json (human-readable, but slower) - for debugging
 let bytes = serde_json::to_vec(&data)?;
 ```
 
 **Benchmark** (10KB struct):
 
-| Format | Serialize | Deserialize | Size |
-|--------|-----------|-------------|------|
-| **bincode** | 12 μs | 18 μs | 10240 bytes |
-| **MessagePack** | 28 μs | 35 μs | 9800 bytes |
-| **JSON** | 85 μs | 120 μs | 15300 bytes |
+| Format | Serialize | Deserialize | Size | Use Case |
+|--------|-----------|-------------|------|----------|
+| **bincode** | 12 μs | 18 μs | 10240 bytes | Rust ↔ Rust (fastest) |
+| **MessagePack** | 28 μs | 35 μs | 9800 bytes | Python ↔ Rust (polyglot) |
+| **JSON** | 85 μs | 120 μs | 15300 bytes | Debugging (human-readable) |
+
+**Recommendation**: Use `bincode` for pure Rust services, MessagePack when integrating with Python bindings.
 
 #### Minimize Allocations
 

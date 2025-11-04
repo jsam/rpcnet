@@ -183,7 +183,7 @@ fi
 echo ""
 echo "🔍 Uncovered Lines (Top 20):"
 echo "============================="
-cargo tarpaulin --print-uncovered-lines --exclude-files "examples/*" --exclude-files "benches/*" --all-features 2>/dev/null | head -20
+cargo tarpaulin --print-uncovered-lines --exclude-files "examples/*" --exclude-files "benches/*" --no-default-features --features codegen,perf 2>/dev/null | head -20
 
 # Exit with appropriate code
 if [ $CRITICAL_GAPS -gt 0 ] || [ $HIGH_GAPS -gt 0 ]; then

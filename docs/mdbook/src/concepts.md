@@ -39,8 +39,16 @@ match client.call("ping", vec![]).await {
 
 ### Serialization Strategy
 
-Requests and responses travel as `Vec<u8>`. Examples use `bincode` for compact
-frames, but any serialization format can be layered on top.
+Requests and responses travel as `Vec<u8>`. RpcNet supports multiple serialization formats:
+
+- **bincode**: Default for Rust-to-Rust communication (most efficient)
+- **MessagePack** (`rmp-serde`): Used for Python-to-Rust interop (better cross-language support)
+- **Custom formats**: Any serialization format can be layered on top
+
+The choice depends on your use case:
+- Pure Rust services → use `bincode` for maximum performance
+- Python/Rust polyglot services → use MessagePack for compatibility
+- Human-readable debugging → consider JSON (with performance trade-off)
 
 ### Concurrency Model
 

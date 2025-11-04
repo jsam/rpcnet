@@ -126,7 +126,7 @@ impl PythonGenerator {
 
         code.push_str(&format!("\"\"\"Generated {} client\"\"\"\n", service_name));
         code.push_str("import asyncio\n");
-        code.push_str("from typing import Optional\n");
+        code.push_str("from typing import Optional, AsyncIterable, AsyncIterator\n");
         code.push_str("import _rpcnet\n");
         code.push_str("from .types import *\n\n");
 
@@ -180,7 +180,18 @@ impl PythonGenerator {
 
     /// Generate a single client method
     fn generate_client_method(&self, method: &TraitItemFn) -> String {
+        // Check if this is a streaming method
+        if is_streaming_method(method) {
+            self.generate_streaming_client_method(method)
+        } else {
+            self.generate_regular_client_method(method)
+        }
+    }
+
+    /// Generate a regular (non-streaming) client method
+    fn generate_regular_client_method(&self, method: &TraitItemFn) -> String {
         let method_name = &method.sig.ident;
+        let service_name = self.definition.service_name();
         let (request_type, response_type) = extract_method_types(method);
 
         let mut code = String::new();
@@ -194,17 +205,89 @@ impl PythonGenerator {
             code.push_str(&format!("        \"\"\"Call {} RPC method\"\"\"\n", method_name));
         }
 
-        code.push_str("        # Serialize request to bincode bytes\n");
+        code.push_str("        # Serialize request to MessagePack bytes\n");
         code.push_str("        request_dict = request.__dict__\n");
-        code.push_str("        request_bytes = _rpcnet.python_to_bincode_py(request_dict)\n");
+        code.push_str("        request_bytes = _rpcnet.python_to_msgpack_py(request_dict)\n");
         code.push_str("        \n");
-        code.push_str(&format!("        # Call RPC method '{}'\n", method_name));
-        code.push_str(&format!("        response_bytes = await self._client.call('{}', request_bytes)\n",
-            method_name));
+        code.push_str(&format!("        # Call RPC method '{}.{}'\n", service_name, method_name));
+        code.push_str(&format!("        response_bytes = await self._client.call('{}.{}', request_bytes)\n",
+            service_name, method_name));
         code.push_str("        \n");
-        code.push_str("        # Deserialize response from bincode\n");
-        code.push_str("        response_dict = _rpcnet.bincode_to_python_py(response_bytes)\n");
+        code.push_str("        # Deserialize response from MessagePack\n");
+        code.push_str("        response_dict = _rpcnet.msgpack_to_python_py(response_bytes)\n");
         code.push_str(&format!("        return {}(**response_dict)\n", response_type));
+
+        code
+    }
+
+    /// Generate a streaming client method
+    fn generate_streaming_client_method(&self, method: &TraitItemFn) -> String {
+        let method_name = &method.sig.ident;
+        let service_name = self.definition.service_name();
+
+        let mut code = String::new();
+
+        // Extract request and response stream item types
+        let request_item_type = if method.sig.inputs.len() >= 2 {
+            if let syn::FnArg::Typed(pat_type) = &method.sig.inputs[1] {
+                extract_stream_item_type(&pat_type.ty).unwrap_or_else(|| "Any".to_string())
+            } else {
+                "Any".to_string()
+            }
+        } else {
+            "Any".to_string()
+        };
+
+        let response_item_type = if let syn::ReturnType::Type(_, ty) = &method.sig.output {
+            if let Type::Path(type_path) = &**ty {
+                if let Some(segment) = type_path.path.segments.last() {
+                    if segment.ident == "Result" {
+                        if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                            if let Some(GenericArgument::Type(ok_type)) = args.args.first() {
+                                extract_stream_item_type(ok_type).unwrap_or_else(|| "Any".to_string())
+                            } else {
+                                "Any".to_string()
+                            }
+                        } else {
+                            "Any".to_string()
+                        }
+                    } else {
+                        "Any".to_string()
+                    }
+                } else {
+                    "Any".to_string()
+                }
+            } else {
+                "Any".to_string()
+            }
+        } else {
+            "Any".to_string()
+        };
+
+        code.push_str(&format!("    async def {}(self, request_stream: AsyncIterable[{}]) -> AsyncIterator[{}]:\n",
+            method_name, request_item_type, response_item_type));
+
+        if let Some(doc) = extract_doc_comment(&method.attrs) {
+            code.push_str(&format!("        \"\"\"{}\"\"\"", doc.trim()));
+        } else {
+            code.push_str(&format!("        \"\"\"Streaming RPC method: {}\"\"\"\n", method_name));
+        }
+
+        code.push_str("        # Collect and serialize request stream items\n");
+        code.push_str("        request_list = []\n");
+        code.push_str("        async for request in request_stream:\n");
+        code.push_str("            request_dict = request.__dict__\n");
+        code.push_str("            request_bytes = _rpcnet.python_to_msgpack_py(request_dict)\n");
+        code.push_str("            request_list.append(request_bytes)\n");
+        code.push_str("        \n");
+        code.push_str(&format!("        # Call streaming RPC method '{}.{}'\n", service_name, method_name));
+        code.push_str(&format!("        response_stream = await self._client.call_streaming('{}.{}', request_list)\n",
+            service_name, method_name));
+        code.push_str("        \n");
+        code.push_str("        # Yield deserialized responses\n");
+        code.push_str("        async for response_bytes in response_stream:\n");
+        code.push_str("            response_dict = _rpcnet.msgpack_to_python_py(response_bytes)\n");
+        code.push_str(&format!("            yield {}(**response_dict)\n", response_item_type));
 
         code
     }
@@ -229,6 +312,10 @@ impl PythonGenerator {
         code.push_str("    \"\"\"\n\n");
 
         for method in self.definition.methods() {
+            // Skip streaming methods in server generation (not yet supported)
+            if is_streaming_method(method) {
+                continue;
+            }
             code.push_str(&self.generate_handler_method(method));
         }
 
@@ -253,6 +340,10 @@ impl PythonGenerator {
         code.push_str("        \"\"\"Register all RPC method handlers\"\"\"\n");
 
         for method in self.definition.methods() {
+            // Skip streaming methods in server generation (not yet supported)
+            if is_streaming_method(method) {
+                continue;
+            }
             code.push_str(&self.generate_handler_registration(method));
         }
 
@@ -456,4 +547,609 @@ fn extract_method_types(method: &TraitItemFn) -> (String, String) {
     };
 
     (request_type, response_type)
+}
+
+/// Check if a type is a Stream type (Pin<Box<dyn Stream<...>>>)
+fn is_stream_type(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.first() {
+            if segment.ident == "Pin" {
+                if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(GenericArgument::Type(Type::Path(box_type))) = args.args.first() {
+                        if let Some(box_segment) = box_type.path.segments.first() {
+                            if box_segment.ident == "Box" {
+                                if let PathArguments::AngleBracketed(box_args) = &box_segment.arguments {
+                                    if let Some(GenericArgument::Type(Type::TraitObject(trait_obj))) = box_args.args.first() {
+                                        for bound in &trait_obj.bounds {
+                                            if let syn::TypeParamBound::Trait(trait_bound) = bound {
+                                                if let Some(trait_segment) = trait_bound.path.segments.last() {
+                                                    if trait_segment.ident == "Stream" {
+                                                        return true;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Extract the item type from a Stream<Item = T>
+fn extract_stream_item_type(ty: &Type) -> Option<String> {
+    if let Type::Path(type_path) = ty {
+        if let Some(segment) = type_path.path.segments.first() {
+            if segment.ident == "Pin" {
+                if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(GenericArgument::Type(Type::Path(box_type))) = args.args.first() {
+                        if let Some(box_segment) = box_type.path.segments.first() {
+                            if box_segment.ident == "Box" {
+                                if let PathArguments::AngleBracketed(box_args) = &box_segment.arguments {
+                                    if let Some(GenericArgument::Type(Type::TraitObject(trait_obj))) = box_args.args.first() {
+                                        for bound in &trait_obj.bounds {
+                                            if let syn::TypeParamBound::Trait(trait_bound) = bound {
+                                                if let Some(trait_segment) = trait_bound.path.segments.last() {
+                                                    if trait_segment.ident == "Stream" {
+                                                        // Extract Item = T from Stream<Item = T>
+                                                        if let PathArguments::AngleBracketed(stream_args) = &trait_segment.arguments {
+                                                            for arg in &stream_args.args {
+                                                                if let GenericArgument::AssocType(assoc) = arg {
+                                                                    if assoc.ident == "Item" {
+                                                                        if let Type::Path(item_path) = &assoc.ty {
+                                                                            // Check if it's Result<T, E>
+                                                                            if let Some(result_segment) = item_path.path.segments.last() {
+                                                                                if result_segment.ident == "Result" {
+                                                                                    if let PathArguments::AngleBracketed(result_args) = &result_segment.arguments {
+                                                                                        if let Some(GenericArgument::Type(Type::Path(ok_type))) = result_args.args.first() {
+                                                                                            return ok_type.path.segments.last()
+                                                                                                .map(|s| s.ident.to_string());
+                                                                                        }
+                                                                                    }
+                                                                                } else {
+                                                                                    // Not a Result, just return the type
+                                                                                    return Some(result_segment.ident.to_string());
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Determine if a method is a streaming RPC method
+fn is_streaming_method(method: &TraitItemFn) -> bool {
+    // Check if the parameter (after &self) is a Stream
+    let has_stream_input = if method.sig.inputs.len() >= 2 {
+        if let syn::FnArg::Typed(pat_type) = &method.sig.inputs[1] {
+            is_stream_type(&pat_type.ty)
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    // Check if the return type contains a Stream
+    let has_stream_output = if let syn::ReturnType::Type(_, ty) = &method.sig.output {
+        if let Type::Path(type_path) = &**ty {
+            if let Some(segment) = type_path.path.segments.last() {
+                if segment.ident == "Result" {
+                    if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                        if let Some(GenericArgument::Type(ok_type)) = args.args.first() {
+                            return is_stream_type(ok_type);
+                        }
+                    }
+                }
+            }
+        }
+        false
+    } else {
+        false
+    };
+
+    has_stream_input || has_stream_output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::codegen::ServiceDefinition;
+
+    /// Test parsing and generating types for a simple service
+    #[test]
+    fn test_generate_simple_types() {
+        let input = r#"
+            use serde::{Serialize, Deserialize};
+
+            #[derive(Serialize, Deserialize)]
+            pub struct EchoRequest {
+                pub message: String,
+            }
+
+            #[derive(Serialize, Deserialize)]
+            pub struct EchoResponse {
+                pub message: String,
+            }
+
+            #[service]
+            pub trait EchoService {
+                async fn echo(&self, request: EchoRequest) -> Result<EchoResponse, String>;
+            }
+        "#;
+
+        let definition = ServiceDefinition::parse(input).expect("Failed to parse");
+        let generator = PythonGenerator::new(definition);
+
+        let types_code = generator.generate_types();
+
+        // Should contain dataclass decorator
+        assert!(types_code.contains("@dataclass"));
+        assert!(types_code.contains("class EchoRequest:"));
+        assert!(types_code.contains("class EchoResponse:"));
+        assert!(types_code.contains("message: str"));
+    }
+
+    /// Test generating Python client code
+    #[test]
+    fn test_generate_client() {
+        let input = r#"
+            use serde::{Serialize, Deserialize};
+
+            #[derive(Serialize, Deserialize)]
+            pub struct PingRequest {
+                pub id: u64,
+            }
+
+            #[derive(Serialize, Deserialize)]
+            pub struct PingResponse {
+                pub id: u64,
+                pub timestamp: u64,
+            }
+
+            #[service]
+            pub trait PingService {
+                async fn ping(&self, request: PingRequest) -> Result<PingResponse, String>;
+            }
+        "#;
+
+        let definition = ServiceDefinition::parse(input).expect("Failed to parse");
+        let generator = PythonGenerator::new(definition);
+
+        let client_code = generator.generate_client();
+
+        // Should contain client class
+        assert!(client_code.contains("class PingServiceClient:"));
+        assert!(client_code.contains("async def connect("));
+        assert!(client_code.contains("async def ping(self, request: PingRequest) -> PingResponse:"));
+
+        // Should use MessagePack serialization
+        assert!(client_code.contains("_rpcnet.python_to_msgpack_py"));
+        assert!(client_code.contains("_rpcnet.msgpack_to_python_py"));
+
+        // Should call the correct RPC method
+        assert!(client_code.contains("'PingService.ping'"));
+    }
+
+    /// Test generating Python server code
+    #[test]
+    fn test_generate_server() {
+        let input = r#"
+            use serde::{Serialize, Deserialize};
+
+            #[derive(Serialize, Deserialize)]
+            pub struct GetRequest {
+                pub key: String,
+            }
+
+            #[derive(Serialize, Deserialize)]
+            pub struct GetResponse {
+                pub value: String,
+            }
+
+            #[service]
+            pub trait KeyValueService {
+                async fn get(&self, request: GetRequest) -> Result<GetResponse, String>;
+            }
+        "#;
+
+        let definition = ServiceDefinition::parse(input).expect("Failed to parse");
+        let generator = PythonGenerator::new(definition);
+
+        let server_code = generator.generate_server();
+
+        // Should contain handler interface
+        assert!(server_code.contains("class KeyValueServiceHandler(ABC):"));
+        assert!(server_code.contains("@abstractmethod"));
+        assert!(server_code.contains("async def get(self, request: GetRequest) -> GetResponse:"));
+
+        // Should contain server class
+        assert!(server_code.contains("class KeyValueServiceServer:"));
+        assert!(server_code.contains("async def serve(self):"));
+        assert!(server_code.contains("async def _register_handlers(self):"));
+    }
+
+    /// Test Rust type to Python type conversion
+    #[test]
+    fn test_rust_type_to_python() {
+        let test_cases = vec![
+            ("i32", "int"),
+            ("u64", "int"),
+            ("f64", "float"),
+            ("bool", "bool"),
+            ("String", "str"),
+        ];
+
+        for (rust_type, expected_python_type) in test_cases {
+            let ty: Type = syn::parse_str(rust_type).unwrap();
+            let python_type = rust_type_to_python(&ty);
+            assert_eq!(python_type, expected_python_type, "Failed for {}", rust_type);
+        }
+    }
+
+    /// Test Vec<T> conversion to List[T]
+    #[test]
+    fn test_vec_to_list_conversion() {
+        let ty: Type = syn::parse_str("Vec<String>").unwrap();
+        let python_type = rust_type_to_python(&ty);
+        assert_eq!(python_type, "List[str]");
+
+        let ty: Type = syn::parse_str("Vec<i32>").unwrap();
+        let python_type = rust_type_to_python(&ty);
+        assert_eq!(python_type, "List[int]");
+    }
+
+    /// Test Option<T> conversion to Optional[T]
+    #[test]
+    fn test_option_to_optional_conversion() {
+        let ty: Type = syn::parse_str("Option<String>").unwrap();
+        let python_type = rust_type_to_python(&ty);
+        assert_eq!(python_type, "Optional[str]");
+
+        let ty: Type = syn::parse_str("Option<i64>").unwrap();
+        let python_type = rust_type_to_python(&ty);
+        assert_eq!(python_type, "Optional[int]");
+    }
+
+    /// Test enum generation
+    #[test]
+    fn test_generate_enum() {
+        let input = r#"
+            use serde::{Serialize, Deserialize};
+
+            #[derive(Serialize, Deserialize)]
+            pub enum Status {
+                Pending,
+                Active,
+                Completed,
+            }
+
+            #[derive(Serialize, Deserialize)]
+            pub struct Request {}
+
+            #[derive(Serialize, Deserialize)]
+            pub struct Response {}
+
+            #[service]
+            pub trait TestService {
+                async fn test(&self, request: Request) -> Result<Response, String>;
+            }
+        "#;
+
+        let definition = ServiceDefinition::parse(input).expect("Failed to parse");
+        let generator = PythonGenerator::new(definition);
+
+        let types_code = generator.generate_types();
+
+        assert!(types_code.contains("class Status(Enum):"));
+        assert!(types_code.contains("PENDING = 0"));
+        assert!(types_code.contains("ACTIVE = 1"));
+        assert!(types_code.contains("COMPLETED = 2"));
+    }
+
+    /// Test streaming method detection
+    #[test]
+    fn test_is_streaming_method() {
+        let streaming_input = r#"
+            use futures::Stream;
+            use std::pin::Pin;
+
+            #[derive(Serialize, Deserialize)]
+            pub struct Request {}
+
+            #[derive(Serialize, Deserialize)]
+            pub struct Response {}
+
+            #[service]
+            pub trait StreamingService {
+                async fn generate(
+                    &self,
+                    request: Pin<Box<dyn Stream<Item = Request> + Send>>
+                ) -> Result<Pin<Box<dyn Stream<Item = Response> + Send>>, String>;
+            }
+        "#;
+
+        let definition = ServiceDefinition::parse(streaming_input).expect("Failed to parse");
+        let methods = definition.methods();
+        assert_eq!(methods.len(), 1);
+        assert!(is_streaming_method(&methods[0]));
+    }
+
+    /// Test regular method detection (non-streaming)
+    #[test]
+    fn test_is_not_streaming_method() {
+        let input = r#"
+            use serde::{Serialize, Deserialize};
+
+            #[derive(Serialize, Deserialize)]
+            pub struct Request {}
+
+            #[derive(Serialize, Deserialize)]
+            pub struct Response {}
+
+            #[service]
+            pub trait RegularService {
+                async fn call(&self, request: Request) -> Result<Response, String>;
+            }
+        "#;
+
+        let definition = ServiceDefinition::parse(input).expect("Failed to parse");
+        let methods = definition.methods();
+        assert_eq!(methods.len(), 1);
+        assert!(!is_streaming_method(&methods[0]));
+    }
+
+    /// Test streaming client method generation
+    #[test]
+    fn test_generate_streaming_client_method() {
+        let input = r#"
+            use futures::Stream;
+            use std::pin::Pin;
+            use serde::{Serialize, Deserialize};
+
+            #[derive(Serialize, Deserialize)]
+            pub struct InferenceRequest {
+                pub prompt: String,
+            }
+
+            #[derive(Serialize, Deserialize)]
+            pub struct InferenceResponse {
+                pub text: String,
+            }
+
+            #[service]
+            pub trait InferenceService {
+                async fn generate(
+                    &self,
+                    request: Pin<Box<dyn Stream<Item = InferenceRequest> + Send>>
+                ) -> Result<Pin<Box<dyn Stream<Item = Result<InferenceResponse, String>> + Send>>, String>;
+            }
+        "#;
+
+        let definition = ServiceDefinition::parse(input).expect("Failed to parse");
+        let generator = PythonGenerator::new(definition);
+
+        let client_code = generator.generate_client();
+
+        // Should have streaming signature with AsyncIterable and AsyncIterator
+        assert!(client_code.contains("AsyncIterable"));
+        assert!(client_code.contains("AsyncIterator"));
+        assert!(client_code.contains("async def generate"));
+
+        // Should collect request stream
+        assert!(client_code.contains("async for request in request_stream:"));
+        assert!(client_code.contains("request_list.append"));
+
+        // Should call streaming RPC method
+        assert!(client_code.contains("call_streaming"));
+
+        // Should yield responses
+        assert!(client_code.contains("async for response_bytes in response_stream:"));
+        assert!(client_code.contains("yield"));
+    }
+
+    /// Test multiple methods in client generation
+    #[test]
+    fn test_generate_multiple_methods() {
+        let input = r#"
+            use serde::{Serialize, Deserialize};
+
+            #[derive(Serialize, Deserialize)]
+            pub struct GetRequest { pub key: String }
+
+            #[derive(Serialize, Deserialize)]
+            pub struct GetResponse { pub value: String }
+
+            #[derive(Serialize, Deserialize)]
+            pub struct SetRequest { pub key: String, pub value: String }
+
+            #[derive(Serialize, Deserialize)]
+            pub struct SetResponse { pub success: bool }
+
+            #[service]
+            pub trait KVStore {
+                async fn get(&self, request: GetRequest) -> Result<GetResponse, String>;
+                async fn set(&self, request: SetRequest) -> Result<SetResponse, String>;
+            }
+        "#;
+
+        let definition = ServiceDefinition::parse(input).expect("Failed to parse");
+        let generator = PythonGenerator::new(definition);
+
+        let client_code = generator.generate_client();
+
+        // Should have both methods
+        assert!(client_code.contains("async def get(self, request: GetRequest) -> GetResponse:"));
+        assert!(client_code.contains("async def set(self, request: SetRequest) -> SetResponse:"));
+
+        // Should call correct RPC methods
+        assert!(client_code.contains("'KVStore.get'"));
+        assert!(client_code.contains("'KVStore.set'"));
+    }
+
+    /// Test extract_stream_item_type helper function
+    #[test]
+    fn test_extract_stream_item_type() {
+        // Parse a Stream type
+        let stream_type_str = "Pin<Box<dyn Stream<Item = MyType> + Send>>";
+        let ty: Type = syn::parse_str(stream_type_str).unwrap();
+
+        let item_type = extract_stream_item_type(&ty);
+        assert_eq!(item_type, Some("MyType".to_string()));
+    }
+
+    /// Test extract_stream_item_type with Result wrapper
+    #[test]
+    fn test_extract_stream_item_type_with_result() {
+        // Parse a Stream<Item = Result<T, E>> type
+        let stream_type_str = "Pin<Box<dyn Stream<Item = Result<MyResponse, MyError>> + Send>>";
+        let ty: Type = syn::parse_str(stream_type_str).unwrap();
+
+        let item_type = extract_stream_item_type(&ty);
+        // Should extract MyResponse from Result<MyResponse, MyError>
+        assert_eq!(item_type, Some("MyResponse".to_string()));
+    }
+
+    /// Test doc comment extraction
+    #[test]
+    fn test_extract_doc_comment() {
+        let input = r#"
+            use serde::{Serialize, Deserialize};
+
+            /// This is a request
+            /// with multiple lines
+            #[derive(Serialize, Deserialize)]
+            pub struct Request {
+                pub data: String,
+            }
+
+            #[derive(Serialize, Deserialize)]
+            pub struct Response {
+                pub result: String,
+            }
+
+            #[service]
+            pub trait DocService {
+                /// This method does something
+                async fn do_something(&self, request: Request) -> Result<Response, String>;
+            }
+        "#;
+
+        let definition = ServiceDefinition::parse(input).expect("Failed to parse");
+        let generator = PythonGenerator::new(definition);
+
+        let client_code = generator.generate_client();
+
+        // Doc comments should be preserved in generated code
+        assert!(client_code.contains("This method does something"));
+    }
+
+    /// Test server generation skips streaming methods
+    #[test]
+    fn test_server_skips_streaming_methods() {
+        let input = r#"
+            use futures::Stream;
+            use std::pin::Pin;
+            use serde::{Serialize, Deserialize};
+
+            #[derive(Serialize, Deserialize)]
+            pub struct Request {}
+
+            #[derive(Serialize, Deserialize)]
+            pub struct Response {}
+
+            #[service]
+            pub trait MixedService {
+                async fn regular(&self, request: Request) -> Result<Response, String>;
+                async fn streaming(
+                    &self,
+                    request: Pin<Box<dyn Stream<Item = Request> + Send>>
+                ) -> Result<Pin<Box<dyn Stream<Item = Response> + Send>>, String>;
+            }
+        "#;
+
+        let definition = ServiceDefinition::parse(input).expect("Failed to parse");
+        let generator = PythonGenerator::new(definition);
+
+        let server_code = generator.generate_server();
+
+        // Should have regular method
+        assert!(server_code.contains("async def regular"));
+
+        // Should NOT have streaming method (not yet supported)
+        assert!(!server_code.contains("async def streaming"));
+    }
+
+    /// Test is_stream_type helper function
+    #[test]
+    fn test_is_stream_type() {
+        // Test that Pin<Box<dyn Stream<...>>> is detected
+        let stream_type: Type = syn::parse_str("Pin<Box<dyn Stream<Item = String> + Send>>").unwrap();
+        assert!(is_stream_type(&stream_type));
+
+        // Test that regular types are not detected as streams
+        let regular_type: Type = syn::parse_str("String").unwrap();
+        assert!(!is_stream_type(&regular_type));
+
+        let option_type: Type = syn::parse_str("Option<String>").unwrap();
+        assert!(!is_stream_type(&option_type));
+    }
+
+    /// Test custom type handling
+    #[test]
+    fn test_custom_type_handling() {
+        let input = r#"
+            use serde::{Serialize, Deserialize};
+
+            #[derive(Serialize, Deserialize)]
+            pub struct CustomType {
+                pub field: String,
+            }
+
+            #[derive(Serialize, Deserialize)]
+            pub struct Request {
+                pub custom: CustomType,
+            }
+
+            #[derive(Serialize, Deserialize)]
+            pub struct Response {}
+
+            #[service]
+            pub trait CustomService {
+                async fn process(&self, request: Request) -> Result<Response, String>;
+            }
+        "#;
+
+        let definition = ServiceDefinition::parse(input).expect("Failed to parse");
+        let generator = PythonGenerator::new(definition);
+
+        let types_code = generator.generate_types();
+
+        // Should generate both custom types
+        assert!(types_code.contains("class CustomType:"));
+        assert!(types_code.contains("class Request:"));
+
+        // Request should reference CustomType
+        assert!(types_code.contains("custom: CustomType"));
+    }
 }

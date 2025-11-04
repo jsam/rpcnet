@@ -437,6 +437,72 @@ impl RpcServer {
         .await;
     }
 
+    /// Register a typed RPC method handler using MessagePack serialization.
+    ///
+    /// This is specifically for Python clients that use MessagePack serialization.
+    /// Use this instead of `register_typed` when the client is using Python bindings.
+    pub async fn register_typed_msgpack<Req, Resp, F, Fut>(&self, method: &str, handler: F)
+    where
+        Req: serde::de::DeserializeOwned + Send + 'static,
+        Resp: serde::Serialize + Send + 'static,
+        F: Fn(Req) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Resp, RpcError>> + Send + 'static,
+    {
+        let handler = Arc::new(handler);
+        self.register(method, move |params: Vec<u8>| {
+            let handler = handler.clone();
+            async move {
+                let request: Req =
+                    rmp_serde::from_slice(&params).map_err(|e| RpcError::InternalError(format!("MessagePack deserialization failed: {}", e)))?;
+
+                let response = handler(request).await?;
+
+                rmp_serde::to_vec(&response).map_err(|e| RpcError::InternalError(format!("MessagePack serialization failed: {}", e)))
+            }
+        })
+        .await;
+    }
+
+    /// Register a typed RPC method handler that accepts both bincode and MessagePack.
+    ///
+    /// This tries to deserialize with bincode first (for Rust clients), and if that fails,
+    /// tries MessagePack (for Python clients). The response is serialized using the same
+    /// format as the request.
+    pub async fn register_typed_polyglot<Req, Resp, F, Fut>(&self, method: &str, handler: F)
+    where
+        Req: serde::de::DeserializeOwned + Send + 'static,
+        Resp: serde::Serialize + Send + 'static,
+        F: Fn(Req) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Resp, RpcError>> + Send + 'static,
+    {
+        let handler = Arc::new(handler);
+        self.register(method, move |params: Vec<u8>| {
+            let handler = handler.clone();
+            async move {
+                // Try bincode first (Rust clients)
+                let (request, use_msgpack) = match bincode::deserialize::<Req>(&params) {
+                    Ok(req) => (req, false),
+                    Err(_) => {
+                        // If bincode fails, try MessagePack (Python clients)
+                        let req = rmp_serde::from_slice::<Req>(&params)
+                            .map_err(|e| RpcError::InternalError(format!("Both bincode and MessagePack deserialization failed. MessagePack error: {}", e)))?;
+                        (req, true)
+                    }
+                };
+
+                let response = handler(request).await?;
+
+                // Serialize response with the same format as request
+                if use_msgpack {
+                    rmp_serde::to_vec_named(&response).map_err(|e| RpcError::InternalError(format!("MessagePack serialization failed: {}", e)))
+                } else {
+                    bincode::serialize(&response).map_err(RpcError::SerializationError)
+                }
+            }
+        })
+        .await;
+    }
+
     pub async fn register_streaming<F, Fut, S>(&self, method: &str, handler: F)
     where
         F: Fn(Pin<Box<dyn Stream<Item = Vec<u8>> + Send>>) -> Fut + Send + Sync + Clone + 'static,

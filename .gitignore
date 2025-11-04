@@ -8,3 +8,4 @@ specs/
 .claude
 docs/COVERAGE.md
 *profraw
+*.pyc

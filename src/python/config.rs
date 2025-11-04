@@ -67,3 +67,146 @@ impl PyRpcConfig {
         self.__repr__()
     }
 }
+
+#[cfg(all(test, feature = "python"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_with_minimal_config() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|_py| {
+            let config = PyRpcConfig::new(
+                "certs/test_cert.pem".to_string(),
+                "127.0.0.1:8080".to_string(),
+                None,
+                None,
+                None,
+            ).unwrap();
+
+            assert_eq!(config.inner.bind_address, "127.0.0.1:8080");
+            assert!(config.inner.cert_path.to_str().unwrap().contains("test_cert.pem"));
+        });
+    }
+
+    #[test]
+    fn test_new_with_full_config() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|_py| {
+            let config = PyRpcConfig::new(
+                "certs/test_cert.pem".to_string(),
+                "127.0.0.1:9090".to_string(),
+                Some("certs/test_key.pem".to_string()),
+                Some("localhost".to_string()),
+                Some(60),
+            ).unwrap();
+
+            assert_eq!(config.inner.bind_address, "127.0.0.1:9090");
+            assert!(config.inner.cert_path.to_str().unwrap().contains("test_cert.pem"));
+            assert_eq!(config.inner.server_name, "localhost");
+            assert_eq!(config.inner.default_stream_timeout, Duration::from_secs(60));
+        });
+    }
+
+    #[test]
+    fn test_with_custom_timeout() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|_py| {
+            let config = PyRpcConfig::new(
+                "certs/cert.pem".to_string(),
+                "0.0.0.0:5000".to_string(),
+                None,
+                None,
+                Some(120),
+            ).unwrap();
+
+            assert_eq!(config.inner.default_stream_timeout, Duration::from_secs(120));
+        });
+    }
+
+    #[test]
+    fn test_repr_format() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|_py| {
+            let config = PyRpcConfig::new(
+                "certs/cert.pem".to_string(),
+                "192.168.1.1:7777".to_string(),
+                None,
+                None,
+                None,
+            ).unwrap();
+
+            let repr = config.__repr__();
+            assert_eq!(repr, "RpcConfig(bind_address='192.168.1.1:7777')");
+        });
+    }
+
+    #[test]
+    fn test_str_equals_repr() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|_py| {
+            let config = PyRpcConfig::new(
+                "certs/cert.pem".to_string(),
+                "127.0.0.1:8000".to_string(),
+                None,
+                None,
+                None,
+            ).unwrap();
+
+            assert_eq!(config.__str__(), config.__repr__());
+        });
+    }
+
+    #[test]
+    fn test_clone() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|_py| {
+            let config1 = PyRpcConfig::new(
+                "certs/cert.pem".to_string(),
+                "127.0.0.1:8080".to_string(),
+                Some("certs/key.pem".to_string()),
+                Some("testserver".to_string()),
+                Some(30),
+            ).unwrap();
+
+            let config2 = config1.clone();
+
+            assert_eq!(config1.inner.bind_address, config2.inner.bind_address);
+            assert_eq!(config1.inner.server_name, config2.inner.server_name);
+            assert_eq!(config1.inner.default_stream_timeout, config2.inner.default_stream_timeout);
+        });
+    }
+
+    #[test]
+    fn test_with_server_name() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|_py| {
+            let config = PyRpcConfig::new(
+                "certs/cert.pem".to_string(),
+                "127.0.0.1:8080".to_string(),
+                None,
+                Some("my-service.local".to_string()),
+                None,
+            ).unwrap();
+
+            assert_eq!(config.inner.server_name, "my-service.local");
+        });
+    }
+
+    #[test]
+    fn test_with_key_path() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|_py| {
+            let config = PyRpcConfig::new(
+                "certs/cert.pem".to_string(),
+                "127.0.0.1:8080".to_string(),
+                Some("certs/private_key.pem".to_string()),
+                None,
+                None,
+            ).unwrap();
+
+            assert!(config.inner.key_path.is_some());
+            assert!(config.inner.key_path.unwrap().to_str().unwrap().contains("private_key.pem"));
+        });
+    }
+}

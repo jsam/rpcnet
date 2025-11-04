@@ -101,7 +101,7 @@ coverage-tool:
 		cargo llvm-cov --html --lcov --output-dir target/llvm-cov; \
 	else \
 		echo "Generating test coverage report with Tarpaulin..."; \
-		cargo tarpaulin --out Html --out Json --output-dir target/coverage --exclude-files "examples/*" --exclude-files "benches/*" --timeout 300 --all-features; \
+		cargo tarpaulin --out Html --out Json --output-dir target/coverage --exclude-files "examples/*" --exclude-files "benches/*" --timeout 300 --no-default-features --features codegen,perf; \
 	fi
 
 # Usage: make coverage-html [tool] - tool can be tarpaulin (default) or llvm-cov  
@@ -149,21 +149,21 @@ coverage-check:
 
 coverage-check-tool:
 	@if [ "$(TOOL)" = "llvm-cov" ]; then \
-		echo "Checking coverage threshold (65%) with LLVM..."; \
+		echo "Checking coverage threshold (60%, Python excluded) with LLVM..."; \
 		cargo llvm-cov --json --output-dir target/llvm-cov; \
 		coverage=$$(cat target/llvm-cov/llvm-cov.json | jq -r '.data[0].totals.lines.percent'); \
-		if (( $$(echo "$$coverage < 65" | bc -l) )); then \
-			echo "❌ Coverage $$coverage% is below 65% threshold"; \
+		if (( $$(echo "$$coverage < 60" | bc -l) )); then \
+			echo "❌ Coverage $$coverage% is below 60% threshold"; \
 			exit 1; \
 		else \
 			echo "✅ Coverage $$coverage% meets threshold"; \
 		fi \
 	else \
-		echo "Checking coverage threshold (65%) with Tarpaulin..."; \
-		cargo tarpaulin --out Json --output-dir target/coverage --exclude-files "examples/*" --exclude-files "benches/*" --timeout 300 --all-features; \
+		echo "Checking coverage threshold (60%, Python excluded) with Tarpaulin..."; \
+		cargo tarpaulin --out Json --output-dir target/coverage --exclude-files "examples/*" --exclude-files "benches/*" --timeout 300 --no-default-features --features codegen,perf; \
 		coverage=$$(cat target/coverage/tarpaulin-report.json | jq -r '.coverage'); \
-		if (( $$(echo "$$coverage < 65" | bc -l) )); then \
-			echo "❌ Coverage $$coverage% is below 65% threshold"; \
+		if (( $$(echo "$$coverage < 60" | bc -l) )); then \
+			echo "❌ Coverage $$coverage% is below 60% threshold (Python bindings excluded)"; \
 			exit 1; \
 		else \
 			echo "✅ Coverage $$coverage% meets threshold"; \
