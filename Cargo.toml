@@ -103,6 +103,18 @@ name = "streaming"
 path = "benches/streaming.rs"
 harness = false
 
+[[bench]]
+name = "python_interop"
+path = "benches/python_interop.rs"
+harness = false
+required-features = ["python"]
+
+[[bench]]
+name = "python_persistent"
+path = "benches/python_persistent.rs"
+harness = false
+required-features = ["python"]
+
 # Basic Examples (no codegen required)
 [[example]]
 name = "basic_server"
