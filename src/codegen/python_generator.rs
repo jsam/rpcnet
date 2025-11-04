@@ -6,7 +6,7 @@
 use super::{ServiceDefinition, ServiceType};
 use std::fs;
 use std::path::Path;
-use syn::{Fields, TraitItemFn, Type, PathArguments, GenericArgument};
+use syn::{Fields, GenericArgument, PathArguments, TraitItemFn, Type};
 
 /// Generates Python code from service definitions
 pub struct PythonGenerator {
@@ -109,7 +109,8 @@ impl PythonGenerator {
                 }
 
                 // Simple enum: just assign integer values
-                code.push_str(&format!("    {} = {}\n",
+                code.push_str(&format!(
+                    "    {} = {}\n",
                     variant_name.to_string().to_uppercase(),
                     idx
                 ));
@@ -131,7 +132,10 @@ impl PythonGenerator {
         code.push_str("from .types import *\n\n");
 
         code.push_str(&format!("class {}Client:\n", service_name));
-        code.push_str(&format!("    \"\"\"Type-safe client for {} service\n\n", service_name));
+        code.push_str(&format!(
+            "    \"\"\"Type-safe client for {} service\n\n",
+            service_name
+        ));
         code.push_str("    All methods are async and use the underlying _rpcnet.RpcClient\n");
         code.push_str("    for communication over QUIC+TLS.\n");
         code.push_str("    \"\"\"\n\n");
@@ -149,7 +153,10 @@ impl PythonGenerator {
         code.push_str("        server_name: Optional[str] = None,\n");
         code.push_str("        timeout_secs: Optional[int] = None,\n");
         code.push_str(&format!("    ) -> '{}Client':\n", service_name));
-        code.push_str(&format!("        \"\"\"Connect to {} server\n\n", service_name));
+        code.push_str(&format!(
+            "        \"\"\"Connect to {} server\n\n",
+            service_name
+        ));
         code.push_str("        Args:\n");
         code.push_str("            addr: Server address (e.g., '127.0.0.1:8080')\n");
         code.push_str("            cert_path: Path to TLS certificate\n");
@@ -157,7 +164,10 @@ impl PythonGenerator {
         code.push_str("            server_name: Optional server name for TLS\n");
         code.push_str("            timeout_secs: Optional timeout in seconds\n\n");
         code.push_str("        Returns:\n");
-        code.push_str(&format!("            {}Client: Connected client instance\n", service_name));
+        code.push_str(&format!(
+            "            {}Client: Connected client instance\n",
+            service_name
+        ));
         code.push_str("        \"\"\"\n");
         code.push_str("        config = _rpcnet.RpcConfig(\n");
         code.push_str("            cert_path=cert_path,\n");
@@ -167,7 +177,10 @@ impl PythonGenerator {
         code.push_str("            timeout_secs=timeout_secs,\n");
         code.push_str("        )\n");
         code.push_str("        client = await _rpcnet.RpcClient.connect(addr, config)\n");
-        code.push_str(&format!("        return {}Client(client)\n\n", service_name));
+        code.push_str(&format!(
+            "        return {}Client(client)\n\n",
+            service_name
+        ));
 
         // Generate method for each RPC method
         for method in self.definition.methods() {
@@ -196,26 +209,39 @@ impl PythonGenerator {
 
         let mut code = String::new();
 
-        code.push_str(&format!("    async def {}(self, request: {}) -> {}:\n",
-            method_name, request_type, response_type));
+        code.push_str(&format!(
+            "    async def {}(self, request: {}) -> {}:\n",
+            method_name, request_type, response_type
+        ));
 
         if let Some(doc) = extract_doc_comment(&method.attrs) {
             code.push_str(&format!("        \"\"\"{}\"\"\"\n", doc.trim()));
         } else {
-            code.push_str(&format!("        \"\"\"Call {} RPC method\"\"\"\n", method_name));
+            code.push_str(&format!(
+                "        \"\"\"Call {} RPC method\"\"\"\n",
+                method_name
+            ));
         }
 
         code.push_str("        # Serialize request to MessagePack bytes\n");
         code.push_str("        request_dict = request.__dict__\n");
         code.push_str("        request_bytes = _rpcnet.python_to_msgpack_py(request_dict)\n");
         code.push_str("        \n");
-        code.push_str(&format!("        # Call RPC method '{}.{}'\n", service_name, method_name));
-        code.push_str(&format!("        response_bytes = await self._client.call('{}.{}', request_bytes)\n",
-            service_name, method_name));
+        code.push_str(&format!(
+            "        # Call RPC method '{}.{}'\n",
+            service_name, method_name
+        ));
+        code.push_str(&format!(
+            "        response_bytes = await self._client.call('{}.{}', request_bytes)\n",
+            service_name, method_name
+        ));
         code.push_str("        \n");
         code.push_str("        # Deserialize response from MessagePack\n");
         code.push_str("        response_dict = _rpcnet.msgpack_to_python_py(response_bytes)\n");
-        code.push_str(&format!("        return {}(**response_dict)\n", response_type));
+        code.push_str(&format!(
+            "        return {}(**response_dict)\n",
+            response_type
+        ));
 
         code
     }
@@ -244,7 +270,8 @@ impl PythonGenerator {
                     if segment.ident == "Result" {
                         if let PathArguments::AngleBracketed(args) = &segment.arguments {
                             if let Some(GenericArgument::Type(ok_type)) = args.args.first() {
-                                extract_stream_item_type(ok_type).unwrap_or_else(|| "Any".to_string())
+                                extract_stream_item_type(ok_type)
+                                    .unwrap_or_else(|| "Any".to_string())
                             } else {
                                 "Any".to_string()
                             }
@@ -264,13 +291,18 @@ impl PythonGenerator {
             "Any".to_string()
         };
 
-        code.push_str(&format!("    async def {}(self, request_stream: AsyncIterable[{}]) -> AsyncIterator[{}]:\n",
-            method_name, request_item_type, response_item_type));
+        code.push_str(&format!(
+            "    async def {}(self, request_stream: AsyncIterable[{}]) -> AsyncIterator[{}]:\n",
+            method_name, request_item_type, response_item_type
+        ));
 
         if let Some(doc) = extract_doc_comment(&method.attrs) {
             code.push_str(&format!("        \"\"\"{}\"\"\"", doc.trim()));
         } else {
-            code.push_str(&format!("        \"\"\"Streaming RPC method: {}\"\"\"\n", method_name));
+            code.push_str(&format!(
+                "        \"\"\"Streaming RPC method: {}\"\"\"\n",
+                method_name
+            ));
         }
 
         code.push_str("        # Collect and serialize request stream items\n");
@@ -280,14 +312,22 @@ impl PythonGenerator {
         code.push_str("            request_bytes = _rpcnet.python_to_msgpack_py(request_dict)\n");
         code.push_str("            request_list.append(request_bytes)\n");
         code.push_str("        \n");
-        code.push_str(&format!("        # Call streaming RPC method '{}.{}'\n", service_name, method_name));
-        code.push_str(&format!("        response_stream = await self._client.call_streaming('{}.{}', request_list)\n",
-            service_name, method_name));
+        code.push_str(&format!(
+            "        # Call streaming RPC method '{}.{}'\n",
+            service_name, method_name
+        ));
+        code.push_str(&format!(
+            "        response_stream = await self._client.call_streaming('{}.{}', request_list)\n",
+            service_name, method_name
+        ));
         code.push_str("        \n");
         code.push_str("        # Yield deserialized responses\n");
         code.push_str("        async for response_bytes in response_stream:\n");
         code.push_str("            response_dict = _rpcnet.msgpack_to_python_py(response_bytes)\n");
-        code.push_str(&format!("            yield {}(**response_dict)\n", response_item_type));
+        code.push_str(&format!(
+            "            yield {}(**response_dict)\n",
+            response_item_type
+        ));
 
         code
     }
@@ -306,7 +346,10 @@ impl PythonGenerator {
 
         // Handler interface (abstract base class)
         code.push_str(&format!("class {}Handler(ABC):\n", service_name));
-        code.push_str(&format!("    \"\"\"Handler interface for {} service\n\n", service_name));
+        code.push_str(&format!(
+            "    \"\"\"Handler interface for {} service\n\n",
+            service_name
+        ));
         code.push_str("    Implement this class to define your service logic.\n");
         code.push_str("    All methods are async and should handle the business logic.\n");
         code.push_str("    \"\"\"\n\n");
@@ -321,16 +364,24 @@ impl PythonGenerator {
 
         // Server class
         code.push_str(&format!("\n\nclass {}Server:\n", service_name));
-        code.push_str(&format!("    \"\"\"RPC server for {} service\n\n", service_name));
+        code.push_str(&format!(
+            "    \"\"\"RPC server for {} service\n\n",
+            service_name
+        ));
         code.push_str("    This server wraps the low-level _rpcnet.RpcServer and\n");
         code.push_str("    automatically registers all handler methods.\n");
         code.push_str("    \"\"\"\n\n");
 
-        code.push_str(&format!("    def __init__(self, handler: {}Handler, config: _rpcnet.RpcConfig):\n",
-            service_name));
+        code.push_str(&format!(
+            "    def __init__(self, handler: {}Handler, config: _rpcnet.RpcConfig):\n",
+            service_name
+        ));
         code.push_str("        \"\"\"Initialize server with handler and configuration\n\n");
         code.push_str("        Args:\n");
-        code.push_str(&format!("            handler: Implementation of {}Handler\n", service_name));
+        code.push_str(&format!(
+            "            handler: Implementation of {}Handler\n",
+            service_name
+        ));
         code.push_str("            config: RPC configuration with TLS settings\n");
         code.push_str("        \"\"\"\n");
         code.push_str("        self.handler = handler\n");
@@ -363,13 +414,18 @@ impl PythonGenerator {
         let mut code = String::new();
 
         code.push_str("    @abstractmethod\n");
-        code.push_str(&format!("    async def {}(self, request: {}) -> {}:\n",
-            method_name, request_type, response_type));
+        code.push_str(&format!(
+            "    async def {}(self, request: {}) -> {}:\n",
+            method_name, request_type, response_type
+        ));
 
         if let Some(doc) = extract_doc_comment(&method.attrs) {
             code.push_str(&format!("        \"\"\"{}\"\"\"\n", doc.trim()));
         } else {
-            code.push_str(&format!("        \"\"\"Handle {} request\"\"\"\n", method_name));
+            code.push_str(&format!(
+                "        \"\"\"Handle {} request\"\"\"\n",
+                method_name
+            ));
         }
 
         code.push_str("        pass\n\n");
@@ -384,21 +440,31 @@ impl PythonGenerator {
 
         let mut code = String::new();
 
-        code.push_str(&format!("        \n        async def handle_{}(request_bytes: bytes) -> bytes:\n",
-            method_name));
+        code.push_str(&format!(
+            "        \n        async def handle_{}(request_bytes: bytes) -> bytes:\n",
+            method_name
+        ));
         code.push_str("            # Deserialize request from bincode\n");
         code.push_str("            request_dict = _rpcnet.bincode_to_python_py(request_bytes)\n");
-        code.push_str(&format!("            request = {}(**request_dict)\n", request_type));
+        code.push_str(&format!(
+            "            request = {}(**request_dict)\n",
+            request_type
+        ));
         code.push_str("            \n");
         code.push_str("            # Call handler\n");
-        code.push_str(&format!("            response = await self.handler.{}(request)\n", method_name));
+        code.push_str(&format!(
+            "            response = await self.handler.{}(request)\n",
+            method_name
+        ));
         code.push_str("            \n");
         code.push_str("            # Serialize response to bincode\n");
         code.push_str("            response_dict = response.__dict__\n");
         code.push_str("            return _rpcnet.python_to_bincode_py(response_dict)\n");
         code.push_str("        \n");
-        code.push_str(&format!("        await self.server.register('{}', handle_{})\n",
-            method_name, method_name));
+        code.push_str(&format!(
+            "        await self.server.register('{}', handle_{})\n",
+            method_name, method_name
+        ));
 
         code
     }
@@ -474,9 +540,8 @@ fn rust_type_to_python(ty: &Type) -> String {
             let ident = &segment.ident;
 
             match ident.to_string().as_str() {
-                "i8" | "i16" | "i32" | "i64" | "i128" |
-                "u8" | "u16" | "u32" | "u64" | "u128" |
-                "isize" | "usize" => "int".to_string(),
+                "i8" | "i16" | "i32" | "i64" | "i128" | "u8" | "u16" | "u32" | "u64" | "u128"
+                | "isize" | "usize" => "int".to_string(),
                 "f32" | "f64" => "float".to_string(),
                 "bool" => "bool".to_string(),
                 "String" | "str" => "str".to_string(),
@@ -510,7 +575,10 @@ fn extract_method_types(method: &TraitItemFn) -> (String, String) {
     let request_type = if method.sig.inputs.len() >= 2 {
         if let syn::FnArg::Typed(pat_type) = &method.sig.inputs[1] {
             if let Type::Path(type_path) = &*pat_type.ty {
-                type_path.path.segments.last()
+                type_path
+                    .path
+                    .segments
+                    .last()
                     .map(|s| s.ident.to_string())
                     .unwrap_or_else(|| "Any".to_string())
             } else {
@@ -529,12 +597,17 @@ fn extract_method_types(method: &TraitItemFn) -> (String, String) {
             if let Some(segment) = type_path.path.segments.last() {
                 if segment.ident == "Result" {
                     if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                        if let Some(GenericArgument::Type(Type::Path(response_path))) = args.args.first() {
+                        if let Some(GenericArgument::Type(Type::Path(response_path))) =
+                            args.args.first()
+                        {
                             return (
                                 request_type,
-                                response_path.path.segments.last()
+                                response_path
+                                    .path
+                                    .segments
+                                    .last()
                                     .map(|s| s.ident.to_string())
-                                    .unwrap_or_else(|| "Any".to_string())
+                                    .unwrap_or_else(|| "Any".to_string()),
                             );
                         }
                     }
@@ -558,11 +631,18 @@ fn is_stream_type(ty: &Type) -> bool {
                     if let Some(GenericArgument::Type(Type::Path(box_type))) = args.args.first() {
                         if let Some(box_segment) = box_type.path.segments.first() {
                             if box_segment.ident == "Box" {
-                                if let PathArguments::AngleBracketed(box_args) = &box_segment.arguments {
-                                    if let Some(GenericArgument::Type(Type::TraitObject(trait_obj))) = box_args.args.first() {
+                                if let PathArguments::AngleBracketed(box_args) =
+                                    &box_segment.arguments
+                                {
+                                    if let Some(GenericArgument::Type(Type::TraitObject(
+                                        trait_obj,
+                                    ))) = box_args.args.first()
+                                    {
                                         for bound in &trait_obj.bounds {
                                             if let syn::TypeParamBound::Trait(trait_bound) = bound {
-                                                if let Some(trait_segment) = trait_bound.path.segments.last() {
+                                                if let Some(trait_segment) =
+                                                    trait_bound.path.segments.last()
+                                                {
                                                     if trait_segment.ident == "Stream" {
                                                         return true;
                                                     }
@@ -590,21 +670,46 @@ fn extract_stream_item_type(ty: &Type) -> Option<String> {
                     if let Some(GenericArgument::Type(Type::Path(box_type))) = args.args.first() {
                         if let Some(box_segment) = box_type.path.segments.first() {
                             if box_segment.ident == "Box" {
-                                if let PathArguments::AngleBracketed(box_args) = &box_segment.arguments {
-                                    if let Some(GenericArgument::Type(Type::TraitObject(trait_obj))) = box_args.args.first() {
+                                if let PathArguments::AngleBracketed(box_args) =
+                                    &box_segment.arguments
+                                {
+                                    if let Some(GenericArgument::Type(Type::TraitObject(
+                                        trait_obj,
+                                    ))) = box_args.args.first()
+                                    {
                                         for bound in &trait_obj.bounds {
                                             if let syn::TypeParamBound::Trait(trait_bound) = bound {
-                                                if let Some(trait_segment) = trait_bound.path.segments.last() {
+                                                if let Some(trait_segment) =
+                                                    trait_bound.path.segments.last()
+                                                {
                                                     if trait_segment.ident == "Stream" {
                                                         // Extract Item = T from Stream<Item = T>
-                                                        if let PathArguments::AngleBracketed(stream_args) = &trait_segment.arguments {
+                                                        if let PathArguments::AngleBracketed(
+                                                            stream_args,
+                                                        ) = &trait_segment.arguments
+                                                        {
                                                             for arg in &stream_args.args {
-                                                                if let GenericArgument::AssocType(assoc) = arg {
+                                                                if let GenericArgument::AssocType(
+                                                                    assoc,
+                                                                ) = arg
+                                                                {
                                                                     if assoc.ident == "Item" {
-                                                                        if let Type::Path(item_path) = &assoc.ty {
+                                                                        if let Type::Path(
+                                                                            item_path,
+                                                                        ) = &assoc.ty
+                                                                        {
                                                                             // Check if it's Result<T, E>
-                                                                            if let Some(result_segment) = item_path.path.segments.last() {
-                                                                                if result_segment.ident == "Result" {
+                                                                            if let Some(
+                                                                                result_segment,
+                                                                            ) = item_path
+                                                                                .path
+                                                                                .segments
+                                                                                .last()
+                                                                            {
+                                                                                if result_segment
+                                                                                    .ident
+                                                                                    == "Result"
+                                                                                {
                                                                                     if let PathArguments::AngleBracketed(result_args) = &result_segment.arguments {
                                                                                         if let Some(GenericArgument::Type(Type::Path(ok_type))) = result_args.args.first() {
                                                                                             return ok_type.path.segments.last()
@@ -803,7 +908,11 @@ mod tests {
         for (rust_type, expected_python_type) in test_cases {
             let ty: Type = syn::parse_str(rust_type).unwrap();
             let python_type = rust_type_to_python(&ty);
-            assert_eq!(python_type, expected_python_type, "Failed for {}", rust_type);
+            assert_eq!(
+                python_type, expected_python_type,
+                "Failed for {}",
+                rust_type
+            );
         }
     }
 
@@ -1104,7 +1213,8 @@ mod tests {
     #[test]
     fn test_is_stream_type() {
         // Test that Pin<Box<dyn Stream<...>>> is detected
-        let stream_type: Type = syn::parse_str("Pin<Box<dyn Stream<Item = String> + Send>>").unwrap();
+        let stream_type: Type =
+            syn::parse_str("Pin<Box<dyn Stream<Item = String> + Send>>").unwrap();
         assert!(is_stream_type(&stream_type));
 
         // Test that regular types are not detected as streams

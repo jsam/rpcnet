@@ -3,13 +3,13 @@
 //! This module provides Python bindings for streaming operations, allowing
 //! Python code to consume Rust streams as async iterators.
 
+use super::error::to_py_err;
+use futures::stream::{Stream, StreamExt};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use futures::stream::{Stream, StreamExt};
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use super::error::to_py_err;
 
 /// Python wrapper for async stream (async iterator)
 ///
@@ -25,7 +25,9 @@ pub struct PyAsyncStream {
 
 impl PyAsyncStream {
     /// Create a new AsyncStream from a Rust stream
-    pub fn new(stream: Pin<Box<dyn Stream<Item = Result<Vec<u8>, crate::RpcError>> + Send>>) -> Self {
+    pub fn new(
+        stream: Pin<Box<dyn Stream<Item = Result<Vec<u8>, crate::RpcError>> + Send>>,
+    ) -> Self {
         Self {
             inner: Arc::new(Mutex::new(stream)),
         }
@@ -49,7 +51,9 @@ impl PyAsyncStream {
             match stream_guard.next().await {
                 Some(Ok(data)) => {
                     // Return the data
-                    Ok(Python::with_gil(|py| PyBytes::new_bound(py, &data).into_py(py)))
+                    Ok(Python::with_gil(|py| {
+                        PyBytes::new_bound(py, &data).into_py(py)
+                    }))
                 }
                 Some(Err(e)) => {
                     // Convert error and raise in Python
@@ -57,7 +61,9 @@ impl PyAsyncStream {
                 }
                 None => {
                     // End of stream - raise StopAsyncIteration
-                    Err(pyo3::exceptions::PyStopAsyncIteration::new_err("Stream ended"))
+                    Err(pyo3::exceptions::PyStopAsyncIteration::new_err(
+                        "Stream ended",
+                    ))
                 }
             }
         })
@@ -99,8 +105,8 @@ impl PyAsyncStream {
 #[cfg(all(test, feature = "python"))]
 mod tests {
     use super::*;
-    use futures::stream;
     use crate::RpcError;
+    use futures::stream;
 
     #[test]
     fn test_repr() {
@@ -117,10 +123,7 @@ mod tests {
     fn test_new_creates_stream() {
         pyo3::prepare_freethreaded_python();
         Python::with_gil(|_py| {
-            let stream = stream::iter(vec![
-                Ok(vec![1, 2, 3]),
-                Ok(vec![4, 5, 6]),
-            ]);
+            let stream = stream::iter(vec![Ok(vec![1, 2, 3]), Ok(vec![4, 5, 6])]);
             let py_stream = PyAsyncStream::new(Box::pin(stream));
 
             // Just verify it was created successfully
@@ -237,10 +240,7 @@ mod tests {
     async fn test_stream_mutex_isolation() {
         pyo3::prepare_freethreaded_python();
 
-        let stream = stream::iter(vec![
-            Ok(vec![1u8]),
-            Ok(vec![2u8]),
-        ]);
+        let stream = stream::iter(vec![Ok(vec![1u8]), Ok(vec![2u8])]);
         let py_stream = PyAsyncStream::new(Box::pin(stream));
 
         // Lock the stream

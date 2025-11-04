@@ -22,10 +22,10 @@ use rpcnet::{RpcClient, RpcConfig, RpcError, RpcServer};
 
 // Test payload sizes
 const PAYLOAD_SIZES: &[usize] = &[
-    100,       // 100 bytes - small message
-    1_024,     // 1 KB - typical request
-    10_240,    // 10 KB - medium payload
-    102_400,   // 100 KB - large payload
+    100,     // 100 bytes - small message
+    1_024,   // 1 KB - typical request
+    10_240,  // 10 KB - medium payload
+    102_400, // 100 KB - large payload
 ];
 
 /// Create a test Rust server that handles MessagePack-serialized requests
@@ -56,7 +56,10 @@ async fn setup_rust_server(port: u16) -> Result<SocketAddr, RpcError> {
 
     let mut server_clone = server.clone();
     tokio::spawn(async move {
-        server_clone.start(quic_server).await.expect("Server failed");
+        server_clone
+            .start(quic_server)
+            .await
+            .expect("Server failed");
     });
 
     // Give server time to start
@@ -192,16 +195,12 @@ fn bench_python_to_rust(c: &mut Criterion) {
         let port = addr.port();
 
         group.throughput(Throughput::Bytes(size as u64));
-        group.bench_with_input(
-            BenchmarkId::from_parameter(size),
-            &size,
-            |b, &size| {
-                b.iter(|| {
-                    let (rps, latency_us) = run_python_benchmark(&runtime, port, size, 100);
-                    (rps, latency_us)
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
+            b.iter(|| {
+                let (rps, latency_us) = run_python_benchmark(&runtime, port, size, 100);
+                (rps, latency_us)
+            });
+        });
     }
 
     group.finish();

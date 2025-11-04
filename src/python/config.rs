@@ -1,7 +1,7 @@
 //! Python wrapper for RpcConfig
 
-use pyo3::prelude::*;
 use crate::RpcConfig;
+use pyo3::prelude::*;
 use std::time::Duration;
 
 /// Python wrapper for RPC configuration
@@ -82,10 +82,16 @@ mod tests {
                 None,
                 None,
                 None,
-            ).unwrap();
+            )
+            .unwrap();
 
             assert_eq!(config.inner.bind_address, "127.0.0.1:8080");
-            assert!(config.inner.cert_path.to_str().unwrap().contains("test_cert.pem"));
+            assert!(config
+                .inner
+                .cert_path
+                .to_str()
+                .unwrap()
+                .contains("test_cert.pem"));
         });
     }
 
@@ -99,10 +105,16 @@ mod tests {
                 Some("certs/test_key.pem".to_string()),
                 Some("localhost".to_string()),
                 Some(60),
-            ).unwrap();
+            )
+            .unwrap();
 
             assert_eq!(config.inner.bind_address, "127.0.0.1:9090");
-            assert!(config.inner.cert_path.to_str().unwrap().contains("test_cert.pem"));
+            assert!(config
+                .inner
+                .cert_path
+                .to_str()
+                .unwrap()
+                .contains("test_cert.pem"));
             assert_eq!(config.inner.server_name, "localhost");
             assert_eq!(config.inner.default_stream_timeout, Duration::from_secs(60));
         });
@@ -118,9 +130,13 @@ mod tests {
                 None,
                 None,
                 Some(120),
-            ).unwrap();
+            )
+            .unwrap();
 
-            assert_eq!(config.inner.default_stream_timeout, Duration::from_secs(120));
+            assert_eq!(
+                config.inner.default_stream_timeout,
+                Duration::from_secs(120)
+            );
         });
     }
 
@@ -134,7 +150,8 @@ mod tests {
                 None,
                 None,
                 None,
-            ).unwrap();
+            )
+            .unwrap();
 
             let repr = config.__repr__();
             assert_eq!(repr, "RpcConfig(bind_address='192.168.1.1:7777')");
@@ -151,7 +168,8 @@ mod tests {
                 None,
                 None,
                 None,
-            ).unwrap();
+            )
+            .unwrap();
 
             assert_eq!(config.__str__(), config.__repr__());
         });
@@ -167,13 +185,17 @@ mod tests {
                 Some("certs/key.pem".to_string()),
                 Some("testserver".to_string()),
                 Some(30),
-            ).unwrap();
+            )
+            .unwrap();
 
             let config2 = config1.clone();
 
             assert_eq!(config1.inner.bind_address, config2.inner.bind_address);
             assert_eq!(config1.inner.server_name, config2.inner.server_name);
-            assert_eq!(config1.inner.default_stream_timeout, config2.inner.default_stream_timeout);
+            assert_eq!(
+                config1.inner.default_stream_timeout,
+                config2.inner.default_stream_timeout
+            );
         });
     }
 
@@ -187,7 +209,8 @@ mod tests {
                 None,
                 Some("my-service.local".to_string()),
                 None,
-            ).unwrap();
+            )
+            .unwrap();
 
             assert_eq!(config.inner.server_name, "my-service.local");
         });
@@ -203,10 +226,17 @@ mod tests {
                 Some("certs/private_key.pem".to_string()),
                 None,
                 None,
-            ).unwrap();
+            )
+            .unwrap();
 
             assert!(config.inner.key_path.is_some());
-            assert!(config.inner.key_path.unwrap().to_str().unwrap().contains("private_key.pem"));
+            assert!(config
+                .inner
+                .key_path
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .contains("private_key.pem"));
         });
     }
 }

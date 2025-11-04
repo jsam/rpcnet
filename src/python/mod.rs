@@ -4,15 +4,15 @@
 //! to Python with async/await support through asyncio.
 
 #[cfg(feature = "python")]
-pub mod error;
+pub mod client;
 #[cfg(feature = "python")]
 pub mod config;
 #[cfg(feature = "python")]
-pub mod client;
-#[cfg(feature = "python")]
-pub mod server;
+pub mod error;
 #[cfg(feature = "python")]
 pub mod serde;
+#[cfg(feature = "python")]
+pub mod server;
 #[cfg(feature = "python")]
 pub mod streaming;
 
@@ -32,9 +32,15 @@ fn _rpcnet(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register exception types
     m.add("RpcError", py.get_type_bound::<error::PyRpcError>())?;
-    m.add("ConnectionError", py.get_type_bound::<error::PyConnectionError>())?;
+    m.add(
+        "ConnectionError",
+        py.get_type_bound::<error::PyConnectionError>(),
+    )?;
     m.add("TimeoutError", py.get_type_bound::<error::PyTimeoutError>())?;
-    m.add("SerializationError", py.get_type_bound::<error::PySerializationError>())?;
+    m.add(
+        "SerializationError",
+        py.get_type_bound::<error::PySerializationError>(),
+    )?;
     m.add("TlsError", py.get_type_bound::<error::PyTlsError>())?;
 
     // Register serialization functions

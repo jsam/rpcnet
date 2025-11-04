@@ -452,12 +452,15 @@ impl RpcServer {
         self.register(method, move |params: Vec<u8>| {
             let handler = handler.clone();
             async move {
-                let request: Req =
-                    rmp_serde::from_slice(&params).map_err(|e| RpcError::InternalError(format!("MessagePack deserialization failed: {}", e)))?;
+                let request: Req = rmp_serde::from_slice(&params).map_err(|e| {
+                    RpcError::InternalError(format!("MessagePack deserialization failed: {}", e))
+                })?;
 
                 let response = handler(request).await?;
 
-                rmp_serde::to_vec(&response).map_err(|e| RpcError::InternalError(format!("MessagePack serialization failed: {}", e)))
+                rmp_serde::to_vec(&response).map_err(|e| {
+                    RpcError::InternalError(format!("MessagePack serialization failed: {}", e))
+                })
             }
         })
         .await;

@@ -1,17 +1,37 @@
 //! Python exception types for RpcNet errors
 
-use pyo3::prelude::*;
-use pyo3::exceptions::PyException;
 use crate::RpcError;
+use pyo3::exceptions::PyException;
+use pyo3::prelude::*;
 
 // Base RPC exception
-pyo3::create_exception!(_rpcnet, PyRpcError, PyException, "Base exception for RPC errors");
-pyo3::create_exception!(_rpcnet, PyConnectionError, PyRpcError, "Connection-related errors");
+pyo3::create_exception!(
+    _rpcnet,
+    PyRpcError,
+    PyException,
+    "Base exception for RPC errors"
+);
+pyo3::create_exception!(
+    _rpcnet,
+    PyConnectionError,
+    PyRpcError,
+    "Connection-related errors"
+);
 pyo3::create_exception!(_rpcnet, PyTimeoutError, PyRpcError, "Timeout errors");
-pyo3::create_exception!(_rpcnet, PySerializationError, PyRpcError, "Serialization/deserialization errors");
+pyo3::create_exception!(
+    _rpcnet,
+    PySerializationError,
+    PyRpcError,
+    "Serialization/deserialization errors"
+);
 pyo3::create_exception!(_rpcnet, PyTlsError, PyRpcError, "TLS/encryption errors");
 pyo3::create_exception!(_rpcnet, PyStreamError, PyRpcError, "Streaming errors");
-pyo3::create_exception!(_rpcnet, PyHandlerError, PyRpcError, "Handler execution errors");
+pyo3::create_exception!(
+    _rpcnet,
+    PyHandlerError,
+    PyRpcError,
+    "Handler execution errors"
+);
 
 /// Convert Rust RpcError to Python exception
 pub fn to_py_err(err: RpcError) -> PyErr {
@@ -66,7 +86,7 @@ mod tests {
         pyo3::prepare_freethreaded_python();
         Python::with_gil(|py| {
             let err = RpcError::SerializationError(
-                bincode::ErrorKind::Custom("invalid data".to_string()).into()
+                bincode::ErrorKind::Custom("invalid data".to_string()).into(),
             );
             let py_err = to_py_err(err);
 

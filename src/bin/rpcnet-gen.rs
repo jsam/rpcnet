@@ -55,7 +55,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Generate Python bindings if --python flag is set
     #[cfg(all(feature = "codegen", feature = "python"))]
     if cli.python {
-        println!("🐍 Generating Python bindings for service: {}", service_name);
+        println!(
+            "🐍 Generating Python bindings for service: {}",
+            service_name
+        );
 
         let generator = rpcnet::codegen::PythonGenerator::new(definition);
         generator.write_to_dir(&cli.output)?;
@@ -66,9 +69,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("\n✨ Python bindings generated!");
         println!("\n📝 To use the generated Python code:");
         println!("    import {}", service_name.to_lowercase());
-        println!("    client = await {}.{}Client.connect(...)",
+        println!(
+            "    client = await {}.{}Client.connect(...)",
             service_name.to_lowercase(),
-            service_name);
+            service_name
+        );
 
         return Ok(());
     }

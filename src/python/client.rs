@@ -1,14 +1,14 @@
 //! Python wrapper for RpcClient
 
+use super::{config::PyRpcConfig, error::to_py_err, streaming::PyAsyncStream};
+use crate::RpcClient;
+use async_stream::stream;
+use futures::stream::StreamExt;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use crate::RpcClient;
-use super::{config::PyRpcConfig, error::to_py_err, streaming::PyAsyncStream};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
-use futures::stream::StreamExt;
-use async_stream::stream;
 
 /// Python wrapper for RPC client
 ///
@@ -47,10 +47,12 @@ impl PyRpcClient {
         addr: String,
         config: &PyRpcConfig,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let socket_addr = SocketAddr::from_str(&addr)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Invalid address '{}': {}", addr, e)
-            ))?;
+        let socket_addr = SocketAddr::from_str(&addr).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Invalid address '{}': {}",
+                addr, e
+            ))
+        })?;
 
         let config = config.inner.clone();
 
@@ -60,7 +62,9 @@ impl PyRpcClient {
                 .await
                 .map_err(to_py_err)?;
 
-            Ok(PyRpcClient { client: Arc::new(client) })
+            Ok(PyRpcClient {
+                client: Arc::new(client),
+            })
         })
     }
 
@@ -91,12 +95,11 @@ impl PyRpcClient {
         let client = self.client.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = client
-                .call(&method, params)
-                .await
-                .map_err(to_py_err)?;
+            let result = client.call(&method, params).await.map_err(to_py_err)?;
 
-            Ok(Python::with_gil(|py| PyBytes::new_bound(py, &result).into_py(py)))
+            Ok(Python::with_gil(|py| {
+                PyBytes::new_bound(py, &result).into_py(py)
+            }))
         })
     }
 
@@ -130,15 +133,14 @@ impl PyRpcClient {
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             // Wrap the call in a timeout
-            let result = tokio::time::timeout(
-                timeout_duration,
-                client.call(&method, params)
-            )
-            .await
-            .map_err(|_| to_py_err(crate::RpcError::Timeout))?
-            .map_err(to_py_err)?;
+            let result = tokio::time::timeout(timeout_duration, client.call(&method, params))
+                .await
+                .map_err(|_| to_py_err(crate::RpcError::Timeout))?
+                .map_err(to_py_err)?;
 
-            Ok(Python::with_gil(|py| PyBytes::new_bound(py, &result).into_py(py)))
+            Ok(Python::with_gil(|py| {
+                PyBytes::new_bound(py, &result).into_py(py)
+            }))
         })
     }
 
@@ -232,7 +234,9 @@ impl PyRpcClient {
                 .await
                 .map_err(to_py_err)?;
 
-            Ok(Python::with_gil(|py| PyBytes::new_bound(py, &response).into_py(py)))
+            Ok(Python::with_gil(|py| {
+                PyBytes::new_bound(py, &response).into_py(py)
+            }))
         })
     }
 

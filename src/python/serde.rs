@@ -72,9 +72,10 @@ impl SerdeValue {
         }
 
         // If nothing matched, error
-        Err(pyo3::exceptions::PyTypeError::new_err(
-            format!("Cannot convert Python type {} to SerdeValue", obj.get_type().name()?),
-        ))
+        Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "Cannot convert Python type {} to SerdeValue",
+            obj.get_type().name()?
+        )))
     }
 
     /// Convert a SerdeValue to a Python object
@@ -182,7 +183,10 @@ pub fn python_to_msgpack_py<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py,
 
         // Serialize directly to MessagePack
         let bytes = rmp_serde::to_vec(&map).map_err(|e| {
-            pyo3::exceptions::PyValueError::new_err(format!("MessagePack serialization failed: {}", e))
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "MessagePack serialization failed: {}",
+                e
+            ))
         })?;
 
         Ok(PyBytes::new_bound(obj.py(), &bytes))
@@ -229,14 +233,20 @@ fn python_value_to_msgpack_value(obj: &Bound<'_, PyAny>) -> PyResult<rmpv::Value
 #[pyfunction]
 pub fn msgpack_to_python_py<'py>(py: Python<'py>, bytes: &[u8]) -> PyResult<Bound<'py, PyAny>> {
     let value: rmpv::Value = rmp_serde::from_slice(bytes).map_err(|e| {
-        pyo3::exceptions::PyValueError::new_err(format!("MessagePack deserialization failed: {}", e))
+        pyo3::exceptions::PyValueError::new_err(format!(
+            "MessagePack deserialization failed: {}",
+            e
+        ))
     })?;
 
     msgpack_value_to_python(py, &value)
 }
 
 /// Convert rmpv::Value to Python object
-fn msgpack_value_to_python<'py>(py: Python<'py>, value: &rmpv::Value) -> PyResult<Bound<'py, PyAny>> {
+fn msgpack_value_to_python<'py>(
+    py: Python<'py>,
+    value: &rmpv::Value,
+) -> PyResult<Bound<'py, PyAny>> {
     match value {
         rmpv::Value::Nil => Ok(py.None().into_bound(py)),
         rmpv::Value::Boolean(b) => Ok(b.into_py(py).into_bound(py)),
@@ -246,7 +256,9 @@ fn msgpack_value_to_python<'py>(py: Python<'py>, value: &rmpv::Value) -> PyResul
             } else if let Some(val) = i.as_u64() {
                 Ok(val.into_py(py).into_bound(py))
             } else {
-                Err(pyo3::exceptions::PyValueError::new_err("Integer out of range"))
+                Err(pyo3::exceptions::PyValueError::new_err(
+                    "Integer out of range",
+                ))
             }
         }
         rmpv::Value::F32(f) => Ok((*f as f64).into_py(py).into_bound(py)),
@@ -269,7 +281,9 @@ fn msgpack_value_to_python<'py>(py: Python<'py>, value: &rmpv::Value) -> PyResul
             }
             Ok(dict.into_any())
         }
-        rmpv::Value::Ext(_, _) => Err(pyo3::exceptions::PyValueError::new_err("Extension types not supported")),
+        rmpv::Value::Ext(_, _) => Err(pyo3::exceptions::PyValueError::new_err(
+            "Extension types not supported",
+        )),
     }
 }
 
@@ -291,9 +305,15 @@ mod tests {
         match deserialized {
             SerdeValue::Dict(entries) => {
                 assert_eq!(entries.len(), 3);
-                assert!(entries.iter().any(|(k, v)| k == "name" && matches!(v, SerdeValue::String(s) if s == "Alice")));
-                assert!(entries.iter().any(|(k, v)| k == "age" && matches!(v, SerdeValue::I64(30))));
-                assert!(entries.iter().any(|(k, v)| k == "active" && matches!(v, SerdeValue::Bool(true))));
+                assert!(entries.iter().any(
+                    |(k, v)| k == "name" && matches!(v, SerdeValue::String(s) if s == "Alice")
+                ));
+                assert!(entries
+                    .iter()
+                    .any(|(k, v)| k == "age" && matches!(v, SerdeValue::I64(30))));
+                assert!(entries
+                    .iter()
+                    .any(|(k, v)| k == "active" && matches!(v, SerdeValue::Bool(true))));
             }
             _ => panic!("Expected Dict variant"),
         }

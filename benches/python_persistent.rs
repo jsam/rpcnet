@@ -42,8 +42,7 @@ async fn setup_rust_server(port: u16) -> Result<SocketAddr, RpcError> {
         .register("echo", |data: Vec<u8>| async move {
             let value: HashMap<String, Vec<u8>> = rmp_serde::from_slice(&data)
                 .map_err(|e| RpcError::InternalError(format!("Deser: {}", e)))?;
-            rmp_serde::to_vec(&value)
-                .map_err(|e| RpcError::InternalError(format!("Ser: {}", e)))
+            rmp_serde::to_vec(&value).map_err(|e| RpcError::InternalError(format!("Ser: {}", e)))
         })
         .await;
 
@@ -52,7 +51,10 @@ async fn setup_rust_server(port: u16) -> Result<SocketAddr, RpcError> {
 
     let mut server_clone = server.clone();
     tokio::spawn(async move {
-        server_clone.start(quic_server).await.expect("Server failed");
+        server_clone
+            .start(quic_server)
+            .await
+            .expect("Server failed");
     });
 
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -144,15 +146,18 @@ impl PersistentPythonClient {
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
 
-        let mut process = cmd.spawn().or_else(|_| {
-            Command::new("python3")
-                .arg("-c")
-                .arg(&script)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::inherit())
-                .spawn()
-        }).map_err(|e| format!("Failed to spawn Python: {}", e))?;
+        let mut process = cmd
+            .spawn()
+            .or_else(|_| {
+                Command::new("python3")
+                    .arg("-c")
+                    .arg(&script)
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::inherit())
+                    .spawn()
+            })
+            .map_err(|e| format!("Failed to spawn Python: {}", e))?;
 
         let stdin = process.stdin.take().unwrap();
         let stdout = BufReader::new(process.stdout.take().unwrap());
