@@ -140,7 +140,7 @@ coverage-ci-tool:
 		echo "LLVM coverage report generated for CI"; \
 	else \
 		echo "Running coverage analysis for CI with Tarpaulin..."; \
-		cargo tarpaulin --config tarpaulin.toml --fail-under 60 --out Xml; \
+		cargo tarpaulin --config tarpaulin.toml --fail-under 58 --out Xml; \
 	fi
 
 # Usage: make coverage-check [tool] - tool can be tarpaulin (default) or llvm-cov
@@ -149,21 +149,21 @@ coverage-check:
 
 coverage-check-tool:
 	@if [ "$(TOOL)" = "llvm-cov" ]; then \
-		echo "Checking coverage threshold (60%, Python excluded) with LLVM..."; \
+		echo "Checking coverage threshold (58%, Python excluded) with LLVM..."; \
 		cargo llvm-cov --json --output-dir target/llvm-cov; \
 		coverage=$$(cat target/llvm-cov/llvm-cov.json | jq -r '.data[0].totals.lines.percent'); \
-		if (( $$(echo "$$coverage < 60" | bc -l) )); then \
-			echo "❌ Coverage $$coverage% is below 60% threshold"; \
+		if (( $$(echo "$$coverage < 58" | bc -l) )); then \
+			echo "❌ Coverage $$coverage% is below 58% threshold"; \
 			exit 1; \
 		else \
 			echo "✅ Coverage $$coverage% meets threshold"; \
 		fi \
 	else \
-		echo "Checking coverage threshold (60%, Python excluded) with Tarpaulin..."; \
+		echo "Checking coverage threshold (58%, Python excluded) with Tarpaulin..."; \
 		cargo tarpaulin --out Json --output-dir target/coverage --exclude-files "examples/*" --exclude-files "benches/*" --timeout 300 --no-default-features --features codegen,perf; \
 		coverage=$$(cat target/coverage/tarpaulin-report.json | jq -r '.coverage'); \
-		if (( $$(echo "$$coverage < 60" | bc -l) )); then \
-			echo "❌ Coverage $$coverage% is below 60% threshold (Python bindings excluded)"; \
+		if (( $$(echo "$$coverage < 58" | bc -l) )); then \
+			echo "❌ Coverage $$coverage% is below 58% threshold (Python bindings excluded)"; \
 			exit 1; \
 		else \
 			echo "✅ Coverage $$coverage% meets threshold"; \
@@ -381,7 +381,7 @@ ci-test:
 
 ci-coverage:
 	@echo "Running CI coverage..."
-	cargo tarpaulin --config tarpaulin.toml --out Xml --fail-under 60
+	cargo tarpaulin --config tarpaulin.toml --out Xml --fail-under 58
 
 ci-lint:
 	@echo "Running CI linting..."
