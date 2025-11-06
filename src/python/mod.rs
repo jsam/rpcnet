@@ -31,17 +31,17 @@ fn _rpcnet(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<streaming::PyAsyncStream>()?;
 
     // Register exception types
-    m.add("RpcError", py.get_type_bound::<error::PyRpcError>())?;
+    m.add("RpcError", py.get_type::<error::PyRpcError>())?;
     m.add(
         "ConnectionError",
-        py.get_type_bound::<error::PyConnectionError>(),
+        py.get_type::<error::PyConnectionError>(),
     )?;
-    m.add("TimeoutError", py.get_type_bound::<error::PyTimeoutError>())?;
+    m.add("TimeoutError", py.get_type::<error::PyTimeoutError>())?;
     m.add(
         "SerializationError",
-        py.get_type_bound::<error::PySerializationError>(),
+        py.get_type::<error::PySerializationError>(),
     )?;
-    m.add("TlsError", py.get_type_bound::<error::PyTlsError>())?;
+    m.add("TlsError", py.get_type::<error::PyTlsError>())?;
 
     // Register serialization functions
     m.add_function(wrap_pyfunction!(serde::python_to_bincode_py, m)?)?;

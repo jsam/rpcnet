@@ -58,7 +58,7 @@ impl PyAsyncStream {
                 Some(Ok(data)) => {
                     // Return the data
                     Ok(Python::with_gil(|py| {
-                        PyBytes::new_bound(py, &data).into_py(py)
+                        PyBytes::new(py, &data).unbind()
                     }))
                 }
                 Some(Err(e)) => {
@@ -94,11 +94,11 @@ impl PyAsyncStream {
 
             // Create Python list from collected items
             Ok(Python::with_gil(|py| {
-                let py_list = pyo3::types::PyList::empty_bound(py);
+                let py_list = pyo3::types::PyList::empty(py);
                 for item in items {
-                    let _ = py_list.append(PyBytes::new_bound(py, &item));
+                    let _ = py_list.append(PyBytes::new(py, &item));
                 }
-                py_list.into_any().into_py(py)
+                py_list.into_any().unbind()
             }))
         })
     }

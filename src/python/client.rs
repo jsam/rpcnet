@@ -100,7 +100,7 @@ impl PyRpcClient {
             let result = client.call(&method, params).await.map_err(to_py_err)?;
 
             Ok(Python::with_gil(|py| {
-                PyBytes::new_bound(py, &result).into_py(py)
+                PyBytes::new(py, &result).unbind()
             }))
         })
     }
@@ -141,7 +141,7 @@ impl PyRpcClient {
                 .map_err(to_py_err)?;
 
             Ok(Python::with_gil(|py| {
-                PyBytes::new_bound(py, &result).into_py(py)
+                PyBytes::new(py, &result).unbind()
             }))
         })
     }
@@ -237,7 +237,7 @@ impl PyRpcClient {
                 .map_err(to_py_err)?;
 
             Ok(Python::with_gil(|py| {
-                PyBytes::new_bound(py, &response).into_py(py)
+                PyBytes::new(py, &response).unbind()
             }))
         })
     }

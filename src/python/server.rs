@@ -73,7 +73,7 @@ impl PyRpcServer {
                 async move {
                     // Create coroutine and convert to Rust future in one step
                     let future = Python::with_gil(|py| -> Result<_, crate::RpcError> {
-                        let params_bytes = PyBytes::new_bound(py, &params);
+                        let params_bytes = PyBytes::new(py, &params);
 
                         // Call Python async function
                         let coroutine = handler.call1(py, (params_bytes,)).map_err(|e| {

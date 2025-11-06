@@ -221,6 +221,9 @@ fn test_threads_from_env_with_hex() {
 #[test]
 fn test_server_worker_threads_idempotent() {
     // Calling multiple times should return same result
+    // Clean up first to avoid interference from other tests
+    env::remove_var(runtime::SERVER_THREADS_ENV);
+
     env::set_var(runtime::SERVER_THREADS_ENV, "7");
 
     let threads1 = runtime::server_worker_threads();
