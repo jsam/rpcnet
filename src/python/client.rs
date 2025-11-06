@@ -99,9 +99,7 @@ impl PyRpcClient {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = client.call(&method, params).await.map_err(to_py_err)?;
 
-            Ok(Python::with_gil(|py| {
-                PyBytes::new(py, &result).unbind()
-            }))
+            Ok(Python::with_gil(|py| PyBytes::new(py, &result).unbind()))
         })
     }
 
@@ -140,9 +138,7 @@ impl PyRpcClient {
                 .map_err(|_| to_py_err(crate::RpcError::Timeout))?
                 .map_err(to_py_err)?;
 
-            Ok(Python::with_gil(|py| {
-                PyBytes::new(py, &result).unbind()
-            }))
+            Ok(Python::with_gil(|py| PyBytes::new(py, &result).unbind()))
         })
     }
 
@@ -236,9 +232,7 @@ impl PyRpcClient {
                 .await
                 .map_err(to_py_err)?;
 
-            Ok(Python::with_gil(|py| {
-                PyBytes::new(py, &response).unbind()
-            }))
+            Ok(Python::with_gil(|py| PyBytes::new(py, &response).unbind()))
         })
     }
 

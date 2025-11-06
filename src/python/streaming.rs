@@ -57,9 +57,7 @@ impl PyAsyncStream {
             match stream_guard.next().await {
                 Some(Ok(data)) => {
                     // Return the data
-                    Ok(Python::with_gil(|py| {
-                        PyBytes::new(py, &data).unbind()
-                    }))
+                    Ok(Python::with_gil(|py| PyBytes::new(py, &data).unbind()))
                 }
                 Some(Err(e)) => {
                     // Convert error and raise in Python

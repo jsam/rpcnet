@@ -32,10 +32,7 @@ fn _rpcnet(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Register exception types
     m.add("RpcError", py.get_type::<error::PyRpcError>())?;
-    m.add(
-        "ConnectionError",
-        py.get_type::<error::PyConnectionError>(),
-    )?;
+    m.add("ConnectionError", py.get_type::<error::PyConnectionError>())?;
     m.add("TimeoutError", py.get_type::<error::PyTimeoutError>())?;
     m.add(
         "SerializationError",

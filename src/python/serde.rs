@@ -82,6 +82,7 @@ impl SerdeValue {
     }
 
     /// Convert a SerdeValue to a Python object
+    #[allow(deprecated)]
     pub fn to_python<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         match self {
             SerdeValue::Null => Ok(py.None().into_bound(py)),
@@ -246,6 +247,7 @@ pub fn msgpack_to_python_py<'py>(py: Python<'py>, bytes: &[u8]) -> PyResult<Boun
 }
 
 /// Convert rmpv::Value to Python object
+#[allow(deprecated)]
 fn msgpack_value_to_python<'py>(
     py: Python<'py>,
     value: &rmpv::Value,

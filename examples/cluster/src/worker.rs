@@ -4,7 +4,7 @@ use cluster_example::generated::inference::*;
 use futures::Stream;
 use futures::StreamExt;
 use rpcnet::cluster::ClusterConfig;
-use rpcnet::{RpcConfig, RpcError};
+use rpcnet::RpcConfig;
 use s2n_quic::Client as QuicClient;
 use std::env;
 use std::net::SocketAddr;
@@ -14,13 +14,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use rand::Rng;
 
 struct WorkerHandler {
     worker_label: String,
     is_failed: Arc<AtomicBool>,
-    failure_enabled: bool,
+    _failure_enabled: bool,
 }
 
 #[async_trait]
@@ -30,7 +30,6 @@ impl InferenceHandler for WorkerHandler {
         request: Pin<Box<dyn Stream<Item = InferenceRequest> + Send>>,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<InferenceResponse, InferenceError>> + Send>>, InferenceError> {
         let name = self.worker_label.clone();
-        let worker_label = self.worker_label.clone();
         let is_failed = self.is_failed.clone();
         
         if is_failed.load(Ordering::SeqCst) {
@@ -39,8 +38,7 @@ impl InferenceHandler for WorkerHandler {
         }
         
         info!("🎬 [{}] Streaming handler invoked", name);
-        
-        let failure_enabled = self.failure_enabled;
+
         let response_stream = async_stream::stream! {
             let mut request_stream = Box::pin(request);
             let mut conn_id = String::new();
@@ -147,7 +145,7 @@ async fn main() -> Result<()> {
     let handler = WorkerHandler {
         worker_label: worker_label.clone(),
         is_failed: is_failed.clone(),
-        failure_enabled: worker_failure_enabled,
+        _failure_enabled: worker_failure_enabled,
     };
     
     let mut server = InferenceServer::new(handler, config.clone());
