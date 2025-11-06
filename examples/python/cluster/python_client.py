@@ -54,8 +54,8 @@ async def main():
     print()
 
     try:
-        # Step 1: Connect to director
-        print("1️⃣  Connecting to director...")
+        # Step 1: Connect to director registry
+        print("1️⃣  Connecting to director registry...")
         director = await DirectorRegistryClient.connect(
             DIRECTOR_ADDR,
             cert_path=cert_path,
@@ -86,7 +86,7 @@ async def main():
                     print(f"      ⚠️  {worker_info.message}")
 
             except Exception as e:
-                if "NoWorkersAvailable" in str(e):
+                if "NoWorkersAvailable" in str(e) or "NOWORKERSAVAILABLE" in str(e):
                     print(f"   Request {i+1}: ❌ No workers available")
                     if i == 0:
                         print()

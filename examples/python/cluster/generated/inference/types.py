@@ -11,14 +11,14 @@ class InferenceResponse(Enum):
     DONE = 3
 
 
+class InferenceError(Enum):
+    WORKERFAILED = 0
+    INVALIDREQUEST = 1
+
+
 @dataclass
 class InferenceRequest:
     connection_id: str
     prompt: str
-
-
-class InferenceError(Enum):
-    WORKERFAILED = 0
-    INVALIDREQUEST = 1
 
 

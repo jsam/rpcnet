@@ -5,9 +5,12 @@ from enum import Enum
 import json
 
 @dataclass
-class GetWorkerRequest:
-    connection_id: Optional[str]
-    prompt: str
+class GetWorkerResponse:
+    success: bool
+    worker_addr: Optional[str]
+    worker_label: Optional[str]
+    connection_id: str
+    message: Optional[str]
 
 
 class DirectorError(Enum):
@@ -16,11 +19,8 @@ class DirectorError(Enum):
 
 
 @dataclass
-class GetWorkerResponse:
-    success: bool
-    worker_addr: Optional[str]
-    worker_label: Optional[str]
-    connection_id: str
-    message: Optional[str]
+class GetWorkerRequest:
+    connection_id: Optional[str]
+    prompt: str
 
 

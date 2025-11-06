@@ -59,7 +59,5 @@ class InferenceClient:
         # Yield deserialized responses
         async for response_bytes in response_stream:
             response_dict = _rpcnet.msgpack_to_python_py(response_bytes)
-            # Rust enum is serialized as {"VariantName": {fields}} or {"VariantName": null}
-            # Just yield the dict directly for now
-            yield response_dict
+            yield InferenceResponse(**response_dict)
 

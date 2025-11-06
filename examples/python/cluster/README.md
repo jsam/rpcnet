@@ -36,178 +36,245 @@ This example shows how to:
 
 ## Generated Code Structure
 
+This example includes generated Python bindings for the actual cluster services:
+
 ```
 generated/
-├── compute/          # Compute service (worker API)
+├── directorregistry/  # Director registry service (coordinator)
 │   ├── __init__.py
-│   ├── types.py      # ComputeRequest, ComputeResponse, ComputeError
-│   ├── client.py     # ComputeClient for calling workers
-│   └── server.py     # ComputeServer for implementing workers
+│   ├── types.py       # GetWorkerRequest, GetWorkerResponse, DirectorError
+│   ├── client.py      # DirectorRegistryClient
+│   └── server.py      # DirectorRegistryServer
 │
-└── registry/         # Registry service (director API)
+└── inference/         # Inference service (worker)
     ├── __init__.py
-    ├── types.py      # GetWorkerRequest, GetWorkerResponse, RegistryError
-    ├── client.py     # RegistryClient for calling director
-    └── server.py     # RegistryServer for implementing director
+    ├── types.py       # InferenceRequest, InferenceResponse, InferenceError
+    ├── client.py      # InferenceClient
+    └── server.py      # InferenceServer
 ```
+
+These bindings are generated from the **actual service definitions** used by the running Rust cluster in `examples/cluster/`.
 
 ## Service Definitions
 
-### `compute.rpc.rs` - Worker Compute Service
+### `director_registry.rpc.rs` - Director Registry Service
+
+This is the **actual service** used by the running Rust director:
 
 ```rust
 #[rpcnet::service]
-pub trait Compute {
-    async fn process(
-        &self,
-        request: ComputeRequest
-    ) -> Result<ComputeResponse, ComputeError>;
-}
-```
-
-**Python Usage:**
-```python
-from generated.compute import ComputeClient, ComputeRequest
-
-# Connect to worker
-client = await ComputeClient.connect(
-    "127.0.0.1:62001",
-    cert_path="certs/test_cert.pem",
-    server_name="localhost"
-)
-
-# Call compute service
-request = ComputeRequest(task_id="task-1", data="process this")
-response = await client.process(request)
-print(f"Result: {response.result} from {response.worker_id}")
-```
-
-### `registry.rpc.rs` - Director Registry Service
-
-```rust
-#[rpcnet::service]
-pub trait Registry {
+pub trait DirectorRegistry {
     async fn get_worker(
         &self,
         request: GetWorkerRequest
-    ) -> Result<GetWorkerResponse, RegistryError>;
+    ) -> Result<GetWorkerResponse, DirectorError>;
 }
 ```
 
 **Python Usage:**
 ```python
-from generated.registry import RegistryClient, GetWorkerRequest
+from directorregistry import DirectorRegistryClient, GetWorkerRequest
 
 # Connect to director
-client = await RegistryClient.connect(
+director = await DirectorRegistryClient.connect(
     "127.0.0.1:61000",
-    cert_path="certs/test_cert.pem",
+    cert_path="../../../certs/test_cert.pem",
     server_name="localhost"
 )
 
 # Get an available worker
-request = GetWorkerRequest(client_id="python-client")
-response = await client.get_worker(request)
-print(f"Got worker: {response.worker_addr}")
+worker_info = await director.get_worker(
+    GetWorkerRequest(
+        connection_id=None,
+        prompt="Request from Python"
+    )
+)
+
+if worker_info.success:
+    print(f"Got worker: {worker_info.worker_label} at {worker_info.worker_addr}")
+```
+
+### `inference.rpc.rs` - Worker Inference Service
+
+This is the **actual service** used by the running Rust workers:
+
+```rust
+#[rpcnet::service]
+pub trait Inference {
+    async fn infer(
+        &self,
+        request: InferenceRequest
+    ) -> Result<InferenceResponse, InferenceError>;
+}
+```
+
+**Python Usage:**
+```python
+from inference import InferenceClient, InferenceRequest
+
+# Connect to worker (get address from director first)
+worker = await InferenceClient.connect(
+    worker_info.worker_addr,
+    cert_path="../../../certs/test_cert.pem",
+    server_name="localhost"
+)
+
+# Send inference request
+response = await worker.infer(
+    InferenceRequest(
+        connection_id=worker_info.connection_id,
+        prompt="Hello from Python!"
+    )
+)
+print(f"Response: {response.response} from {response.worker_label}")
 ```
 
 ## Generating Python Code
 
+**Important**: The Python bindings must match the actual Rust cluster services.
+
 ```bash
 # From project root directory
 
-# Generate Compute service bindings
-cargo run --bin rpcnet-gen --features codegen,python -- \
-  --input examples/python/cluster/compute.rpc.rs \
+# 1. Build the code generator
+cargo build --release --bin rpcnet-gen --features codegen,python
+
+# 2. Generate DirectorRegistry service bindings (matches running director)
+./target/release/rpcnet-gen \
+  --input examples/python/cluster/director_registry.rpc.rs \
   --output examples/python/cluster/generated \
   --python
 
-# Generate Registry service bindings
-cargo run --bin rpcnet-gen --features codegen,python -- \
-  --input examples/python/cluster/registry.rpc.rs \
+# 3. Generate Inference service bindings (matches running workers)
+./target/release/rpcnet-gen \
+  --input examples/python/cluster/inference.rpc.rs \
   --output examples/python/cluster/generated \
   --python
 ```
 
+**Note**: The service definitions (`director_registry.rpc.rs`, `inference.rpc.rs`) are copied from `examples/cluster/` to ensure they match the running services.
+
 ## Running the Example
 
-### 1. Start the Rust Cluster
+### Prerequisites
 
-The actual cluster runs in Rust. See `examples/cluster/README.md` for details:
-
+1. **Generate TLS Certificates** (if not already done):
 ```bash
-# Terminal 1 - Director
+mkdir -p certs
+cd certs
+openssl req -x509 -newkey rsa:4096 -keyout test_key.pem -out test_cert.pem \
+  -days 365 -nodes -subj "/CN=localhost"
+cd ..
+```
+
+2. **Build Python Bindings**:
+```bash
+# From project root
+maturin develop --features python --release
+```
+
+3. **Install Python Dependencies**:
+```bash
+pip install -r examples/python/cluster/requirements.txt
+```
+
+### Step 1: Start the Rust Cluster
+
+The Python clients connect to the actual Rust cluster. Start the cluster components in separate terminals:
+
+**Terminal 1 - Director (Coordinator)**:
+```bash
 DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
   cargo run --manifest-path examples/cluster/Cargo.toml --bin director
+```
 
-# Terminal 2 - Worker A
+**Terminal 2 - Worker A**:
+```bash
 WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \
   DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
   cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+```
 
-# Terminal 3 - Worker B
+**Terminal 3 - Worker B (Optional - for load balancing demo)**:
+```bash
 WORKER_LABEL=worker-b WORKER_ADDR=127.0.0.1:62002 \
   DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
   cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
 ```
 
-### 2. Use Python Client (Optional)
+### Step 2: Run Python Clients
 
-Once the Rust cluster is running, you can interact with it from Python:
+Once the Rust cluster is running, test the Python clients:
 
+**Simple Client (Director only)**:
 ```bash
-# Install Python dependencies
-cd examples/python/cluster
-pip install -r requirements.txt
-
-# Build Python bindings
-cd ../../..  # Back to project root
-maturin develop --features python --release
-
-# Run Python client
 python examples/python/cluster/python_client.py
 ```
 
-## Python Client Example
+**Streaming Client (Full workflow - Director + Worker)**:
+```bash
+python examples/python/cluster/python_streaming_client.py
+```
 
-See `python_client.py` for a complete example:
+## Python Client Examples
+
+### Simple Client (`python_client.py`)
+
+Demonstrates connecting to the director and requesting workers:
 
 ```python
 import asyncio
-from generated.registry import RegistryClient, GetWorkerRequest
-from generated.compute import ComputeClient, ComputeRequest
+from directorregistry import DirectorRegistryClient, GetWorkerRequest
 
 async def main():
-    # 1. Connect to director
-    director = await RegistryClient.connect(
+    # Connect to director
+    director = await DirectorRegistryClient.connect(
         "127.0.0.1:61000",
-        cert_path="certs/test_cert.pem",
+        cert_path="../../../certs/test_cert.pem",
         server_name="localhost"
     )
 
-    # 2. Get available worker
-    worker_info = await director.get_worker(
-        GetWorkerRequest(client_id="python-client")
-    )
-    print(f"Got worker: {worker_info.worker_addr}")
-
-    # 3. Connect to worker
-    worker = await ComputeClient.connect(
-        worker_info.worker_addr,
-        cert_path="certs/test_cert.pem",
-        server_name="localhost"
-    )
-
-    # 4. Send compute task
-    response = await worker.process(
-        ComputeRequest(
-            task_id="task-1",
-            data="Hello from Python!"
+    # Request workers (tests load balancing)
+    for i in range(5):
+        worker_info = await director.get_worker(
+            GetWorkerRequest(
+                connection_id=None,
+                prompt=f"Request {i+1} from Python"
+            )
         )
-    )
-    print(f"Result: {response.result}")
+
+        if worker_info.success:
+            print(f"Request {i+1}: {worker_info.worker_label} at {worker_info.worker_addr}")
 
 asyncio.run(main())
+```
+
+### Streaming Client (`python_streaming_client.py`)
+
+Demonstrates the full end-to-end workflow:
+
+1. Connect to director registry
+2. Get available worker
+3. Connect to worker
+4. Send inference requests
+5. Test load balancing
+
+```python
+# 1. Get worker from director
+director = await DirectorRegistryClient.connect("127.0.0.1:61000", ...)
+worker_info = await director.get_worker(GetWorkerRequest(...))
+
+# 2. Connect to worker
+worker = await InferenceClient.connect(worker_info.worker_addr, ...)
+
+# 3. Send inference request
+response = await worker.infer(
+    InferenceRequest(
+        connection_id=worker_info.connection_id,
+        prompt="Hello from Python!"
+    )
+)
+print(f"Response: {response.response}")
 ```
 
 ## Features Demonstrated
@@ -284,12 +351,15 @@ rpcnet-gen --input compute.rpc.rs --output generated --python --types-only
 
 ## Files
 
-- `compute.rpc.rs` - Compute service definition
-- `registry.rpc.rs` - Registry service definition
+- `director_registry.rpc.rs` - Director registry service (from examples/cluster/)
+- `inference.rpc.rs` - Worker inference service (from examples/cluster/)
 - `generated/` - Generated Python bindings
-- `python_client.py` - Example Python client
+  - `directorregistry/` - Director client bindings
+  - `inference/` - Worker client bindings
+- `python_client.py` - Simple example (director only)
+- `python_streaming_client.py` - Full workflow example (director + worker)
 - `requirements.txt` - Python dependencies
-- `README.md` - This file
+- `README.md`, `QUICKSTART.md`, `SUMMARY.md` - Documentation
 
 ## See Also
 

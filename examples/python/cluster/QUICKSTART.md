@@ -3,75 +3,124 @@
 ## TL;DR
 
 ```bash
-# 1. Generate Python bindings (already done)
-ls generated/compute generated/registry
+# 1. Generate TLS certificates (if needed)
+mkdir -p certs && cd certs
+openssl req -x509 -newkey rsa:4096 -keyout test_key.pem -out test_cert.pem \
+  -days 365 -nodes -subj "/CN=localhost"
+cd ..
 
 # 2. Build Python module
-source .venv/bin/activate
 maturin develop --features python --release
 
-# 3. Start Rust cluster
-# Terminal 1
+# 3. Start Rust cluster (3 terminals)
+# Terminal 1 - Director
 DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
   cargo run --manifest-path examples/cluster/Cargo.toml --bin director
 
-# Terminal 2
-WORKER_ADDR=127.0.0.1:62001 DIRECTOR_ADDR=127.0.0.1:61000 \
+# Terminal 2 - Worker A
+WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \
+  DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
   cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
 
-# 4. Run Python client
-cd examples/python/cluster
-python python_client.py
+# 4. Run Python client (from project root)
+python examples/python/cluster/python_client.py
+
+# Or run the full workflow demo
+python examples/python/cluster/python_streaming_client.py
 ```
 
 ## What You'll See
 
+**Simple Client** (`python_client.py`):
 ```
 ====================================================================
-Python Client for RpcNet Cluster
+Python Client for RpcNet Cluster - Director Connection Demo
 ====================================================================
 
-📁 Using certificate: ../../certs/test_cert.pem
+📁 Using certificate: ../../../certs/test_cert.pem
 🎯 Director address: 127.0.0.1:61000
 
-1️⃣  Connecting to director...
+1️⃣  Connecting to director registry...
    ✅ Connected to director at 127.0.0.1:61000
 
-2️⃣  Requesting available worker...
-   ✅ Got worker: worker-a
-   📍 Address: 127.0.0.1:62001
-
-3️⃣  Connecting to worker...
-   ✅ Connected to worker
-
-4️⃣  Sending compute tasks...
-   📤 Sending task: task-1
-   📥 Result: Processed: Process this data
-      Worker: worker-a
+2️⃣  Requesting workers (testing load balancing)...
+   Request 1:
+      ✅ Worker: worker-a
+      📍 Address: 127.0.0.1:62001
+      🔗 Connection ID: conn-1234
 
    ...
 
 ✅ Python client completed successfully!
 ```
 
+**Streaming Client** (`python_streaming_client.py`):
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 1: Connecting to Director Registry                        │
+└─────────────────────────────────────────────────────────────────┘
+✅ Connected to director at 127.0.0.1:61000
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 2: Getting Available Worker                               │
+└─────────────────────────────────────────────────────────────────┘
+✅ Got worker: worker-a at 127.0.0.1:62001
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 3: Connecting to Worker                                   │
+└─────────────────────────────────────────────────────────────────┘
+✅ Connected to worker at 127.0.0.1:62001
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 4: Sending Inference Requests                             │
+└─────────────────────────────────────────────────────────────────┘
+Request 1/5:
+  ✅ Success (45.2ms)
+  📝 Prompt:   Hello, how are you?
+  📊 Response: I'm doing well, thank you for asking!
+  🔧 Worker:   worker-a
+
+...
+
+✅ Python Streaming Client Demo Completed Successfully!
+```
+
 ## How It Works
 
 ### 1. Service Definition (Rust)
 
+The actual running cluster uses these services:
+
 ```rust
-// compute.rpc.rs
+// director_registry.rpc.rs (from examples/cluster/)
 #[rpcnet::service]
-pub trait Compute {
-    async fn process(&self, request: ComputeRequest)
-        -> Result<ComputeResponse, ComputeError>;
+pub trait DirectorRegistry {
+    async fn get_worker(&self, request: GetWorkerRequest)
+        -> Result<GetWorkerResponse, DirectorError>;
+}
+
+// inference.rpc.rs (from examples/cluster/)
+#[rpcnet::service]
+pub trait Inference {
+    async fn infer(&self, request: InferenceRequest)
+        -> Result<InferenceResponse, InferenceError>;
 }
 ```
 
 ### 2. Generate Python Code
 
 ```bash
-cargo run --bin rpcnet-gen --features codegen,python -- \
-  --input examples/python/cluster/compute.rpc.rs \
+# Build code generator
+cargo build --release --bin rpcnet-gen --features codegen,python
+
+# Generate bindings (matching actual services)
+./target/release/rpcnet-gen \
+  --input examples/python/cluster/director_registry.rpc.rs \
+  --output examples/python/cluster/generated \
+  --python
+
+./target/release/rpcnet-gen \
+  --input examples/python/cluster/inference.rpc.rs \
   --output examples/python/cluster/generated \
   --python
 ```
@@ -79,56 +128,73 @@ cargo run --bin rpcnet-gen --features codegen,python -- \
 ### 3. Use in Python
 
 ```python
-from generated.compute import ComputeClient, ComputeRequest
+from directorregistry import DirectorRegistryClient, GetWorkerRequest
+from inference import InferenceClient, InferenceRequest
 
-# Connect
-client = await ComputeClient.connect(
-    "127.0.0.1:62001",
-    cert_path="certs/test_cert.pem"
+# Connect to director
+director = await DirectorRegistryClient.connect(
+    "127.0.0.1:61000",
+    cert_path="../../../certs/test_cert.pem"
 )
 
-# Call
-response = await client.process(
-    ComputeRequest(task_id="1", data="test")
+# Get worker
+worker_info = await director.get_worker(
+    GetWorkerRequest(connection_id=None, prompt="test")
 )
-print(response.result)
+
+# Connect to worker
+worker = await InferenceClient.connect(
+    worker_info.worker_addr,
+    cert_path="../../../certs/test_cert.pem"
+)
+
+# Send inference request
+response = await worker.infer(
+    InferenceRequest(
+        connection_id=worker_info.connection_id,
+        prompt="Hello!"
+    )
+)
+print(response.response)
 ```
 
 ## Files Generated
 
 ```
 generated/
-├── compute/
-│   ├── types.py      ← ComputeRequest, ComputeResponse
-│   ├── client.py     ← ComputeClient
-│   └── server.py     ← ComputeServer (to implement)
+├── directorregistry/        # Director service bindings
+│   ├── __init__.py
+│   ├── types.py             ← GetWorkerRequest, GetWorkerResponse, DirectorError
+│   ├── client.py            ← DirectorRegistryClient
+│   └── server.py            ← DirectorRegistryServer
 │
-└── registry/
-    ├── types.py      ← GetWorkerRequest, GetWorkerResponse
-    ├── client.py     ← RegistryClient
-    └── server.py     ← RegistryServer (to implement)
+└── inference/               # Worker service bindings
+    ├── __init__.py
+    ├── types.py             ← InferenceRequest, InferenceResponse, InferenceError
+    ├── client.py            ← InferenceClient
+    └── server.py            ← InferenceServer
 ```
 
-## Full Example
+##Full Example
 
-See `python_client.py` for complete working code:
+See `python_streaming_client.py` for complete working code:
 
 ```python
 import asyncio
-from generated.registry import RegistryClient, GetWorkerRequest
-from generated.compute import ComputeClient, ComputeRequest
+from directorregistry import DirectorRegistryClient, GetWorkerRequest
+from inference import InferenceClient, InferenceRequest
 
 async def main():
-    # Get worker from director
-    director = await RegistryClient.connect("127.0.0.1:61000", ...)
+    # 1. Get worker from director
+    director = await DirectorRegistryClient.connect("127.0.0.1:61000", ...)
     worker_info = await director.get_worker(GetWorkerRequest(...))
 
-    # Connect to worker
-    worker = await ComputeClient.connect(worker_info.worker_addr, ...)
+    # 2. Connect to worker
+    worker = await InferenceClient.connect(worker_info.worker_addr, ...)
 
-    # Send task
-    response = await worker.process(ComputeRequest(...))
-    print(response.result)
+    # 3. Send inference request
+    response = await worker.infer(InferenceRequest(...))
+    print(response.response)
 
 asyncio.run(main())
 ```
@@ -142,15 +208,17 @@ Build the Python module:
 maturin develop --features python --release
 ```
 
-### "Connection refused"
+### "Connection refused" or "Unknown method"
 
-Start the Rust cluster first:
+Start the Rust cluster first (must be running before Python clients):
 ```bash
 # Terminal 1 - Director
-DIRECTOR_ADDR=127.0.0.1:61000 cargo run --manifest-path examples/cluster/Cargo.toml --bin director
+DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin director
 
 # Terminal 2 - Worker
-WORKER_ADDR=127.0.0.1:62001 DIRECTOR_ADDR=127.0.0.1:61000 \
+WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \
+  DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
   cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
 ```
 

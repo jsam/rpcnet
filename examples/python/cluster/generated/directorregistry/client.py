@@ -1,6 +1,6 @@
 """Generated DirectorRegistry client"""
 import asyncio
-from typing import Optional
+from typing import Optional, AsyncIterable, AsyncIterator
 import _rpcnet
 from .types import *
 

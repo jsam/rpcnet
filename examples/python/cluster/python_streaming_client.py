@@ -2,51 +2,39 @@
 """
 Python streaming client for RpcNet cluster example.
 
-This demonstrates how to use the generated Python bindings for streaming RPC.
-It connects directly to a worker and uses the streaming generate() method.
+This demonstrates the complete end-to-end flow:
+1. Connect to director registry to get an available worker
+2. Connect to the worker
+3. Send compute tasks to the worker
+4. Handle responses
 
 Prerequisites:
-1. Run the Rust cluster (director + worker) first
-2. Build Python bindings: maturin develop --features python
+1. Run the Rust cluster (director + workers)
+2. Build Python bindings: maturin develop --features python --release
+3. Generate Python code for both services
 """
 
 import asyncio
 import sys
 import os
+import time
 
 # Add generated code to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'generated'))
 
-from directorregistry import DirectorRegistryClient, GetWorkerRequest
-from inference import InferenceClient, InferenceRequest, InferenceResponse
-
-
-async def generate_requests():
-    """Async generator that yields inference requests"""
-    prompts = [
-        "Hello, how are you?",
-        "What is the meaning of life?",
-        "Tell me a joke.",
-    ]
-
-    for i, prompt in enumerate(prompts):
-        print(f"   📤 Sending request {i+1}: {prompt}")
-        yield InferenceRequest(
-            connection_id="python-streaming-client",
-            prompt=prompt,
-        )
-        await asyncio.sleep(0.1)  # Small delay between requests
+from directorregistry import DirectorRegistryClient, GetWorkerRequest, DirectorError
+from inference import InferenceClient, InferenceRequest, InferenceError
 
 
 async def main():
     print("=" * 70)
-    print("Python Streaming Client for RpcNet Cluster - Inference Demo")
+    print("Python Streaming Client - Full Workflow Demo")
     print("=" * 70)
     print()
-    print("This demonstrates bidirectional streaming RPC:")
-    print("  • Client sends multiple requests as a stream")
-    print("  • Server generates responses as a stream")
-    print("  • All using Python async generators!")
+    print("This demonstrates:")
+    print("  1. Python → Rust Director (Registry service)")
+    print("  2. Python → Rust Worker (Compute service)")
+    print("  3. End-to-end task processing")
     print()
 
     # Configuration
@@ -70,75 +58,195 @@ async def main():
     print()
 
     try:
-        # Step 1: Connect to director to get a worker
-        print("1️⃣  Connecting to director to get a worker...")
+        # ===================================================================
+        # STEP 1: Connect to Director Registry
+        # ===================================================================
+        print("┌─────────────────────────────────────────────────────────────────┐")
+        print("│ STEP 1: Connecting to Director Registry                        │")
+        print("└─────────────────────────────────────────────────────────────────┘")
+        print()
+
         director = await DirectorRegistryClient.connect(
             DIRECTOR_ADDR,
             cert_path=cert_path,
             server_name="localhost",
             timeout_secs=5,
         )
-        print(f"   ✅ Connected to director")
-
-        # Get a worker
-        worker_info = await director.get_worker(
-            GetWorkerRequest(
-                connection_id=None,
-                prompt="Streaming demo request"
-            )
-        )
-
-        if not worker_info.success or not worker_info.worker_addr:
-            print(f"   ❌ No workers available: {worker_info.message}")
-            print()
-            print("   💡 Start a worker with:")
-            print("      WORKER_ADDR=127.0.0.1:62001 DIRECTOR_ADDR=127.0.0.1:61000 \\")
-            print("        cargo run --manifest-path examples/cluster/Cargo.toml --bin worker")
-            return 1
-
-        worker_addr = worker_info.worker_addr
-        print(f"   ✅ Got worker: {worker_info.worker_label} at {worker_addr}")
+        print(f"✅ Connected to director at {DIRECTOR_ADDR}")
         print()
 
-        # Step 2: Connect directly to the worker
-        print("2️⃣  Connecting to worker for streaming RPC...")
-        inference_client = await InferenceClient.connect(
-            worker_addr,
+        # ===================================================================
+        # STEP 2: Get Available Worker
+        # ===================================================================
+        print("┌─────────────────────────────────────────────────────────────────┐")
+        print("│ STEP 2: Getting Available Worker                               │")
+        print("└─────────────────────────────────────────────────────────────────┘")
+        print()
+
+        try:
+            worker_info = await director.get_worker(
+                GetWorkerRequest(
+                    connection_id=None,
+                    prompt="Streaming demo from Python"
+                )
+            )
+
+            if not worker_info.success or not worker_info.worker_addr:
+                print(f"❌ No workers available: {worker_info.message}")
+                print()
+                print("💡 Start a worker with:")
+                print("   WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \\")
+                print("     DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \\")
+                print("     cargo run --manifest-path examples/cluster/Cargo.toml --bin worker")
+                return 1
+
+            print(f"✅ Got worker assignment:")
+            print(f"   Worker:  {worker_info.worker_label}")
+            print(f"   Address: {worker_info.worker_addr}")
+            print(f"   Connection ID: {worker_info.connection_id}")
+            print()
+
+        except Exception as e:
+            if "NoWorkersAvailable" in str(e) or "NOWORKERSAVAILABLE" in str(e):
+                print("❌ No workers available")
+                print()
+                print("💡 Start a worker with:")
+                print("   WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \\")
+                print("     DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \\")
+                print("     cargo run --manifest-path examples/cluster/Cargo.toml --bin worker")
+                return 1
+            else:
+                raise
+
+        # ===================================================================
+        # STEP 3: Connect to Worker
+        # ===================================================================
+        print("┌─────────────────────────────────────────────────────────────────┐")
+        print("│ STEP 3: Connecting to Worker                                   │")
+        print("└─────────────────────────────────────────────────────────────────┘")
+        print()
+
+        worker = await InferenceClient.connect(
+            worker_info.worker_addr,
             cert_path=cert_path,
             server_name="localhost",
             timeout_secs=30,
         )
-        print(f"   ✅ Connected to worker at {worker_addr}")
+        print(f"✅ Connected to worker at {worker_info.worker_addr}")
         print()
 
-        # Step 3: Call streaming generate() method
-        print("3️⃣  Calling streaming generate() method...")
+        # ===================================================================
+        # STEP 4: Send Inference Requests
+        # ===================================================================
+        print("┌─────────────────────────────────────────────────────────────────┐")
+        print("│ STEP 4: Sending Inference Requests                             │")
+        print("└─────────────────────────────────────────────────────────────────┘")
         print()
 
-        response_count = 0
-        async for response in inference_client.generate(generate_requests()):
-            response_count += 1
-            print(f"   📥 Response {response_count}: {response}")
-            print()
+        prompts = [
+            "Hello, how are you?",
+            "What is the meaning of life?",
+            "Tell me a joke.",
+            "Explain quantum computing",
+            "Write a haiku about coding",
+        ]
 
+        print(f"📤 Sending {len(prompts)} inference requests to worker...")
+        print()
+
+        for i, prompt in enumerate(prompts, 1):
+            start_time = time.time()
+
+            try:
+                response = await worker.infer(
+                    InferenceRequest(
+                        connection_id=worker_info.connection_id,
+                        prompt=prompt
+                    )
+                )
+
+                elapsed = (time.time() - start_time) * 1000
+
+                print(f"Request {i}/{len(prompts)}:")
+                print(f"  ✅ Success ({elapsed:.1f}ms)")
+                print(f"  📝 Prompt:   {prompt}")
+                print(f"  📊 Response: {response.response}")
+                print(f"  🔧 Worker:   {response.worker_label}")
+                print()
+
+            except Exception as e:
+                elapsed = (time.time() - start_time) * 1000
+                print(f"Request {i}/{len(prompts)}:")
+                print(f"  ❌ Failed ({elapsed:.1f}ms)")
+                print(f"  ⚠️  Error: {e}")
+                print()
+
+        # ===================================================================
+        # STEP 5: Test Load Balancing (get multiple workers)
+        # ===================================================================
+        print("┌─────────────────────────────────────────────────────────────────┐")
+        print("│ STEP 5: Testing Load Balancing                                 │")
+        print("└─────────────────────────────────────────────────────────────────┘")
+        print()
+
+        print("📊 Requesting workers multiple times to test load balancing...")
+        print()
+
+        worker_counts = {}
+        num_requests = 10
+
+        for i in range(num_requests):
+            try:
+                info = await director.get_worker(
+                    GetWorkerRequest(
+                        connection_id=None,
+                        prompt=f"Load balance test {i+1}"
+                    )
+                )
+
+                if info.success and info.worker_label:
+                    worker_label = info.worker_label
+                    worker_counts[worker_label] = worker_counts.get(worker_label, 0) + 1
+                    print(f"  Request {i+1:2d}: {worker_label:<15} (total: {worker_counts[worker_label]})")
+                else:
+                    print(f"  Request {i+1:2d}: ⚠️  {info.message}")
+
+            except Exception as e:
+                print(f"  Request {i+1:2d}: ❌ {e}")
+
+        print()
+        print("📈 Load Distribution:")
+        for worker_label, count in sorted(worker_counts.items()):
+            percentage = (count / num_requests) * 100
+            bar = "█" * int(percentage / 5)
+            print(f"  {worker_label:<15} {bar} {count:2d} ({percentage:5.1f}%)")
+
+        # ===================================================================
+        # Summary
+        # ===================================================================
+        print()
         print("=" * 70)
-        print("✅ Streaming RPC completed successfully!")
+        print("✅ Python Streaming Client Demo Completed Successfully!")
+        print("=" * 70)
         print()
         print("What was demonstrated:")
-        print("  • Python async generator used for request stream")
-        print("  • Python async iterator used for response stream")
-        print("  • Bidirectional streaming over QUIC+TLS")
-        print("  • Method name: 'Inference.generate'")
-        print("  • Serialization: MessagePack (Python ↔ Rust)")
-        print(f"  • Total requests sent: 3")
-        print(f"  • Total responses received: {response_count}")
+        print("  ✅ Python → Rust director (DirectorRegistry.get_worker)")
+        print("  ✅ Python → Rust worker (Inference.infer)")
+        print("  ✅ End-to-end inference processing")
+        print("  ✅ Load balancing across workers")
+        print("  ✅ Type-safe Python bindings")
+        print("  ✅ MessagePack serialization (Python ↔ Rust)")
+        print("  ✅ QUIC+TLS transport")
         print()
-        print("Generated files:")
-        print("  • examples/python/cluster/generated/inference/")
-        print("    - types.py      (InferenceRequest, InferenceResponse, InferenceError)")
-        print("    - client.py     (InferenceClient with streaming support)")
-        print("    - server.py     (InferenceServer)")
+        print("Generated bindings used:")
+        print("  • generated/directorregistry/ (DirectorRegistryClient)")
+        print("  • generated/inference/ (InferenceClient)")
+        print()
+        print("Services:")
+        print(f"  • Director: {DIRECTOR_ADDR}")
+        print(f"  • Worker:   {worker_info.worker_addr}")
         print("=" * 70)
+
         return 0
 
     except ConnectionError as e:
@@ -146,13 +254,15 @@ async def main():
         print(f"❌ Connection error: {e}")
         print()
         print("💡 Make sure the Rust cluster is running:")
-        print("   Terminal 1 - Director:")
-        print("     DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \\")
-        print("       cargo run --manifest-path examples/cluster/Cargo.toml --bin director")
         print()
-        print("   Terminal 2 - Worker:")
-        print("     WORKER_ADDR=127.0.0.1:62001 DIRECTOR_ADDR=127.0.0.1:61000 \\")
-        print("       RUST_LOG=info cargo run --manifest-path examples/cluster/Cargo.toml --bin worker")
+        print("   # Terminal 1 - Director")
+        print("   DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \\")
+        print("     cargo run --manifest-path examples/cluster/Cargo.toml --bin director")
+        print()
+        print("   # Terminal 2 - Worker")
+        print("   WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \\")
+        print("     DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \\")
+        print("     cargo run --manifest-path examples/cluster/Cargo.toml --bin worker")
         return 1
     except Exception as e:
         print()

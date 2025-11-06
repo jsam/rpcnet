@@ -21,23 +21,23 @@ Python Client (generated bindings)
 
 ### 1. Service Definitions (`.rpc.rs`)
 
-Two RPC services defined in Rust:
+Two RPC services from the **actual running Rust cluster** (`examples/cluster/`):
 
-- **`compute.rpc.rs`**: Worker compute service
+- **`director_registry.rpc.rs`**: Director registry service
   ```rust
   #[rpcnet::service]
-  pub trait Compute {
-      async fn process(&self, request: ComputeRequest)
-          -> Result<ComputeResponse, ComputeError>;
+  pub trait DirectorRegistry {
+      async fn get_worker(&self, request: GetWorkerRequest)
+          -> Result<GetWorkerResponse, DirectorError>;
   }
   ```
 
-- **`registry.rpc.rs`**: Director registry service
+- **`inference.rpc.rs`**: Worker inference service
   ```rust
   #[rpcnet::service]
-  pub trait Registry {
-      async fn get_worker(&self, request: GetWorkerRequest)
-          -> Result<GetWorkerResponse, RegistryError>;
+  pub trait Inference {
+      async fn infer(&self, request: InferenceRequest)
+          -> Result<InferenceResponse, InferenceError>;
   }
   ```
 
@@ -47,57 +47,71 @@ Created with `rpcnet-gen --python`:
 
 ```
 generated/
-├── compute/
+├── directorregistry/
 │   ├── __init__.py      # Package exports
-│   ├── types.py         # ComputeRequest, ComputeResponse, ComputeError
-│   ├── client.py        # ComputeClient (async RPC client)
-│   └── server.py        # ComputeServer (for implementing workers in Python)
+│   ├── types.py         # GetWorkerRequest, GetWorkerResponse, DirectorError
+│   ├── client.py        # DirectorRegistryClient (async RPC client)
+│   └── server.py        # DirectorRegistryServer
 │
-└── registry/
+└── inference/
     ├── __init__.py      # Package exports
-    ├── types.py         # GetWorkerRequest, GetWorkerResponse, RegistryError
-    ├── client.py        # RegistryClient (async RPC client)
-    └── server.py        # RegistryServer (for implementing director in Python)
+    ├── types.py         # InferenceRequest, InferenceResponse, InferenceError
+    ├── client.py        # InferenceClient (async RPC client)
+    └── server.py        # InferenceServer
 ```
 
-### 3. Python Client Example
+### 3. Python Client Examples
 
-`python_client.py` - Full working example that:
-- Connects to Rust director
-- Gets available workers (with load balancing)
-- Sends compute tasks to workers
+**`python_client.py`** - Simple example that:
+- Connects to Rust director registry
+- Requests workers multiple times
+- Demonstrates load balancing
 - Handles errors gracefully
 - Uses Python async/await
+
+**`python_streaming_client.py`** - Full workflow example that:
+- Connects to director to get available worker
+- Connects to worker for inference
+- Sends multiple inference requests
+- Tests load balancing across workers
+- Shows complete end-to-end flow
 
 ### 4. Documentation
 
 - `README.md` - Complete usage guide
-- `requirements.txt` - Python dependencies (none needed!)
+- `QUICKSTART.md` - Quick start guide with TL;DR
 - `SUMMARY.md` - This file
+- `requirements.txt` - Python dependencies (none needed!)
 
 ## Key Features
 
 ### ✅ Type-Safe Python API
 
 ```python
-from generated.compute import ComputeClient, ComputeRequest
+from directorregistry import DirectorRegistryClient, GetWorkerRequest
+from inference import InferenceClient, InferenceRequest
 
-request = ComputeRequest(task_id="1", data="test")  # Type-safe!
-response = await client.process(request)
-print(response.result)  # Auto-completion works!
+# Connect to director
+director = await DirectorRegistryClient.connect("127.0.0.1:61000", ...)
+worker_info = await director.get_worker(GetWorkerRequest(...))  # Type-safe!
+
+# Connect to worker
+worker = await InferenceClient.connect(worker_info.worker_addr, ...)
+response = await worker.infer(InferenceRequest(prompt="Hello!"))
+print(response.response)  # Auto-completion works!
 ```
 
 ### ✅ Async/Await Support
 
 ```python
 # Non-blocking RPC calls
-response = await client.process(request)
+response = await worker.infer(request)
 
-# Works with asyncio
-await asyncio.gather(
-    client.process(req1),
-    client.process(req2),
-    client.process(req3),
+# Works with asyncio - send multiple requests in parallel
+responses = await asyncio.gather(
+    worker.infer(req1),
+    worker.infer(req2),
+    worker.infer(req3),
 )
 ```
 
@@ -105,10 +119,11 @@ await asyncio.gather(
 
 Python objects ↔ bytes handled automatically using MessagePack:
 ```python
-request = ComputeRequest(...)  # Python object
+request = InferenceRequest(prompt="Hello!")  # Python object
 # Automatically serialized to MessagePack bytes for cross-language compatibility
-response = await client.process(request)
+response = await worker.infer(request)
 # Automatically deserialized back to Python object
+print(response.response)  # Access fields directly
 ```
 
 ### ✅ Error Handling
@@ -116,11 +131,13 @@ response = await client.process(request)
 Service errors map to Python exceptions:
 ```python
 try:
-    response = await client.process(request)
-except ComputeError.WorkerBusy:
-    print("Worker busy")
-except ComputeError.ProcessingFailed as e:
-    print(f"Failed: {e}")
+    worker_info = await director.get_worker(request)
+    if not worker_info.success:
+        print(f"No workers available: {worker_info.message}")
+except DirectorError as e:
+    print(f"Director error: {e}")
+except InferenceError as e:
+    print(f"Inference error: {e}")
 ```
 
 ## How to Use
@@ -131,99 +148,113 @@ except ComputeError.ProcessingFailed as e:
 # Build rpcnet-gen with Python support
 cargo build --bin rpcnet-gen --features codegen,python --release
 
-# Generate compute service
-target/release/rpcnet-gen \
-  --input examples/python/cluster/compute.rpc.rs \
+# Generate DirectorRegistry service
+./target/release/rpcnet-gen \
+  --input examples/python/cluster/director_registry.rpc.rs \
   --output examples/python/cluster/generated \
   --python
 
-# Generate registry service
-target/release/rpcnet-gen \
-  --input examples/python/cluster/registry.rpc.rs \
+# Generate Inference service
+./target/release/rpcnet-gen \
+  --input examples/python/cluster/inference.rpc.rs \
   --output examples/python/cluster/generated \
   --python
 ```
 
-### 2. Build Python Module
+### 2. Generate TLS Certificates
+
+```bash
+mkdir -p certs && cd certs
+openssl req -x509 -newkey rsa:4096 -keyout test_key.pem -out test_cert.pem \
+  -days 365 -nodes -subj "/CN=localhost"
+cd ..
+```
+
+### 3. Build Python Module
 
 ```bash
 # From project root
-source .venv/bin/activate  # Or use uv venv
 maturin develop --features python --release
 ```
 
-### 3. Run Rust Cluster
+### 4. Run Rust Cluster
 
 ```bash
 # Terminal 1 - Director
 DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
   cargo run --manifest-path examples/cluster/Cargo.toml --bin director
 
-# Terminal 2 - Worker
-WORKER_ADDR=127.0.0.1:62001 DIRECTOR_ADDR=127.0.0.1:61000 \
-  RUST_LOG=info cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+# Terminal 2 - Worker A
+WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \
+  DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
 ```
 
-### 4. Run Python Client
+### 5. Run Python Clients
 
 ```bash
-cd examples/python/cluster
-python python_client.py
+# Simple client (director only)
+python examples/python/cluster/python_client.py
+
+# Full workflow (director + worker)
+python examples/python/cluster/python_streaming_client.py
 ```
 
 ## Generated Code Example
 
-### Types (`generated/compute/types.py`)
+### Types (`generated/directorregistry/types.py`)
 
 ```python
 from dataclasses import dataclass
 from enum import Enum
+from typing import Optional
 
 @dataclass
-class ComputeRequest:
-    task_id: str
-    data: str
+class GetWorkerRequest:
+    connection_id: Optional[str]
+    prompt: str
 
 @dataclass
-class ComputeResponse:
-    task_id: str
-    result: str
-    worker_id: str
+class GetWorkerResponse:
+    success: bool
+    worker_addr: Optional[str]
+    worker_label: Optional[str]
+    connection_id: str
+    message: Optional[str]
 
-class ComputeError(Enum):
-    WorkerBusy = "WorkerBusy"
-    InvalidInput = "InvalidInput"
-    ProcessingFailed = "ProcessingFailed"
+class DirectorError(Enum):
+    NoWorkersAvailable = "NoWorkersAvailable"
+    RegistryError = "RegistryError"
 ```
 
-### Client (`generated/compute/client.py`)
+### Client (`generated/directorregistry/client.py`)
 
 ```python
-class ComputeClient:
+class DirectorRegistryClient:
     @staticmethod
-    async def connect(addr: str, cert_path: str, ...) -> 'ComputeClient':
-        """Connect to Compute service"""
+    async def connect(addr: str, cert_path: str, ...) -> 'DirectorRegistryClient':
+        """Connect to DirectorRegistry service"""
         ...
 
-    async def process(self, request: ComputeRequest) -> ComputeResponse:
-        """Call process RPC method"""
+    async def get_worker(self, request: GetWorkerRequest) -> GetWorkerResponse:
+        """Call get_worker RPC method"""
         ...
 ```
 
-### Server (`generated/compute/server.py`)
+### Server (`generated/directorregistry/server.py`)
 
 ```python
-class ComputeServer:
-    """Implement this to create a Python worker"""
+class DirectorRegistryServer:
+    """Implement this to create a Python director"""
 
     async def register_handlers(self):
         """Register RPC handlers"""
         ...
 
-    async def process_impl(
+    async def get_worker_impl(
         self,
-        request: ComputeRequest
-    ) -> ComputeResponse:
+        request: GetWorkerRequest
+    ) -> GetWorkerResponse:
         """Implement this method"""
         raise NotImplementedError()
 ```
@@ -241,11 +272,11 @@ Use when:
 
 ### 2. Python Services with Rust Clients
 
-Implement `ComputeServer` in Python, call from Rust
+Implement `InferenceServer` in Python, call from Rust
 
 Use when:
 - Need rapid prototyping (Python is fast to write)
-- Integrating with Python ML libraries
+- Integrating with Python ML libraries (e.g., transformers, torch)
 - Building tools/scripts that expose RPC APIs
 
 ### 3. Polyglot Microservices
@@ -282,14 +313,16 @@ Python adds minimal overhead - most time is network/serialization.
 
 ```
 examples/python/cluster/
-├── compute.rpc.rs           # Compute service definition
-├── registry.rpc.rs          # Registry service definition
+├── director_registry.rpc.rs # Director registry service definition
+├── inference.rpc.rs         # Worker inference service definition
 ├── generated/               # Generated Python code
-│   ├── compute/            # Compute service bindings
-│   └── registry/           # Registry service bindings
-├── python_client.py         # Example Python client
+│   ├── directorregistry/   # Director service bindings
+│   └── inference/          # Worker service bindings
+├── python_client.py         # Simple example (director only)
+├── python_streaming_client.py # Full workflow example
 ├── requirements.txt         # Python dependencies
-├── README.md               # Usage guide
+├── README.md               # Complete usage guide
+├── QUICKSTART.md           # Quick start guide
 └── SUMMARY.md              # This file
 ```
 
@@ -297,19 +330,18 @@ examples/python/cluster/
 
 ### Implement Python Worker
 
-Create a Python worker that implements `ComputeServer`:
+Create a Python worker that implements `InferenceServer`:
 
 ```python
-from generated.compute import ComputeServer, ComputeRequest, ComputeResponse
+from inference import InferenceServer, InferenceRequest, InferenceResponse
 
-class MyWorker(ComputeServer):
-    async def process_impl(self, request: ComputeRequest) -> ComputeResponse:
-        # Process the request
-        result = f"Processed: {request.data}"
-        return ComputeResponse(
-            task_id=request.task_id,
-            result=result,
-            worker_id="python-worker-1"
+class MyWorker(InferenceServer):
+    async def infer_impl(self, request: InferenceRequest) -> InferenceResponse:
+        # Process the inference request
+        response_text = f"Processed: {request.prompt}"
+        return InferenceResponse(
+            response=response_text,
+            worker_label="python-worker-1"
         )
 
 # Run the worker
@@ -352,5 +384,5 @@ The generated Python code provides a Pythonic, type-safe way to interact with Rp
 
 **Status**: ✅ Complete and ready to use
 **Generated files**: 8 Python modules (types, clients, servers)
-**Example code**: Full working Python client
-**Documentation**: Complete usage guide
+**Example code**: Two working Python clients (simple + full workflow)
+**Documentation**: Complete usage guide + quick start
