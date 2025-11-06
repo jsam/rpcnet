@@ -59,5 +59,5 @@ class InferenceClient:
         # Yield deserialized responses
         async for response_bytes in response_stream:
             response_dict = _rpcnet.msgpack_to_python_py(response_bytes)
-            yield InferenceResponse(**response_dict)
+            yield deserialize_inferenceresponse(response_dict)
 

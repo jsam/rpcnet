@@ -69,12 +69,21 @@ generated/
 - Handles errors gracefully
 - Uses Python async/await
 
-**`python_streaming_client.py`** - Full workflow example that:
+**`python_streaming_client.py`** - Workflow example that:
 - Connects to director to get available worker
 - Connects to worker for inference
-- Sends multiple inference requests
+- Sends multiple unary inference requests
 - Tests load balancing across workers
 - Shows complete end-to-end flow
+- Note: Uses multiple unary calls, not true streaming
+
+**`python_real_streaming_client.py`** - True streaming example that:
+- Demonstrates bidirectional streaming RPC
+- Uses AsyncIterable for request streaming (client → server)
+- Uses AsyncIterator for response streaming (server → client)
+- Single streaming RPC call with continuous data flow
+- Shows proper use of `generate()` method
+- Lower latency and better resource utilization
 
 ### 4. Documentation
 

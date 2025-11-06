@@ -211,9 +211,14 @@ Once the Rust cluster is running, test the Python clients:
 python examples/python/cluster/python_client.py
 ```
 
-**Streaming Client (Full workflow - Director + Worker)**:
+**Workflow Client (Director + Worker, multiple unary calls)**:
 ```bash
 python examples/python/cluster/python_streaming_client.py
+```
+
+**Real Streaming Client (Bidirectional streaming with AsyncIterable/AsyncIterator)**:
+```bash
+python examples/python/cluster/python_real_streaming_client.py
 ```
 
 ## Python Client Examples
@@ -249,15 +254,17 @@ async def main():
 asyncio.run(main())
 ```
 
-### Streaming Client (`python_streaming_client.py`)
+### Workflow Client (`python_streaming_client.py`)
 
 Demonstrates the full end-to-end workflow:
 
 1. Connect to director registry
 2. Get available worker
 3. Connect to worker
-4. Send inference requests
+4. Send multiple inference requests (unary calls)
 5. Test load balancing
+
+**Note**: Despite the name, this makes multiple separate unary RPC calls, not true streaming.
 
 ```python
 # 1. Get worker from director
@@ -267,15 +274,55 @@ worker_info = await director.get_worker(GetWorkerRequest(...))
 # 2. Connect to worker
 worker = await InferenceClient.connect(worker_info.worker_addr, ...)
 
-# 3. Send inference request
-response = await worker.infer(
-    InferenceRequest(
-        connection_id=worker_info.connection_id,
-        prompt="Hello from Python!"
+# 3. Send multiple unary requests
+for prompt in prompts:
+    response = await worker.infer(
+        InferenceRequest(
+            connection_id=worker_info.connection_id,
+            prompt=prompt
+        )
     )
-)
-print(f"Response: {response.response}")
+    print(f"Response: {response.response}")
 ```
+
+### Real Streaming Client (`python_real_streaming_client.py`)
+
+Demonstrates **true bidirectional streaming** using the generated `generate()` method:
+
+1. Connect to director and get worker
+2. Connect to worker
+3. Create async generator for requests (client → server stream)
+4. Stream responses back (server → client stream)
+5. Process streamed responses
+
+**Key difference**: Single streaming RPC call with AsyncIterable/AsyncIterator.
+
+```python
+async def request_generator(connection_id, prompts):
+    """Generate streaming requests"""
+    for prompt in prompts:
+        yield InferenceRequest(
+            connection_id=connection_id,
+            prompt=prompt
+        )
+        await asyncio.sleep(0.1)  # Simulate streaming
+
+# Bidirectional streaming
+async for response in worker.generate(
+    request_generator(connection_id, prompts)
+):
+    # Handle streamed responses
+    if 'Token' in response or 'text' in response:
+        print(f"Token: {response.get('text')}")
+    elif 'Connected' in response:
+        print(f"Connected to: {response.get('worker')}")
+```
+
+**Benefits of true streaming**:
+- Lower latency (continuous data flow)
+- Less connection overhead
+- Better resource utilization
+- Native async iteration support
 
 ## Features Demonstrated
 

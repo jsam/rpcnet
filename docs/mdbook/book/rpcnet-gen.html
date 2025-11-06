@@ -239,6 +239,7 @@ Usage: rpcnet-gen [OPTIONS] --input &lt;INPUT&gt;
 Options:
   -i, --input &lt;INPUT&gt;    Input .rpc file (Rust source with service trait)
   -o, --output &lt;OUTPUT&gt;  Output directory for generated code [default: src/generated]
+      --python           Generate Python bindings instead of Rust code
       --server-only      Generate only server code
       --client-only      Generate only client code
       --types-only       Generate only type definitions
@@ -300,6 +301,53 @@ fn main() {
 }</code></pre></pre>
 <p>Each input produces a sibling directory under <code>src/generated/</code> (<code>user/</code>,
 <code>billing/</code>, <code>audit/</code>).</p>
+<h2 id="generating-python-bindings"><a class="header" href="#generating-python-bindings">Generating Python Bindings</a></h2>
+<p>The <code>--python</code> flag generates Python client and server code instead of Rust:</p>
+<pre><code class="language-bash"># Generate Python bindings
+rpcnet-gen --input greeting.rpc.rs --output generated --python
+</code></pre>
+<p>This produces Python packages with type-safe dataclasses and async APIs:</p>
+<pre><code>generated/
+└── greeting/
+    ├── __init__.py      # Package exports
+    ├── types.py         # GreetRequest, GreetResponse, GreetError
+    ├── client.py        # GreetingClient with async methods
+    └── server.py        # GreetingServer base class
+</code></pre>
+<h3 id="prerequisites-for-python"><a class="header" href="#prerequisites-for-python">Prerequisites for Python</a></h3>
+<p>Before using Python bindings, build the native <code>_rpcnet</code> module:</p>
+<pre><code class="language-bash"># Install maturin
+pip install maturin
+
+# Build Python module
+maturin develop --features python --release
+</code></pre>
+<h3 id="using-python-bindings"><a class="header" href="#using-python-bindings">Using Python Bindings</a></h3>
+<pre><code class="language-python">import asyncio
+from greeting import GreetingClient, GreetRequest
+
+async def main():
+    client = await GreetingClient.connect(
+        "127.0.0.1:50051",
+        cert_path="certs/test_cert.pem",
+        server_name="localhost"
+    )
+
+    response = await client.greet(GreetRequest(name="Alice"))
+    print(response.message)
+
+asyncio.run(main())
+</code></pre>
+<h3 id="key-differences-rust-vs-python"><a class="header" href="#key-differences-rust-vs-python">Key Differences: Rust vs Python</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Feature</th><th>Rust Generation</th><th>Python Generation</th></tr></thead><tbody>
+<tr><td><strong>Output</strong></td><td><code>.rs</code> files</td><td><code>.py</code> files</td></tr>
+<tr><td><strong>Serialization</strong></td><td>bincode</td><td>MessagePack</td></tr>
+<tr><td><strong>Types</strong></td><td>Rust structs/enums</td><td>Python dataclasses</td></tr>
+<tr><td><strong>Async</strong></td><td>Tokio</td><td>asyncio</td></tr>
+<tr><td><strong>Use Case</strong></td><td>Production services</td><td>Tooling, clients, prototyping</td></tr>
+</tbody></table>
+</div>
+<p>For complete documentation on Python bindings, see the <a href="python-bindings.html">Python Bindings</a> chapter.</p>
 <h2 id="version-control-strategy"><a class="header" href="#version-control-strategy">Version-Control Strategy</a></h2>
 <p>Generated code is ordinary Rust and can be committed. Most teams either:</p>
 <ol>
@@ -329,7 +377,7 @@ step: edit the <code>.rpc.rs</code> trait, regenerate, and keep building.</p>
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="cluster-example.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="python-bindings.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -343,7 +391,7 @@ step: edit the <code>.rpc.rs</code> trait, regenerate, and keep building.</p>
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="cluster-example.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="python-bindings.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

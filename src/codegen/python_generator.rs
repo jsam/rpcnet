@@ -25,7 +25,7 @@ impl PythonGenerator {
 
         code.push_str("\"\"\"Generated type definitions for RPC service\"\"\"\n");
         code.push_str("from dataclasses import dataclass\n");
-        code.push_str("from typing import Optional, List, Dict, Any\n");
+        code.push_str("from typing import Optional, List, Dict, Any, Union\n");
         code.push_str("from enum import Enum\n");
         code.push_str("import json\n\n");
 
@@ -87,6 +87,20 @@ impl PythonGenerator {
 
     /// Generate a Python enum from a Rust enum
     fn generate_enum(&self, name: &str, enum_item: &syn::ItemEnum) -> String {
+        // Check if any variant has fields (associated data)
+        let has_data = enum_item.variants.iter().any(|v| {
+            !matches!(v.fields, syn::Fields::Unit)
+        });
+
+        if has_data {
+            self.generate_enum_with_data(name, enum_item)
+        } else {
+            self.generate_simple_enum(name, enum_item)
+        }
+    }
+
+    /// Generate a simple Python enum (no associated data)
+    fn generate_simple_enum(&self, name: &str, enum_item: &syn::ItemEnum) -> String {
         let mut code = String::new();
 
         // Add docstring if available
@@ -108,7 +122,6 @@ impl PythonGenerator {
                     code.push_str(&format!("    # {}\n", doc.trim()));
                 }
 
-                // Simple enum: just assign integer values
                 code.push_str(&format!(
                     "    {} = {}\n",
                     variant_name.to_string().to_uppercase(),
@@ -116,6 +129,210 @@ impl PythonGenerator {
                 ));
             }
         }
+
+        code
+    }
+
+    /// Generate Python Union type for enums with associated data
+    fn generate_enum_with_data(&self, name: &str, enum_item: &syn::ItemEnum) -> String {
+        let mut code = String::new();
+
+        // Add docstring if available
+        if let Some(doc) = extract_doc_comment(&enum_item.attrs) {
+            code.push_str(&format!("\"\"\"{}\"\"\"", doc.trim()));
+            code.push('\n');
+        }
+
+        // Generate variant dataclasses
+        let mut variant_classes = Vec::new();
+        for variant in &enum_item.variants {
+            let variant_name = &variant.ident;
+            let class_name = format!("{}{}", name, variant_name);
+            variant_classes.push(class_name.clone());
+
+            code.push_str("@dataclass\n");
+            code.push_str(&format!("class {}:\n", class_name));
+
+            if let Some(doc) = extract_doc_comment(&variant.attrs) {
+                code.push_str(&format!("    \"\"\"{}\"\"\"", doc.trim()));
+                code.push('\n');
+            }
+
+            match &variant.fields {
+                syn::Fields::Named(fields) => {
+                    if fields.named.is_empty() {
+                        code.push_str("    pass\n");
+                    } else {
+                        for field in &fields.named {
+                            let field_name = field.ident.as_ref().unwrap();
+                            let field_type = self.map_rust_type_to_python(&field.ty);
+                            code.push_str(&format!("    {}: {}\n", field_name, field_type));
+                        }
+                    }
+                }
+                syn::Fields::Unnamed(fields) => {
+                    if fields.unnamed.is_empty() {
+                        code.push_str("    pass\n");
+                    } else {
+                        for (idx, field) in fields.unnamed.iter().enumerate() {
+                            let field_type = self.map_rust_type_to_python(&field.ty);
+                            code.push_str(&format!("    field_{}: {}\n", idx, field_type));
+                        }
+                    }
+                }
+                syn::Fields::Unit => {
+                    code.push_str("    pass\n");
+                }
+            }
+            code.push('\n');
+        }
+
+        // Generate Union type
+        code.push_str(&format!("{} = Union[\n", name));
+        for (idx, class_name) in variant_classes.iter().enumerate() {
+            let comma = if idx < variant_classes.len() - 1 { "," } else { "" };
+            code.push_str(&format!("    {}{}\n", class_name, comma));
+        }
+        code.push_str("]\n\n");
+
+        // Generate helper functions
+        code.push_str(&self.generate_enum_deserializer(name, enum_item));
+        code.push_str("\n\n");
+        code.push_str(&self.generate_enum_serializer(name, enum_item));
+
+        code
+    }
+
+    /// Map Rust type to Python type annotation
+    fn map_rust_type_to_python(&self, ty: &syn::Type) -> String {
+        match ty {
+            syn::Type::Path(type_path) => {
+                if let Some(segment) = type_path.path.segments.last() {
+                    let type_name = segment.ident.to_string();
+                    match type_name.as_str() {
+                        "String" | "str" => "str".to_string(),
+                        "i8" | "i16" | "i32" | "i64" | "i128" |
+                        "u8" | "u16" | "u32" | "u64" | "u128" |
+                        "isize" | "usize" => "int".to_string(),
+                        "f32" | "f64" => "float".to_string(),
+                        "bool" => "bool".to_string(),
+                        "Vec" => {
+                            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                                if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
+                                    return format!("List[{}]", self.map_rust_type_to_python(inner));
+                                }
+                            }
+                            "List[Any]".to_string()
+                        }
+                        "Option" => {
+                            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                                if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
+                                    return format!("Optional[{}]", self.map_rust_type_to_python(inner));
+                                }
+                            }
+                            "Optional[Any]".to_string()
+                        }
+                        _ => type_name,
+                    }
+                } else {
+                    "Any".to_string()
+                }
+            }
+            _ => "Any".to_string(),
+        }
+    }
+
+    /// Generate deserializer for enum with associated data
+    fn generate_enum_deserializer(&self, name: &str, enum_item: &syn::ItemEnum) -> String {
+        let mut code = String::new();
+        let fn_name = format!("deserialize_{}", name.to_lowercase());
+
+        code.push_str(&format!("def {}(data: Any) -> {}:\n", fn_name, name));
+        code.push_str(&format!("    \"\"\"Deserialize MessagePack data to {} variant.\"\"\"\n", name));
+        code.push_str("    if not isinstance(data, dict):\n");
+        code.push_str("        raise ValueError(f\"Expected dict for enum, got {type(data)}\")\n");
+        code.push_str("    \n");
+        code.push_str("    if len(data) != 1:\n");
+        code.push_str("        raise ValueError(f\"Expected single-key dict for enum, got {len(data)} keys\")\n");
+        code.push_str("    \n");
+        code.push_str("    variant_name, variant_data = next(iter(data.items()))\n");
+        code.push_str("    \n");
+
+        for variant in &enum_item.variants {
+            let variant_name = &variant.ident;
+            let class_name = format!("{}{}", name, variant_name);
+
+            code.push_str(&format!("    if variant_name == '{}':\n", variant_name));
+
+            match &variant.fields {
+                syn::Fields::Unit => {
+                    code.push_str(&format!("        return {}()\n", class_name));
+                }
+                syn::Fields::Named(_) | syn::Fields::Unnamed(_) => {
+                    code.push_str("        if isinstance(variant_data, dict):\n");
+                    code.push_str(&format!("            return {}(**variant_data)\n", class_name));
+                    code.push_str("        elif isinstance(variant_data, list):\n");
+                    code.push_str(&format!("            return {}(*variant_data)\n", class_name));
+                    code.push_str("        elif variant_data is None:\n");
+                    code.push_str(&format!("            return {}()\n", class_name));
+                    code.push_str("        else:\n");
+                    code.push_str("            raise ValueError(f\"Unexpected variant data type: {type(variant_data)}\")\n");
+                }
+            }
+        }
+
+        code.push_str("    \n");
+        code.push_str("    raise ValueError(f\"Unknown variant: {variant_name}\")\n");
+
+        code
+    }
+
+    /// Generate serializer for enum with associated data
+    fn generate_enum_serializer(&self, name: &str, enum_item: &syn::ItemEnum) -> String {
+        let mut code = String::new();
+        let fn_name = format!("serialize_{}", name.to_lowercase());
+
+        code.push_str(&format!("def {}(value: {}) -> Dict[str, Any]:\n", fn_name, name));
+        code.push_str(&format!("    \"\"\"Serialize {} variant to MessagePack-compatible dict.\"\"\"\n", name));
+
+        for variant in &enum_item.variants {
+            let variant_name = &variant.ident;
+            let class_name = format!("{}{}", name, variant_name);
+
+            code.push_str(&format!("    if isinstance(value, {}):\n", class_name));
+
+            match &variant.fields {
+                syn::Fields::Named(fields) => {
+                    if fields.named.is_empty() {
+                        code.push_str(&format!("        return {{'{}': None}}\n", variant_name));
+                    } else {
+                        code.push_str(&format!("        return {{'{}': {{\n", variant_name));
+                        for field in &fields.named {
+                            let field_name = field.ident.as_ref().unwrap();
+                            code.push_str(&format!("            '{}': value.{},\n", field_name, field_name));
+                        }
+                        code.push_str("        }}\n");
+                    }
+                }
+                syn::Fields::Unnamed(fields) => {
+                    if fields.unnamed.is_empty() {
+                        code.push_str(&format!("        return {{'{}': None}}\n", variant_name));
+                    } else {
+                        code.push_str(&format!("        return {{'{}': [\n", variant_name));
+                        for idx in 0..fields.unnamed.len() {
+                            code.push_str(&format!("            value.field_{},\n", idx));
+                        }
+                        code.push_str("        ]}\n");
+                    }
+                }
+                syn::Fields::Unit => {
+                    code.push_str(&format!("        return {{'{}': None}}\n", variant_name));
+                }
+            }
+        }
+
+        code.push_str("    \n");
+        code.push_str("    raise ValueError(f\"Unknown value type: {type(value)}\")\n");
 
         code
     }
@@ -201,6 +418,20 @@ impl PythonGenerator {
         }
     }
 
+    /// Check if a type name refers to an enum with associated data
+    fn is_enum_with_data(&self, type_name: &str) -> bool {
+        // Check if this type is an enum in our definition
+        if let Some(service_type) = self.definition.types.get(type_name) {
+            if let crate::codegen::parser::ServiceType::Enum(enum_item) = service_type {
+                // Check if any variant has fields
+                return enum_item.variants.iter().any(|v| {
+                    !matches!(v.fields, syn::Fields::Unit)
+                });
+            }
+        }
+        false
+    }
+
     /// Generate a regular (non-streaming) client method
     fn generate_regular_client_method(&self, method: &TraitItemFn) -> String {
         let method_name = &method.sig.ident;
@@ -238,10 +469,17 @@ impl PythonGenerator {
         code.push_str("        \n");
         code.push_str("        # Deserialize response from MessagePack\n");
         code.push_str("        response_dict = _rpcnet.msgpack_to_python_py(response_bytes)\n");
-        code.push_str(&format!(
-            "        return {}(**response_dict)\n",
-            response_type
-        ));
+
+        // Check if response type is an enum with data
+        if self.is_enum_with_data(&response_type) {
+            let deserializer = format!("deserialize_{}", response_type.to_lowercase());
+            code.push_str(&format!("        return {}(response_dict)\n", deserializer));
+        } else {
+            code.push_str(&format!(
+                "        return {}(**response_dict)\n",
+                response_type
+            ));
+        }
 
         code
     }
@@ -324,10 +562,17 @@ impl PythonGenerator {
         code.push_str("        # Yield deserialized responses\n");
         code.push_str("        async for response_bytes in response_stream:\n");
         code.push_str("            response_dict = _rpcnet.msgpack_to_python_py(response_bytes)\n");
-        code.push_str(&format!(
-            "            yield {}(**response_dict)\n",
-            response_item_type
-        ));
+
+        // Check if response type is an enum with data
+        if self.is_enum_with_data(&response_item_type) {
+            let deserializer = format!("deserialize_{}", response_item_type.to_lowercase());
+            code.push_str(&format!("            yield {}(response_dict)\n", deserializer));
+        } else {
+            code.push_str(&format!(
+                "            yield {}(**response_dict)\n",
+                response_item_type
+            ));
+        }
 
         code
     }

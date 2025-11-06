@@ -207,8 +207,18 @@ of parsing strings:</p>
 }
 <span class="boring">}</span></code></pre></pre>
 <h3 id="serialization-strategy"><a class="header" href="#serialization-strategy">Serialization Strategy</a></h3>
-<p>Requests and responses travel as <code>Vec&lt;u8&gt;</code>. Examples use <code>bincode</code> for compact
-frames, but any serialization format can be layered on top.</p>
+<p>Requests and responses travel as <code>Vec&lt;u8&gt;</code>. RpcNet supports multiple serialization formats:</p>
+<ul>
+<li><strong>bincode</strong>: Default for Rust-to-Rust communication (most efficient)</li>
+<li><strong>MessagePack</strong> (<code>rmp-serde</code>): Used for Python-to-Rust interop (better cross-language support)</li>
+<li><strong>Custom formats</strong>: Any serialization format can be layered on top</li>
+</ul>
+<p>The choice depends on your use case:</p>
+<ul>
+<li>Pure Rust services → use <code>bincode</code> for maximum performance</li>
+<li>Python/Rust polyglot services → use MessagePack for compatibility</li>
+<li>Human-readable debugging → consider JSON (with performance trade-off)</li>
+</ul>
 <h3 id="concurrency-model"><a class="header" href="#concurrency-model">Concurrency Model</a></h3>
 <p>Each accepted QUIC connection runs inside its own Tokio task. Within that
 connection, every RPC request is processed on another task so long-running

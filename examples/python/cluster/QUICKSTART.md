@@ -22,11 +22,15 @@ WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \
   DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
   cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
 
-# 4. Run Python client (from project root)
+# 4. Run Python clients (from project root)
+# Simple client (director only)
 python examples/python/cluster/python_client.py
 
-# Or run the full workflow demo
+# Full workflow (director + worker, multiple unary calls)
 python examples/python/cluster/python_streaming_client.py
+
+# Real bidirectional streaming (demonstrates AsyncIterable/AsyncIterator)
+python examples/python/cluster/python_real_streaming_client.py
 ```
 
 ## What You'll See
@@ -83,6 +87,47 @@ Request 1/5:
 ...
 
 ✅ Python Streaming Client Demo Completed Successfully!
+```
+
+**Real Streaming Client** (`python_real_streaming_client.py`):
+```
+======================================================================
+Python REAL Streaming Client - Bidirectional Streaming Demo
+======================================================================
+
+This demonstrates TRUE streaming RPC with:
+  • Client-side streaming (AsyncIterable[InferenceRequest])
+  • Server-side streaming (AsyncIterator[InferenceResponse])
+  • Bidirectional: send multiple requests, receive multiple responses
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 1: Getting Worker Assignment from Director                │
+└─────────────────────────────────────────────────────────────────┘
+✅ Connected to director at 127.0.0.1:61000
+✅ Got worker assignment:
+   Worker:        worker-a
+   Address:       127.0.0.1:62001
+   Connection ID: conn-123
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 2: Connecting to Worker                                   │
+└─────────────────────────────────────────────────────────────────┘
+✅ Connected to worker at 127.0.0.1:62001
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 3: Bidirectional Streaming Inference                      │
+└─────────────────────────────────────────────────────────────────┘
+📊 Streaming 5 requests to worker...
+
+   📤 Sending request 1/5: What is the capital of France?...
+📥 Response 1:
+   🔗 Connected to worker: worker-a
+
+   📤 Sending request 2/5: Explain quantum computing...
+📥 Response 2:
+   ✅ Token #0: [worker-a] processed: What is the capital of France?
+
+✅ Bidirectional Streaming Demo Completed Successfully!
 ```
 
 ## How It Works
