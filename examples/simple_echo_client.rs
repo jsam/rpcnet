@@ -36,9 +36,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         message: "Hello Echo".to_string(),
         times: 1,
     };
-    let params = bincode::serialize(&request)?;
+    let params = rmp_serde::to_vec(&request)?;
     let response_bytes = client.call("echo", params).await?;
-    let response: EchoResponse = bincode::deserialize(&response_bytes)?;
+    let response: EchoResponse = rmp_serde::from_slice(&response_bytes)?;
     println!("Echo: {}", response.echoed_message);
 
     // Test multiple echo
@@ -46,9 +46,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         message: "Test".to_string(),
         times: 3,
     };
-    let params = bincode::serialize(&request)?;
+    let params = rmp_serde::to_vec(&request)?;
     let response_bytes = client.call("echo", params).await?;
-    let response: EchoResponse = bincode::deserialize(&response_bytes)?;
+    let response: EchoResponse = rmp_serde::from_slice(&response_bytes)?;
     println!("Multiple echo (3x): {}", response.echoed_message);
 
     // Test binary echo
@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         message: "Error".to_string(),
         times: 200, // Should exceed limit
     };
-    let params = bincode::serialize(&request)?;
+    let params = rmp_serde::to_vec(&request)?;
     match client.call("echo", params).await {
         Ok(_) => println!("❌ Expected error but got success"),
         Err(e) => println!("✅ Error handling works: {}", e),

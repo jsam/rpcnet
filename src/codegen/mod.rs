@@ -166,7 +166,7 @@
 //!
 //! ### Performance Considerations
 //!
-//! - Generated code uses efficient binary serialization (bincode)
+//! - Generated code uses efficient binary serialization (MessagePack)
 //! - Connection reuse is handled automatically
 //! - Method calls are properly typed at compile time
 //! - No runtime reflection or dynamic dispatch

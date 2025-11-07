@@ -153,8 +153,8 @@ mod tests {
     #[test]
     fn test_serialization() {
         let inc = Incarnation(12345);
-        let serialized = bincode::serialize(&inc).unwrap();
-        let deserialized: Incarnation = bincode::deserialize(&serialized).unwrap();
+        let serialized = rmp_serde::to_vec(&inc).unwrap();
+        let deserialized: Incarnation = rmp_serde::from_slice(&serialized).unwrap();
 
         assert_eq!(inc, deserialized);
     }

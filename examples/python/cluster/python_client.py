@@ -36,10 +36,12 @@ async def main():
     # Configuration
     DIRECTOR_ADDR = os.getenv("DIRECTOR_ADDR", "127.0.0.1:61000")
     CERT_PATH = os.getenv("CERT_PATH", "../../../certs/test_cert.pem")
+    KEY_PATH = os.getenv("KEY_PATH", "../../../certs/test_key.pem")
 
-    # Resolve cert path relative to this file
+    # Resolve cert and key paths relative to this file
     script_dir = os.path.dirname(os.path.abspath(__file__))
     cert_path = os.path.join(script_dir, CERT_PATH)
+    key_path = os.path.join(script_dir, KEY_PATH)
 
     if not os.path.exists(cert_path):
         print(f"❌ Certificate not found: {cert_path}")
@@ -59,6 +61,7 @@ async def main():
         director = await DirectorRegistryClient.connect(
             DIRECTOR_ADDR,
             cert_path=cert_path,
+            key_path=key_path,
             server_name="localhost",
             timeout_secs=5,
         )

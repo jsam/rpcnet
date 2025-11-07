@@ -25,7 +25,7 @@ fn create_test_config() -> RpcConfig {
 #[tokio::test]
 async fn test_start_method_response_serialization_and_sending() {
     // Test that specifically hits the response serialization and stream.send lines
-    // Lines: if let Ok(response_data) = bincode::serialize(&response) {
+    // Lines: if let Ok(response_data) = rmp_serde::to_vec(&response) {
     //            let _ = stream.send(response_data.into()).await;
     //        }
 

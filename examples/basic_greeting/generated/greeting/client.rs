@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use super::types::*;
 use rpcnet::{RpcClient, RpcConfig, RpcError};
 use std::net::SocketAddr;
@@ -14,8 +12,8 @@ impl GreetingClient {
         Ok(Self { inner })
     }
     pub async fn greet(&self, request: GreetRequest) -> Result<GreetResponse, RpcError> {
-        let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
+        let params = rmp_serde::to_vec(&request)?;
         let response_data = self.inner.call("Greeting.greet", params).await?;
-        bincode::deserialize::<GreetResponse>(&response_data).map_err(RpcError::SerializationError)
+        rmp_serde::from_slice::<GreetResponse>(&response_data).map_err(Into::into)
     }
 }

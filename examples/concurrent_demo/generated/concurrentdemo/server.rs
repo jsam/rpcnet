@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use super::types::*;
 use async_trait::async_trait;
 use rpcnet::{RpcConfig, RpcError, RpcServer};
@@ -24,7 +22,7 @@ pub trait ConcurrentDemoHandler: Send + Sync + 'static {
 /// Generated server that manages RPC registration and routing.
 pub struct ConcurrentDemoServer<H: ConcurrentDemoHandler> {
     handler: Arc<H>,
-    rpc_server: RpcServer,
+    pub rpc_server: RpcServer,
 }
 impl<H: ConcurrentDemoHandler> ConcurrentDemoServer<H> {
     /// Creates a new server with the given handler and configuration.
@@ -42,12 +40,9 @@ impl<H: ConcurrentDemoHandler> ConcurrentDemoServer<H> {
                 .register("ConcurrentDemo.compute", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: ComputeRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: ComputeRequest = rmp_serde::from_slice(&params)?;
                         match handler.compute(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }
@@ -60,12 +55,9 @@ impl<H: ConcurrentDemoHandler> ConcurrentDemoServer<H> {
                 .register("ConcurrentDemo.async_task", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: AsyncTaskRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: AsyncTaskRequest = rmp_serde::from_slice(&params)?;
                         match handler.async_task(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }
@@ -78,12 +70,9 @@ impl<H: ConcurrentDemoHandler> ConcurrentDemoServer<H> {
                 .register("ConcurrentDemo.increment", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: IncrementRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: IncrementRequest = rmp_serde::from_slice(&params)?;
                         match handler.increment(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }
@@ -96,12 +85,9 @@ impl<H: ConcurrentDemoHandler> ConcurrentDemoServer<H> {
                 .register("ConcurrentDemo.get_counter", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: GetCounterRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: GetCounterRequest = rmp_serde::from_slice(&params)?;
                         match handler.get_counter(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }

@@ -40,14 +40,14 @@ class DirectorRegistryServer:
         """Register all RPC method handlers"""
         
         async def handle_get_worker(request_bytes: bytes) -> bytes:
-            # Deserialize request from bincode
+            # Deserialize request from MessagePack
             request_dict = _rpcnet.bincode_to_python_py(request_bytes)
             request = GetWorkerRequest(**request_dict)
             
             # Call handler
             response = await self.handler.get_worker(request)
             
-            # Serialize response to bincode
+            # Serialize response to MessagePack
             response_dict = response.__dict__
             return _rpcnet.python_to_bincode_py(response_dict)
         

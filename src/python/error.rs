@@ -85,9 +85,7 @@ mod tests {
     fn test_to_py_err_serialization_error() {
         pyo3::prepare_freethreaded_python();
         Python::with_gil(|py| {
-            let err = RpcError::SerializationError(
-                bincode::ErrorKind::Custom("invalid data".to_string()).into(),
-            );
+            let err = RpcError::SerializationError("invalid data".to_string());
             let py_err = to_py_err(err);
 
             // Check that the error type is PySerializationError

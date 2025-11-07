@@ -125,9 +125,8 @@ async fn test_rpc_config_builder_methods() {
 async fn test_error_variants() {
     // Test different RpcError variants to improve coverage
     let stream_error = RpcError::StreamError("stream failed".to_string());
-    let serialization_error = RpcError::SerializationError(bincode::Error::new(
-        bincode::ErrorKind::InvalidBoolEncoding(101),
-    ));
+    let serialization_error =
+        RpcError::SerializationError("Serialization error description".to_string());
 
     // Test Debug formatting
     let _stream_debug = format!("{:?}", stream_error);

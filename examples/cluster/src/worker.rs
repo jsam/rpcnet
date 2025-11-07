@@ -25,6 +25,31 @@ struct WorkerHandler {
 
 #[async_trait]
 impl InferenceHandler for WorkerHandler {
+    async fn infer(
+        &self,
+        request: InferenceRequest,
+    ) -> Result<InferenceResponse, InferenceError> {
+        let name = self.worker_label.clone();
+
+        if self.is_failed.load(Ordering::SeqCst) {
+            error!("🚫 [{}] Rejecting request - worker is in failed state", name);
+            return Err(InferenceError::WorkerFailed(format!("Worker {} is currently failed", name)));
+        }
+
+        info!(
+            connection_id = %request.connection_id,
+            worker = %name,
+            prompt = %request.prompt,
+            "📝 [infer] Processing single request"
+        );
+
+        // Simple response with the processed prompt
+        Ok(InferenceResponse::Token {
+            text: format!("[{}] processed: {}", name, request.prompt),
+            sequence: 0,
+        })
+    }
+
     async fn generate(
         &self,
         request: Pin<Box<dyn Stream<Item = InferenceRequest> + Send>>,

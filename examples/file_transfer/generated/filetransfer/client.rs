@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use super::types::*;
 use rpcnet::{RpcClient, RpcConfig, RpcError};
 use std::net::SocketAddr;
@@ -17,33 +15,30 @@ impl FileTransferClient {
         &self,
         request: UploadChunkRequest,
     ) -> Result<UploadChunkResponse, RpcError> {
-        let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
+        let params = rmp_serde::to_vec(&request)?;
         let response_data = self.inner.call("FileTransfer.upload_chunk", params).await?;
-        bincode::deserialize::<UploadChunkResponse>(&response_data)
-            .map_err(RpcError::SerializationError)
+        rmp_serde::from_slice::<UploadChunkResponse>(&response_data).map_err(Into::into)
     }
     pub async fn download_chunk(
         &self,
         request: DownloadChunkRequest,
     ) -> Result<DownloadChunkResponse, RpcError> {
-        let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
+        let params = rmp_serde::to_vec(&request)?;
         let response_data = self
             .inner
             .call("FileTransfer.download_chunk", params)
             .await?;
-        bincode::deserialize::<DownloadChunkResponse>(&response_data)
-            .map_err(RpcError::SerializationError)
+        rmp_serde::from_slice::<DownloadChunkResponse>(&response_data).map_err(Into::into)
     }
     pub async fn get_file_info(
         &self,
         request: FileInfoRequest,
     ) -> Result<FileInfoResponse, RpcError> {
-        let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
+        let params = rmp_serde::to_vec(&request)?;
         let response_data = self
             .inner
             .call("FileTransfer.get_file_info", params)
             .await?;
-        bincode::deserialize::<FileInfoResponse>(&response_data)
-            .map_err(RpcError::SerializationError)
+        rmp_serde::from_slice::<FileInfoResponse>(&response_data).map_err(Into::into)
     }
 }

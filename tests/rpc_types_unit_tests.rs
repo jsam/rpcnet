@@ -189,9 +189,8 @@ fn test_rpc_error_from_io_error() {
 }
 
 #[test]
-fn test_rpc_error_from_bincode_error() {
-    // Test automatic conversion from bincode::Error
-    use bincode;
+fn test_rpc_error_from_msgpack_error() {
+    // Test automatic conversion from rmp_serde::Error
     use serde::{Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize)]
@@ -199,12 +198,12 @@ fn test_rpc_error_from_bincode_error() {
         value: u32,
     }
 
-    // Create a bincode error by deserializing invalid data
+    // Create a MessagePack error by deserializing invalid data
     let invalid_data = vec![0xFF, 0xFF, 0xFF, 0xFF];
-    let result: Result<TestStruct, _> = bincode::deserialize(&invalid_data);
+    let result: Result<TestStruct, _> = rmp_serde::from_slice(&invalid_data);
 
-    if let Err(bincode_err) = result {
-        let rpc_err: RpcError = bincode_err.into();
+    if let Err(msgpack_err) = result {
+        let rpc_err: RpcError = msgpack_err.into();
         match rpc_err {
             RpcError::SerializationError(_) => {} // Expected
             other => panic!("Expected SerializationError, got {:?}", other),

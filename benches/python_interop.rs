@@ -75,15 +75,20 @@ fn create_python_client_script(port: u16, payload_size: usize, num_requests: usi
 import asyncio
 import sys
 import time
-sys.path.insert(0, 'target/release')
 
-import _rpcnet
+# Try .venv first, then target/release
+try:
+    import _rpcnet
+except ImportError:
+    sys.path.insert(0, 'target/release')
+    import _rpcnet
 
 async def benchmark():
     config = _rpcnet.RpcConfig(
         cert_path="certs/test_cert.pem",
         bind_addr="0.0.0.0:0",
-        server_name="localhost"
+        server_name="localhost",
+        timeout_secs=10  # Longer timeout for benchmarks
     )
 
     client = await _rpcnet.RpcClient.connect("127.0.0.1:{}", config)
@@ -92,8 +97,8 @@ async def benchmark():
     payload = {{"data": list(b"x" * {})}}  # Convert bytes to list of ints
     serialized = _rpcnet.python_to_msgpack_py(payload)
 
-    # Warmup
-    for _ in range(10):
+    # Warmup with smaller iteration count
+    for _ in range(3):
         await client.call("echo", serialized)
 
     # Benchmark
@@ -124,20 +129,22 @@ fn run_python_benchmark(
 
     let output = runtime.block_on(async {
         tokio::task::spawn_blocking(move || {
-            // Try uv run first (if using uv), fallback to system python
-            let result = Command::new("uv")
-                .args(&["run", "python3", "-c", &script])
-                .output();
+            // Try .venv/bin/python first (if using uv), fallback to system python
+            let venv_python = std::path::Path::new(".venv/bin/python");
 
-            if result.is_ok() {
-                result.unwrap()
+            if venv_python.exists() {
+                Command::new(".venv/bin/python")
+                    .arg("-c")
+                    .arg(&script)
+                    .output()
+                    .expect("Failed to run Python benchmark with venv python")
             } else {
                 // Fallback to system python3
                 Command::new("python3")
                     .arg("-c")
                     .arg(&script)
                     .output()
-                    .expect("Failed to run Python benchmark")
+                    .expect("Failed to run Python benchmark with system python")
             }
         })
         .await
@@ -165,18 +172,21 @@ fn bench_python_to_rust(c: &mut Criterion) {
     let runtime = Runtime::new().unwrap();
 
     // Check if Python bindings are available
-    // Try uv environment first, then system python
-    let check_uv = Command::new("uv")
-        .args(&["run", "python3", "-c", "import _rpcnet"])
-        .output();
+    let venv_python = std::path::Path::new(".venv/bin/python");
 
-    let check_system = Command::new("python3")
-        .arg("-c")
-        .arg("import sys; sys.path.insert(0, 'target/release'); import _rpcnet")
-        .output();
+    let check_result = if venv_python.exists() {
+        Command::new(".venv/bin/python")
+            .arg("-c")
+            .arg("import _rpcnet")
+            .output()
+    } else {
+        Command::new("python3")
+            .arg("-c")
+            .arg("import sys; sys.path.insert(0, 'target/release'); import _rpcnet")
+            .output()
+    };
 
-    let has_bindings = (check_uv.is_ok() && check_uv.unwrap().status.success())
-        || (check_system.is_ok() && check_system.unwrap().status.success());
+    let has_bindings = check_result.is_ok() && check_result.unwrap().status.success();
 
     if !has_bindings {
         println!("⚠️  Skipping Python benchmarks: Python bindings not built");
@@ -211,17 +221,21 @@ fn bench_comparison(c: &mut Criterion) {
     let runtime = Runtime::new().unwrap();
 
     // Check Python availability
-    let check_uv = Command::new("uv")
-        .args(&["run", "python3", "-c", "import _rpcnet"])
-        .output();
+    let venv_python = std::path::Path::new(".venv/bin/python");
 
-    let check_system = Command::new("python3")
-        .arg("-c")
-        .arg("import sys; sys.path.insert(0, 'target/release'); import _rpcnet")
-        .output();
+    let check_result = if venv_python.exists() {
+        Command::new(".venv/bin/python")
+            .arg("-c")
+            .arg("import _rpcnet")
+            .output()
+    } else {
+        Command::new("python3")
+            .arg("-c")
+            .arg("import sys; sys.path.insert(0, 'target/release'); import _rpcnet")
+            .output()
+    };
 
-    let has_python = (check_uv.is_ok() && check_uv.unwrap().status.success())
-        || (check_system.is_ok() && check_system.unwrap().status.success());
+    let has_python = check_result.is_ok() && check_result.unwrap().status.success();
 
     if !has_python {
         println!("⚠️  Skipping comparison benchmarks: Python bindings not available");

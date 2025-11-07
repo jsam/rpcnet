@@ -173,20 +173,14 @@ pub fn bincode_to_python_py<'py>(py: Python<'py>, bytes: &[u8]) -> PyResult<Boun
 /// Unlike python_to_bincode which wraps in SerdeValue, this serializes the dict directly.
 #[pyfunction]
 pub fn python_to_msgpack_py<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyBytes>> {
-    use std::collections::HashMap;
+    // Convert Python dict to rmpv::Value directly (preserves order and structure)
+    if let Ok(_dict) = obj.downcast::<PyDict>() {
+        let val = python_value_to_msgpack_value(obj)?;
 
-    // Convert Python dict to Rust HashMap
-    if let Ok(dict) = obj.downcast::<PyDict>() {
-        let mut map: HashMap<String, rmpv::Value> = HashMap::new();
-
-        for (key, value) in dict {
-            let key_str = key.extract::<String>()?;
-            let val = python_value_to_msgpack_value(&value)?;
-            map.insert(key_str, val);
-        }
-
-        // Serialize directly to MessagePack
-        let bytes = rmp_serde::to_vec(&map).map_err(|e| {
+        // Serialize the rmpv::Value directly to MessagePack bytes
+        // Use rmpv's write_value to preserve the exact MessagePack structure
+        let mut bytes = Vec::new();
+        rmpv::encode::write_value(&mut bytes, &val).map_err(|e| {
             pyo3::exceptions::PyValueError::new_err(format!(
                 "MessagePack serialization failed: {}",
                 e
@@ -304,8 +298,8 @@ mod tests {
             ("active".to_string(), SerdeValue::Bool(true)),
         ]);
 
-        let bytes = bincode::serialize(&value).unwrap();
-        let deserialized: SerdeValue = bincode::deserialize(&bytes).unwrap();
+        let bytes = rmp_serde::to_vec(&value).unwrap();
+        let deserialized: SerdeValue = rmp_serde::from_slice(&bytes).unwrap();
 
         match deserialized {
             SerdeValue::Dict(entries) => {

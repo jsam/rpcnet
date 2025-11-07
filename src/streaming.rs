@@ -17,6 +17,19 @@ pub enum StreamError<T> {
     Item(T),
 }
 
+// Conversion from rmp_serde errors to StreamError<RpcError>
+impl From<rmp_serde::encode::Error> for StreamError<RpcError> {
+    fn from(err: rmp_serde::encode::Error) -> Self {
+        StreamError::Transport(RpcError::from(err))
+    }
+}
+
+impl From<rmp_serde::decode::Error> for StreamError<RpcError> {
+    fn from(err: rmp_serde::decode::Error) -> Self {
+        StreamError::Transport(RpcError::from(err))
+    }
+}
+
 #[pin_project]
 pub struct TimeoutStream<S>
 where

@@ -1438,7 +1438,6 @@ dependencies = [
  "aes-gcm",
  "async-stream",
  "async-trait",
- "bincode",
  "bytes",
  "clap",
  "dashmap",

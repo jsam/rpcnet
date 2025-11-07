@@ -26,13 +26,17 @@ async fn start_test_server() -> Result<std::net::SocketAddr, Box<dyn std::error:
 
     server
         .register("multiply", |params| async move {
-            if let Ok(number) = bincode::deserialize::<i32>(&params) {
+            if let Ok(number) = rmp_serde::from_slice::<i32>(&params) {
                 let result = number * 2;
-                bincode::serialize(&result).map_err(rpcnet::RpcError::SerializationError)
+                rmp_serde::to_vec(&result).map_err(|_| {
+                    rpcnet::RpcError::SerializationError(
+                        "Serialization error description".to_string(),
+                    )
+                })
             } else {
-                Err(rpcnet::RpcError::SerializationError(bincode::Error::new(
-                    bincode::ErrorKind::Custom("Invalid input".to_string()),
-                )))
+                Err(rpcnet::RpcError::SerializationError(
+                    "Serialization error description".to_string(),
+                ))
             }
         })
         .await;
@@ -97,13 +101,13 @@ async fn test_regular_rpc_with_serialization() {
 
     // Test regular RPC with serialization
     let number = 21;
-    let request = bincode::serialize(&number).expect("Serialization should work");
+    let request = rmp_serde::to_vec(&number).expect("Serialization should work");
     let response = client
         .call("multiply", request)
         .await
         .expect("Regular RPC should work");
 
-    let result: i32 = bincode::deserialize(&response).expect("Deserialization should work");
+    let result: i32 = rmp_serde::from_slice(&response).expect("Deserialization should work");
     assert_eq!(result, 42);
 }
 

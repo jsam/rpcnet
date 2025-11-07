@@ -63,12 +63,12 @@ async fn start_streaming_server() -> Result<SocketAddr, RpcError> {
             async_stream::stream! {
                 let mut request_stream = Box::pin(request_stream);
                 if let Some(request_data) = request_stream.next().await {
-                    let count: u32 = bincode::deserialize(&request_data)
+                    let count: u32 = rmp_serde::from_slice(&request_data)
                         .unwrap_or(100);
 
                     for i in 0..count {
                         let token = format!("token-{}", i);
-                        if let Ok(bytes) = bincode::serialize(&token) {
+                        if let Ok(bytes) = rmp_serde::to_vec(&token) {
                             yield Ok(bytes);
                         }
                     }
@@ -186,7 +186,7 @@ fn bench_streaming_token_burst(c: &mut Criterion) {
 
                 rt.block_on(async {
                     for _ in 0..iterations {
-                        let request = bincode::serialize(&count).unwrap();
+                        let request = rmp_serde::to_vec(&count).unwrap();
                         let request_stream = futures::stream::iter(vec![request]);
 
                         let response_stream = client

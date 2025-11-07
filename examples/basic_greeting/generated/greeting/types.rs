@@ -1,7 +1,13 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 //! Type definitions for the service.
 use serde::{Deserialize, Serialize};
+/// Errors that can occur in greeting operations.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum GreetingError {
+    /// Empty name provided.
+    EmptyName,
+    /// Invalid input provided.
+    InvalidInput(String),
+}
 /// Response from greeting operation.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GreetResponse {
@@ -11,12 +17,4 @@ pub struct GreetResponse {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GreetRequest {
     pub name: String,
-}
-/// Errors that can occur in greeting operations.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum GreetingError {
-    /// Empty name provided.
-    EmptyName,
-    /// Invalid input provided.
-    InvalidInput(String),
 }

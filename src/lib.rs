@@ -101,7 +101,7 @@ pub enum RpcError {
     TlsError(String),
 
     #[error("Serialization error: {0}")]
-    SerializationError(#[from] bincode::Error),
+    SerializationError(String),
 
     #[error("Request timeout")]
     Timeout,
@@ -125,11 +125,23 @@ pub enum RpcError {
     MigrationRejected,
 }
 
+impl From<rmp_serde::encode::Error> for RpcError {
+    fn from(err: rmp_serde::encode::Error) -> Self {
+        RpcError::SerializationError(err.to_string())
+    }
+}
+
+impl From<rmp_serde::decode::Error> for RpcError {
+    fn from(err: rmp_serde::decode::Error) -> Self {
+        RpcError::SerializationError(err.to_string())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RpcRequest {
-    id: u64,
-    method: String,
-    params: Vec<u8>,
+    pub id: u64,
+    pub method: String,
+    pub params: Vec<u8>,
 }
 
 impl RpcRequest {
@@ -426,12 +438,11 @@ impl RpcServer {
         self.register(method, move |params: Vec<u8>| {
             let handler = handler.clone();
             async move {
-                let request: Req =
-                    bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                let request: Req = rmp_serde::from_slice(&params)?;
 
                 let response = handler(request).await?;
 
-                bincode::serialize(&response).map_err(RpcError::SerializationError)
+                rmp_serde::to_vec_named(&response).map_err(Into::into)
             }
         })
         .await;
@@ -458,7 +469,7 @@ impl RpcServer {
 
                 let response = handler(request).await?;
 
-                rmp_serde::to_vec(&response).map_err(|e| {
+                rmp_serde::to_vec_named(&response).map_err(|e| {
                     RpcError::InternalError(format!("MessagePack serialization failed: {}", e))
                 })
             }
@@ -466,11 +477,10 @@ impl RpcServer {
         .await;
     }
 
-    /// Register a typed RPC method handler that accepts both bincode and MessagePack.
+    /// Register a typed RPC method handler using MessagePack serialization.
     ///
-    /// This tries to deserialize with bincode first (for Rust clients), and if that fails,
-    /// tries MessagePack (for Python clients). The response is serialized using the same
-    /// format as the request.
+    /// This is the standard method for Python<->Rust interop, using MessagePack
+    /// for both request deserialization and response serialization.
     pub async fn register_typed_polyglot<Req, Resp, F, Fut>(&self, method: &str, handler: F)
     where
         Req: serde::de::DeserializeOwned + Send + 'static,
@@ -482,25 +492,12 @@ impl RpcServer {
         self.register(method, move |params: Vec<u8>| {
             let handler = handler.clone();
             async move {
-                // Try bincode first (Rust clients)
-                let (request, use_msgpack) = match bincode::deserialize::<Req>(&params) {
-                    Ok(req) => (req, false),
-                    Err(_) => {
-                        // If bincode fails, try MessagePack (Python clients)
-                        let req = rmp_serde::from_slice::<Req>(&params)
-                            .map_err(|e| RpcError::InternalError(format!("Both bincode and MessagePack deserialization failed. MessagePack error: {}", e)))?;
-                        (req, true)
-                    }
-                };
+                // Use MessagePack for Python<->Rust interop
+                let request: Req = rmp_serde::from_slice(&params)?;
 
                 let response = handler(request).await?;
 
-                // Serialize response with the same format as request
-                if use_msgpack {
-                    rmp_serde::to_vec_named(&response).map_err(|e| RpcError::InternalError(format!("MessagePack serialization failed: {}", e)))
-                } else {
-                    bincode::serialize(&response).map_err(RpcError::SerializationError)
-                }
+                rmp_serde::to_vec_named(&response).map_err(Into::into)
             }
         })
         .await;
@@ -614,25 +611,37 @@ impl RpcServer {
             }
 
             // Then try to parse as regular RPC request (original behavior)
-            if let Ok(request) = bincode::deserialize::<RpcRequest>(&request_data) {
-                debug!("📨 Received RPC request: {}", request.method);
-                let handlers = handlers.read().await;
-                let response = match handlers.get(request.method()) {
-                    Some(handler) => {
-                        let result = handler(request.params().to_vec()).await;
-                        RpcResponse::from_result(request.id(), result)
+            debug!("Attempting to parse {} bytes as RpcRequest with named fields. First 20 bytes: {:?}",
+                   request_data.len(),
+                   &request_data[..request_data.len().min(20)]);
+            match rmp_serde::from_slice::<RpcRequest>(&request_data) {
+                Ok(request) => {
+                    debug!("📨 Received RPC request: {}", request.method);
+                    let handlers = handlers.read().await;
+                    let response = match handlers.get(request.method()) {
+                        Some(handler) => {
+                            let result = handler(request.params().to_vec()).await;
+                            RpcResponse::from_result(request.id(), result)
+                        }
+                        None => RpcResponse::new(
+                            request.id(),
+                            None,
+                            Some(format!("Unknown method: {}", request.method())),
+                        ),
+                    };
+                    if let Ok(response_data) = rmp_serde::to_vec_named(&response) {
+                        let mut stream_guard = stream.lock().await;
+                        let _ = stream_guard.send_bytes(Bytes::from(response_data)).await;
                     }
-                    None => RpcResponse::new(
-                        request.id(),
-                        None,
-                        Some(format!("Unknown method: {}", request.method())),
-                    ),
-                };
-                if let Ok(response_data) = bincode::serialize(&response) {
-                    let mut stream_guard = stream.lock().await;
-                    let _ = stream_guard.send_bytes(Bytes::from(response_data)).await;
+                    break; // Handle one request per stream
                 }
-                break; // Handle one request per stream
+                Err(e) => {
+                    debug!(
+                        "⚠️  Not a regular RPC request (tried {} bytes): {:?}",
+                        request_data.len(),
+                        e
+                    );
+                }
             }
 
             // If regular RPC parsing fails and we have enough data, check for streaming protocol
@@ -1114,7 +1123,8 @@ impl RpcClient {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let req = RpcRequest::new(id, method.to_string(), params);
         // Pre-allocate serialization buffer to avoid reallocations
-        let req_data = bincode::serialize(&req)?;
+        // Use MessagePack Serializer with struct_map for compatibility with Python
+        let req_data = rmp_serde::to_vec(&req)?;
 
         // Open a new bidirectional stream with minimal lock time
         let mut stream = {
@@ -1132,20 +1142,17 @@ impl RpcClient {
             while let Ok(Some(chunk)) = stream.receive_bytes().await {
                 response_data.extend_from_slice(&chunk);
 
-                // Only attempt deserialization if we have a reasonable amount of data
-                if response_data.len() >= 16 {
-                    // Minimum for a valid response
-                    if let Ok(response) = bincode::deserialize::<RpcResponse>(&response_data[..]) {
-                        if response.id() == id {
-                            // Extract data without cloning when possible
-                            return match (response.result(), response.error()) {
-                                (Some(data), None) => Ok(data.to_vec()), // More explicit about the copy
-                                (None, Some(err_msg)) => {
-                                    Err(RpcError::StreamError(err_msg.to_string()))
-                                } // Already owned
-                                _ => Err(RpcError::StreamError("Invalid response".into())), // Avoid string allocation
-                            };
-                        }
+                // Attempt deserialization on any data we have
+                if let Ok(response) = rmp_serde::from_slice::<RpcResponse>(&response_data[..]) {
+                    if response.id() == id {
+                        // Extract data without cloning when possible
+                        return match (response.result(), response.error()) {
+                            (Some(data), None) => Ok(data.to_vec()), // More explicit about the copy
+                            (None, Some(err_msg)) => {
+                                Err(RpcError::StreamError(err_msg.to_string()))
+                            } // Already owned
+                            _ => Err(RpcError::StreamError("Invalid response".into())), // Avoid string allocation
+                        };
                     }
                 }
             }
@@ -2010,7 +2017,7 @@ mod client_call_helper_tests {
     }
 
     pub(super) fn encode_response(response: &RpcResponse) -> Vec<u8> {
-        bincode::serialize(response).expect("serialize response")
+        rmp_serde::to_vec(response).expect("serialize response")
     }
 
     pub(super) async fn wait_for_sent(state: &Arc<Mutex<MockStreamState>>, expected: usize) {
@@ -2042,7 +2049,7 @@ mod client_call_helper_tests {
         wait_for_sent(&state, 1).await;
         let sent = state.lock().await.sent.clone();
         assert_eq!(sent.len(), 1);
-        let request: RpcRequest = bincode::deserialize(&sent[0]).unwrap();
+        let request: RpcRequest = rmp_serde::from_slice(&sent[0]).unwrap();
         assert_eq!(request.method(), "ping");
     }
 
@@ -2347,14 +2354,14 @@ mod doc_examples_tests {
 
         let client = make_client(state.clone());
         let response = client
-            .call("echo", bincode::serialize(&"Hello, Server!").unwrap())
+            .call("echo", rmp_serde::to_vec(&"Hello, Server!").unwrap())
             .await
             .unwrap();
         assert_eq!(response, b"Hello, Server!".to_vec());
 
         wait_for_sent_frames(&state, 1).await;
         let sent_requests = state.lock().await.sent.clone();
-        let req: RpcRequest = bincode::deserialize(&sent_requests[0]).unwrap();
+        let req: RpcRequest = rmp_serde::from_slice(&sent_requests[0]).unwrap();
         assert_eq!(req.method(), "echo");
     }
 
@@ -2400,11 +2407,11 @@ mod doc_examples_tests {
         wait_for_sent_frames(&state_two, 1).await;
 
         let sent_one = state_one.lock().await.sent.clone();
-        let req_one: RpcRequest = bincode::deserialize(&sent_one[0]).unwrap();
+        let req_one: RpcRequest = rmp_serde::from_slice(&sent_one[0]).unwrap();
         assert_eq!(req_one.method(), "method1");
 
         let sent_two = state_two.lock().await.sent.clone();
-        let req_two: RpcRequest = bincode::deserialize(&sent_two[0]).unwrap();
+        let req_two: RpcRequest = rmp_serde::from_slice(&sent_two[0]).unwrap();
         assert_eq!(req_two.method(), "method2");
     }
 
@@ -2597,7 +2604,7 @@ mod tests {
                             while let Ok(Some(data)) = stream.receive().await {
                                 request_data.extend_from_slice(&data);
                                 if let Ok(request) =
-                                    bincode::deserialize::<RpcRequest>(&request_data)
+                                    rmp_serde::from_slice::<RpcRequest>(&request_data)
                                 {
                                     let handlers = handlers.read().await;
                                     let response = match handlers.get(request.method()) {
@@ -2611,7 +2618,7 @@ mod tests {
                                             Some(format!("Unknown method: {}", request.method())),
                                         ),
                                     };
-                                    if let Ok(resp_data) = bincode::serialize(&response) {
+                                    if let Ok(resp_data) = rmp_serde::to_vec(&response) {
                                         let _ = stream.send(resp_data.into()).await;
                                     }
                                     break;
@@ -2667,7 +2674,7 @@ mod tests {
             server: &RpcServer,
             req_data: Vec<u8>,
         ) -> Result<Vec<u8>, RpcError> {
-            let req: RpcRequest = bincode::deserialize(&req_data)?;
+            let req: RpcRequest = rmp_serde::from_slice(&req_data)?;
             let handlers = server.handlers.read().await;
             let h = handlers
                 .get(req.method())
@@ -2675,11 +2682,11 @@ mod tests {
 
             let result = h(req.params().to_vec()).await;
             let resp = RpcResponse::from_result(req.id(), result);
-            Ok(bincode::serialize(&resp)?)
+            Ok(rmp_serde::to_vec(&resp)?)
         }
 
         let req = RpcRequest::new(1, "unknown".into(), vec![]);
-        let data = bincode::serialize(&req).unwrap();
+        let data = rmp_serde::to_vec(&req).unwrap();
 
         let res = handle_request_direct(&server, data).await;
         match res {
@@ -2701,7 +2708,7 @@ mod tests {
             server: &RpcServer,
             req_data: Vec<u8>,
         ) -> Result<Vec<u8>, RpcError> {
-            let req: RpcRequest = bincode::deserialize(&req_data)?;
+            let req: RpcRequest = rmp_serde::from_slice(&req_data)?;
             let handlers = server.handlers.read().await;
             let h = handlers
                 .get(req.method())
@@ -2709,13 +2716,13 @@ mod tests {
 
             let result = h(req.params().to_vec()).await;
             let resp = RpcResponse::from_result(req.id(), result);
-            Ok(bincode::serialize(&resp)?)
+            Ok(rmp_serde::to_vec(&resp)?)
         }
 
         let req = RpcRequest::new(42, "echo".into(), b"hello".to_vec());
-        let data = bincode::serialize(&req).unwrap();
+        let data = rmp_serde::to_vec(&req).unwrap();
         let res_data = handle_request_direct(&server, data).await.unwrap();
-        let resp: RpcResponse = bincode::deserialize(&res_data).unwrap();
+        let resp: RpcResponse = rmp_serde::from_slice(&res_data).unwrap();
 
         assert_eq!(resp.id(), 42);
         assert_eq!(resp.result().unwrap(), b"hello");
@@ -2910,8 +2917,8 @@ mod tests {
         let request = RpcRequest::new(999, "large_test".to_string(), large_data.clone());
 
         // Should serialize and deserialize successfully
-        let serialized = bincode::serialize(&request).unwrap();
-        let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
+        let serialized = rmp_serde::to_vec(&request).unwrap();
+        let deserialized: RpcRequest = rmp_serde::from_slice(&serialized).unwrap();
 
         assert_eq!(deserialized.id(), 999);
         assert_eq!(deserialized.method(), "large_test");
@@ -2925,8 +2932,8 @@ mod tests {
         assert!(request.params().is_empty());
 
         // Should be serializable
-        let serialized = bincode::serialize(&request).unwrap();
-        let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
+        let serialized = rmp_serde::to_vec(&request).unwrap();
+        let deserialized: RpcRequest = rmp_serde::from_slice(&serialized).unwrap();
         assert_eq!(deserialized.method(), "");
         assert!(deserialized.params().is_empty());
     }
@@ -3083,8 +3090,8 @@ mod tests {
     #[test]
     fn test_serialization_doctest() {
         let request = RpcRequest::new(1, "test".to_string(), vec![1, 2, 3]);
-        let serialized = bincode::serialize(&request).unwrap();
-        let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
+        let serialized = rmp_serde::to_vec(&request).unwrap();
+        let deserialized: RpcRequest = rmp_serde::from_slice(&serialized).unwrap();
 
         assert_eq!(request.id(), deserialized.id());
         assert_eq!(request.method(), deserialized.method());

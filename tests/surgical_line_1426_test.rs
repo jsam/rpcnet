@@ -9,7 +9,7 @@
 #![allow(clippy::get_first)]
 #![allow(clippy::useless_vec)]
 // Line 1426: let _ = stream.send(response_data.into()).await;
-// This line is inside: if let Ok(request) = bincode::deserialize::<RpcRequest>(&request_data)
+// This line is inside: if let Ok(request) = rmp_serde::from_slice::<RpcRequest>(&request_data)
 
 use rpcnet::{RpcClient, RpcConfig, RpcServer};
 use std::time::Duration;
@@ -26,10 +26,10 @@ fn create_test_config() -> RpcConfig {
 async fn test_surgical_line_1426_bincode_path() {
     // This test is designed to hit the EXACT path:
     // 1. Data comes in via stream.receive()
-    // 2. Gets parsed via bincode::deserialize::<RpcRequest>(&request_data)
+    // 2. Gets parsed via rmp_serde::from_slice::<RpcRequest>(&request_data)
     // 3. Handler is found and executed
     // 4. Response is created via RpcResponse::from_result()
-    // 5. Response gets serialized via bincode::serialize(&response)
+    // 5. Response gets serialized via rmp_serde::to_vec(&response)
     // 6. Line 1426 executes: let _ = stream.send(response_data.into()).await;
 
     let mut server = RpcServer::new(create_test_config());
@@ -81,9 +81,9 @@ async fn test_surgical_line_1426_bincode_path() {
     assert_eq!(response, b"surgical_response_success");
 
     println!("✅ SURGICAL TEST SUCCESS!");
-    println!("   - Request went through bincode::deserialize::<RpcRequest>");
+    println!("   - Request went through rmp_serde::from_slice::<RpcRequest>");
     println!("   - Handler was found and executed");
-    println!("   - Response went through bincode::serialize");
+    println!("   - Response went through rmp_serde::to_vec");
     println!("   - Line 1426 should have been executed: stream.send(response_data.into()).await");
 
     // Make additional calls to ensure multiple hits

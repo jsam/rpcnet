@@ -595,6 +595,23 @@ impl PythonGenerator {
         code.push_str("        # Yield deserialized responses\n");
         code.push_str("        async for response_bytes in response_stream:\n");
         code.push_str("            response_dict = _rpcnet.msgpack_to_python_py(response_bytes)\n");
+        code.push_str("            \n");
+        code.push_str(
+            "            # Unwrap Result if present (Rust streaming methods return Result<T, E>)\n",
+        );
+        code.push_str(
+            "            if isinstance(response_dict, dict) and 'Ok' in response_dict:\n",
+        );
+        code.push_str("                response_dict = response_dict['Ok']\n");
+        code.push_str(
+            "            elif isinstance(response_dict, dict) and 'Err' in response_dict:\n",
+        );
+        code.push_str(
+            "                # Handle error variant - could raise exception or yield error\n",
+        );
+        code.push_str("                error_dict = response_dict['Err']\n");
+        code.push_str("                raise Exception(f\"RPC error: {error_dict}\")\n");
+        code.push_str("            \n");
 
         // Check if response type is an enum with data
         if self.is_enum_with_data(&response_item_type) {
@@ -725,7 +742,7 @@ impl PythonGenerator {
             "        \n        async def handle_{}(request_bytes: bytes) -> bytes:\n",
             method_name
         ));
-        code.push_str("            # Deserialize request from bincode\n");
+        code.push_str("            # Deserialize request from MessagePack\n");
         code.push_str("            request_dict = _rpcnet.bincode_to_python_py(request_bytes)\n");
         code.push_str(&format!(
             "            request = {}(**request_dict)\n",
@@ -738,7 +755,7 @@ impl PythonGenerator {
             method_name
         ));
         code.push_str("            \n");
-        code.push_str("            # Serialize response to bincode\n");
+        code.push_str("            # Serialize response to MessagePack\n");
         code.push_str("            response_dict = response.__dict__\n");
         code.push_str("            return _rpcnet.python_to_bincode_py(response_dict)\n");
         code.push_str("        \n");

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use super::types::*;
 use rpcnet::{RpcClient, RpcConfig, RpcError};
 use std::net::SocketAddr;
@@ -14,25 +12,23 @@ impl CalculatorClient {
         Ok(Self { inner })
     }
     pub async fn add(&self, request: AddRequest) -> Result<AddResponse, RpcError> {
-        let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
+        let params = rmp_serde::to_vec(&request)?;
         let response_data = self.inner.call("Calculator.add", params).await?;
-        bincode::deserialize::<AddResponse>(&response_data).map_err(RpcError::SerializationError)
+        rmp_serde::from_slice::<AddResponse>(&response_data).map_err(Into::into)
     }
     pub async fn subtract(&self, request: SubtractRequest) -> Result<SubtractResponse, RpcError> {
-        let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
+        let params = rmp_serde::to_vec(&request)?;
         let response_data = self.inner.call("Calculator.subtract", params).await?;
-        bincode::deserialize::<SubtractResponse>(&response_data)
-            .map_err(RpcError::SerializationError)
+        rmp_serde::from_slice::<SubtractResponse>(&response_data).map_err(Into::into)
     }
     pub async fn multiply(&self, request: MultiplyRequest) -> Result<MultiplyResponse, RpcError> {
-        let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
+        let params = rmp_serde::to_vec(&request)?;
         let response_data = self.inner.call("Calculator.multiply", params).await?;
-        bincode::deserialize::<MultiplyResponse>(&response_data)
-            .map_err(RpcError::SerializationError)
+        rmp_serde::from_slice::<MultiplyResponse>(&response_data).map_err(Into::into)
     }
     pub async fn divide(&self, request: DivideRequest) -> Result<DivideResponse, RpcError> {
-        let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
+        let params = rmp_serde::to_vec(&request)?;
         let response_data = self.inner.call("Calculator.divide", params).await?;
-        bincode::deserialize::<DivideResponse>(&response_data).map_err(RpcError::SerializationError)
+        rmp_serde::from_slice::<DivideResponse>(&response_data).map_err(Into::into)
     }
 }

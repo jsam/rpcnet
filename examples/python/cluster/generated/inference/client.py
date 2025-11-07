@@ -44,6 +44,19 @@ class InferenceClient:
         client = await _rpcnet.RpcClient.connect(addr, config)
         return InferenceClient(client)
 
+    async def infer(self, request: InferenceRequest) -> InferenceResponse:
+        """Call infer RPC method"""
+        # Serialize request to MessagePack bytes
+        request_dict = request.__dict__
+        request_bytes = _rpcnet.python_to_msgpack_py(request_dict)
+        
+        # Call RPC method 'Inference.infer'
+        response_bytes = await self._client.call('Inference.infer', request_bytes)
+        
+        # Deserialize response from MessagePack
+        response_dict = _rpcnet.msgpack_to_python_py(response_bytes)
+        return deserialize_inferenceresponse(response_dict)
+
     async def generate(self, request_stream: AsyncIterable[InferenceRequest]) -> AsyncIterator[InferenceResponse]:
         """Streaming RPC method: generate"""
         # Collect and serialize request stream items
@@ -59,5 +72,14 @@ class InferenceClient:
         # Yield deserialized responses
         async for response_bytes in response_stream:
             response_dict = _rpcnet.msgpack_to_python_py(response_bytes)
+            
+            # Unwrap Result if present (Rust streaming methods return Result<T, E>)
+            if isinstance(response_dict, dict) and 'Ok' in response_dict:
+                response_dict = response_dict['Ok']
+            elif isinstance(response_dict, dict) and 'Err' in response_dict:
+                # Handle error variant - could raise exception or yield error
+                error_dict = response_dict['Err']
+                raise Exception(f"RPC error: {error_dict}")
+            
             yield deserialize_inferenceresponse(response_dict)
 

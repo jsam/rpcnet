@@ -313,15 +313,14 @@ async fn test_malformed_data_scenarios() {
     // Register handlers that expect specific data formats
     server
         .register("expect_string", |params| async move {
-            let _text: String =
-                bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+            let _text: String = rmp_serde::from_slice(&params)?;
             Ok(b"string parsed successfully".to_vec())
         })
         .await;
 
     server
         .register("expect_number", |params| async move {
-            let _num: i32 = bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+            let _num: i32 = rmp_serde::from_slice(&params)?;
             Ok(b"number parsed successfully".to_vec())
         })
         .await;
@@ -354,7 +353,7 @@ async fn test_malformed_data_scenarios() {
 
             // Test 2: Send wrong data type
             println!("📍 Test 2: Wrong data type to number handler");
-            let string_data = bincode::serialize("not a number").unwrap();
+            let string_data = rmp_serde::to_vec("not a number").unwrap();
             let result2 = client.call("expect_number", string_data).await;
             match result2 {
                 Err(e) => {
