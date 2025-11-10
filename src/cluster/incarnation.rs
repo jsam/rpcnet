@@ -243,4 +243,52 @@ mod tests {
 
         assert_eq!(winner1.node_id, winner2.node_id);
     }
+
+    #[test]
+    fn test_resolve_conflict_equal_incarnation_lower_node_id() {
+        // Test the else branch when node_id a <= b
+        let status_a = NodeStatus {
+            node_id: NodeId::new("node-a"),
+            addr: "127.0.0.1:8001".parse().unwrap(),
+            incarnation: Incarnation(100),
+            state: NodeState::Alive,
+            last_seen: Instant::now(),
+            tags: HashMap::new(),
+        };
+
+        let status_b = NodeStatus {
+            node_id: NodeId::new("node-b"),
+            addr: "127.0.0.1:8002".parse().unwrap(),
+            incarnation: Incarnation(100),
+            state: NodeState::Alive,
+            last_seen: Instant::now(),
+            tags: HashMap::new(),
+        };
+
+        let winner = super::resolve_conflict(&status_a, &status_b);
+        // When incarnations are equal, higher node_id wins
+        assert_eq!(winner.node_id.as_str(), "node-b");
+    }
+
+    #[test]
+    fn test_from_value_and_value() {
+        let inc = Incarnation::from_value(12345);
+        assert_eq!(inc.value(), 12345);
+
+        let inc_zero = Incarnation::from_value(0);
+        assert_eq!(inc_zero.value(), 0);
+
+        let inc_max = Incarnation::from_value(u64::MAX);
+        assert_eq!(inc_max.value(), u64::MAX);
+    }
+
+    #[test]
+    fn test_partial_ord_trait() {
+        let inc1 = Incarnation(100);
+        let inc2 = Incarnation(200);
+
+        assert_eq!(inc1.partial_cmp(&inc2), Some(Ordering::Less));
+        assert_eq!(inc2.partial_cmp(&inc1), Some(Ordering::Greater));
+        assert_eq!(inc1.partial_cmp(&inc1), Some(Ordering::Equal));
+    }
 }
