@@ -245,23 +245,25 @@ fn bench_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("interop_comparison");
     let test_size = 1_024; // 1KB payload
 
-    // Rust client → Rust server (bincode)
+    // Rust client → Rust server (MessagePack)
     let rust_addr = runtime.block_on(setup_rust_server(19100)).unwrap();
 
-    group.bench_function("rust_to_rust_bincode", |b| {
+    // Create client once and reuse to avoid file descriptor exhaustion
+    let rust_client = runtime.block_on(async {
+        let config =
+            RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0").with_server_name("localhost");
+        RpcClient::connect(rust_addr, config).await.unwrap()
+    });
+
+    group.bench_function("rust_to_rust_msgpack", |b| {
         b.iter(|| {
             runtime.block_on(async {
-                let config = RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0")
-                    .with_server_name("localhost");
-
-                let client = RpcClient::connect(rust_addr, config).await.unwrap();
-
                 // Create MessagePack payload like Python would
                 let mut payload = HashMap::new();
                 payload.insert("data".to_string(), vec![0u8; test_size]);
                 let data = rmp_serde::to_vec(&payload).unwrap();
 
-                let _response = client.call("echo", data).await.unwrap();
+                let _response = rust_client.call("echo", data).await.unwrap();
             })
         });
     });
@@ -280,12 +282,97 @@ fn bench_comparison(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark: Direct PyO3 Python↔Rust calls (realistic real-world scenario)
+/// This uses PyO3 directly to call the Python RPC client from Rust,
+/// eliminating subprocess overhead for a more accurate measurement.
+#[cfg(feature = "python")]
+fn bench_pyo3_direct(c: &mut Criterion) {
+    use pyo3::prelude::*;
+    use pyo3::types::{PyBytes, PyDict};
+
+    let runtime = Runtime::new().unwrap();
+
+    // Check if Python bindings are available
+    let has_bindings = Python::with_gil(|py| py.import_bound("_rpcnet").is_ok());
+
+    if !has_bindings {
+        println!("⚠️  Skipping PyO3 direct benchmarks: Python bindings not built");
+        return;
+    }
+
+    let mut group = c.benchmark_group("pyo3_direct");
+    let test_size = 1_024; // 1KB payload
+
+    // Start Rust server
+    let server_addr = runtime.block_on(setup_rust_server(19200)).unwrap();
+    let port = server_addr.port();
+
+    // Create Python client once using PyO3
+    let py_client = Python::with_gil(|py| -> PyResult<PyObject> {
+        let rpcnet = py.import_bound("_rpcnet")?;
+
+        // Create config: RpcConfig(cert_path, bind_addr, server_name=None, timeout_secs=30)
+        let config_class = rpcnet.getattr("RpcConfig")?;
+        let config = config_class.call1(("certs/test_cert.pem", "0.0.0.0:0"))?;
+
+        // Set server_name attribute
+        config.setattr("server_name", "localhost")?;
+
+        // Connect to server
+        let client_class = rpcnet.getattr("RpcClient")?;
+        let connect_coro =
+            client_class.call_method1("connect", (format!("127.0.0.1:{}", port), config))?;
+
+        // Run async connect
+        let asyncio = py.import_bound("asyncio")?;
+        let client = asyncio.call_method1("run", (connect_coro,))?;
+
+        Ok(client.to_object(py))
+    })
+    .expect("Failed to create Python client");
+
+    println!("✅ Created long-lived Python client for realistic benchmarking");
+
+    group.bench_function("python_client_reused", |b| {
+        b.iter(|| {
+            Python::with_gil(|py| {
+                let client = py_client.bind(py);
+                let rpcnet = py.import_bound("_rpcnet").unwrap();
+
+                // Create payload dict
+                let py_dict = PyDict::new_bound(py);
+                let data_bytes = vec![0u8; test_size];
+                py_dict.set_item("data", data_bytes).unwrap();
+
+                // Serialize with python_to_msgpack_py
+                let serialized = rpcnet
+                    .call_method1("python_to_msgpack_py", (py_dict,))
+                    .unwrap();
+
+                // Call RPC
+                let call_coro = client.call_method1("call", ("echo", serialized)).unwrap();
+
+                // Run async call
+                let asyncio = py.import_bound("asyncio").unwrap();
+                let _response = asyncio.call_method1("run", (call_coro,)).unwrap();
+            })
+        });
+    });
+
+    group.finish();
+}
+
+#[cfg(not(feature = "python"))]
+fn bench_pyo3_direct(_c: &mut Criterion) {
+    println!("⚠️  Skipping PyO3 benchmarks: python feature not enabled");
+}
+
 criterion_group! {
     name = benches;
     config = Criterion::default()
         .sample_size(50)  // Fewer samples since Python is slower
         .measurement_time(Duration::from_secs(10));
-    targets = bench_python_to_rust, bench_comparison
+    targets = bench_python_to_rust, bench_comparison, bench_pyo3_direct
 }
 
 criterion_main!(benches);

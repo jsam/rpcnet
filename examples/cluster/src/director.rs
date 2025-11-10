@@ -95,7 +95,7 @@ async fn main() -> Result<()> {
 
     info!("🔄 Load balancing strategy: LeastConnections");
 
-    // Shared handler for both bincode (Rust clients) and MessagePack (Python clients)
+    // Shared handler for both Rust and Python clients (all use MessagePack)
     let handler = {
         let registry = worker_registry.clone();
         move |request: GetWorkerRequest| {
@@ -155,7 +155,7 @@ async fn main() -> Result<()> {
         }
     };
 
-    // Register with polyglot support (accepts both bincode from Rust and MessagePack from Python)
+    // Register with polyglot support (MessagePack serialization for all clients)
     server.register_typed_polyglot("DirectorRegistry.get_worker", handler).await;
 
     let stats_registry = worker_registry.clone();

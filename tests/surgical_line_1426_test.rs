@@ -56,9 +56,9 @@ async fn test_surgical_line_1426_bincode_path() {
     // Wait for server to start
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    println!("Connecting client to hit the exact bincode deserialization path...");
+    println!("Connecting client to hit the exact MessagePack deserialization path...");
 
-    // Connect and make a call that will definitely hit the bincode path
+    // Connect and make a call that will definitely hit the MessagePack path
     let client = timeout(
         Duration::from_millis(2000),
         RpcClient::connect(server_addr, create_test_config()),

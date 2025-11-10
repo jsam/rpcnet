@@ -325,8 +325,32 @@ doc-book-serve:
 
 # Benchmark commands
 bench:
-	@echo "Running benchmarks..."
+	@echo "Running all benchmarks (Rust + Python)..."
+	@echo ""
+	@echo "=== Rust Benchmarks ==="
 	cargo bench
+	@echo ""
+	@echo "=== Python Benchmarks ==="
+	@if [ -f .venv/bin/python ]; then \
+		.venv/bin/python benches/python_realistic_bench.py; \
+	else \
+		echo "⚠️  Python venv not found. Skipping Python benchmarks."; \
+		echo "   Run: uv venv && uv run maturin develop --features python --release"; \
+	fi
+
+bench-rust:
+	@echo "Running Rust benchmarks only..."
+	cargo bench
+
+bench-python:
+	@echo "Running Python benchmarks only..."
+	@if [ -f .venv/bin/python ]; then \
+		.venv/bin/python benches/python_realistic_bench.py; \
+	else \
+		echo "❌ Error: Python venv not found"; \
+		echo "   Run: uv venv && uv run maturin develop --features python --release"; \
+		exit 1; \
+	fi
 
 # Example commands
 examples:

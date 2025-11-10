@@ -382,9 +382,10 @@ responses = await asyncio.gather(
 
 ### ✅ Automatic Serialization
 
-- MessagePack encoding/decoding
+- MessagePack encoding/decoding (via `rmp-serde`)
 - Handles complex nested types
-- Compatible with Rust bincode for primitive types
+- Fully compatible with Rust MessagePack serialization
+- Cross-language type safety maintained
 
 ```python
 # Automatic serialization
