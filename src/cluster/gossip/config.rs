@@ -82,8 +82,7 @@ mod tests {
     #[test]
     fn test_config_partial_builder() {
         // Test that we can set some values while keeping others at default
-        let config = GossipConfig::default()
-            .with_protocol_period(Duration::from_millis(100));
+        let config = GossipConfig::default().with_protocol_period(Duration::from_millis(100));
 
         assert_eq!(config.protocol_period, Duration::from_millis(100));
         assert_eq!(config.indirect_ping_count, 3); // Still default

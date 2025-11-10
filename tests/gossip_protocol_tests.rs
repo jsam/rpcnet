@@ -183,7 +183,7 @@ fn test_gossip_queue_logarithmic_redundancy() {
     // Test that gossip rounds follow log(N) * 3 formula
     let test_cases = vec![
         (10, 12),   // log2(10) = 3.32, ceil = 4, * 3 = 12
-        (100, 21), // log2(100) = 6.64, ceil = 7, * 3 = 21
+        (100, 21),  // log2(100) = 6.64, ceil = 7, * 3 = 21
         (1000, 30), // log2(1000) = 9.97, ceil = 10, * 3 = 30
     ];
 
@@ -340,7 +340,10 @@ fn test_node_update_serialization_with_tags() {
     let deserialized: GossipMessage = rmp_serde::from_slice(&serialized).unwrap();
 
     assert_eq!(deserialized.updates.len(), 1);
-    assert_eq!(deserialized.updates[0].tags.get("key"), Some(&"value".to_string()));
+    assert_eq!(
+        deserialized.updates[0].tags.get("key"),
+        Some(&"value".to_string())
+    );
 }
 
 //------------------------------------------------------------------------------
