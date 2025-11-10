@@ -174,8 +174,7 @@ async def main():
                 print(f"Request {i}/{len(prompts)}:")
                 print(f"  ✅ Success ({elapsed:.1f}ms)")
                 print(f"  📝 Prompt:   {prompt}")
-                print(f"  📊 Response: {response.response}")
-                print(f"  🔧 Worker:   {response.worker_label}")
+                print(f"  📊 Response: {response.text}")
                 print()
 
             except Exception as e:
