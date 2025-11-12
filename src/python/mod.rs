@@ -26,6 +26,10 @@ use pyo3::prelude::*;
 #[cfg(feature = "python")]
 #[pymodule]
 fn _rpcnet(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Note: prepare_freethreaded_python() is NOT needed for extension modules.
+    // Python has already initialized the interpreter before loading this module.
+    // Multi-threaded GIL acquisition via Python::with_gil() works correctly without it.
+
     // Register classes
     m.add_class::<config::PyRpcConfig>()?;
     m.add_class::<client::PyRpcClient>()?;
