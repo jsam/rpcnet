@@ -10,6 +10,8 @@ pub mod config;
 #[cfg(feature = "python")]
 pub mod error;
 #[cfg(feature = "python")]
+pub mod event_loop;
+#[cfg(feature = "python")]
 pub mod serde;
 #[cfg(feature = "python")]
 pub mod server;
