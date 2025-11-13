@@ -19,11 +19,9 @@
 
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use std::ffi::CString;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
-
-#[cfg(test)]
-use pyo3::ffi::c_str;
 
 /// Message sent to the event loop thread to execute a handler
 enum ExecutionRequest {
@@ -312,13 +310,12 @@ impl PythonEventLoopExecutor {
         // Create Python code that defines an async iterator from a list
         // We'll collect all items from the receiver first, then iterate
         let iterator_code = r#"
-async def request_iterator(items):
-    for item in items:
-        yield item
-
 async def run_handler(handler, items):
-    iterator = request_iterator(items)
-    result = await handler(iterator)
+    async def request_iterator():
+        for item in items:
+            yield item
+
+    result = await handler(request_iterator())
     return result
 "#;
 
@@ -326,9 +323,9 @@ async def run_handler(handler, items):
         let items_list = pyo3::types::PyList::empty(py);
         while let Ok(item) = request_rx.try_recv() {
             let py_bytes = PyBytes::new(py, &item);
-            items_list
-                .append(py_bytes)
-                .map_err(|e| crate::RpcError::InternalError(format!("Failed to append item: {}", e)))?;
+            items_list.append(py_bytes).map_err(|e| {
+                crate::RpcError::InternalError(format!("Failed to append item: {}", e))
+            })?;
         }
 
         // If no items yet, we need to block and wait for at least one
@@ -336,13 +333,18 @@ async def run_handler(handler, items):
             // Release GIL and wait for first item
             py.allow_threads(|| request_rx.blocking_recv())
                 .ok_or_else(|| {
-                    crate::RpcError::InternalError("Request stream closed before any items".to_string())
+                    crate::RpcError::InternalError(
+                        "Request stream closed before any items".to_string(),
+                    )
                 })
                 .and_then(|first_item| {
                     Python::with_gil(|py| {
                         let py_bytes = PyBytes::new(py, &first_item);
                         items_list.append(py_bytes).map_err(|e| {
-                            crate::RpcError::InternalError(format!("Failed to append first item: {}", e))
+                            crate::RpcError::InternalError(format!(
+                                "Failed to append first item: {}",
+                                e
+                            ))
                         })
                     })
                 })?;
@@ -350,36 +352,45 @@ async def run_handler(handler, items):
             // Now collect any remaining items
             while let Ok(item) = request_rx.try_recv() {
                 let py_bytes = PyBytes::new(py, &item);
-                items_list
-                    .append(py_bytes)
-                    .map_err(|e| crate::RpcError::InternalError(format!("Failed to append item: {}", e)))?;
+                items_list.append(py_bytes).map_err(|e| {
+                    crate::RpcError::InternalError(format!("Failed to append item: {}", e))
+                })?;
             }
         }
 
         // Execute the Python code to define the functions
         let locals = PyDict::new(py);
-        py.run(iterator_code, None, Some(locals))
-            .map_err(|e| crate::RpcError::InternalError(format!("Failed to define iterator: {}", e)))?;
+        let iterator_code_cstr = CString::new(iterator_code).map_err(|e| {
+            crate::RpcError::InternalError(format!("Failed to create CString: {}", e))
+        })?;
+        py.run(&iterator_code_cstr, None, Some(&locals))
+            .map_err(|e| {
+                crate::RpcError::InternalError(format!("Failed to define iterator: {}", e))
+            })?;
 
         let run_handler_fn = locals
             .get_item("run_handler")
-            .map_err(|e| crate::RpcError::InternalError(format!("Failed to get run_handler: {}", e)))?
+            .map_err(|e| {
+                crate::RpcError::InternalError(format!("Failed to get run_handler: {}", e))
+            })?
             .ok_or_else(|| crate::RpcError::InternalError("run_handler not found".to_string()))?;
 
         // Call run_handler(handler, items) to create the coroutine
-        let coroutine = run_handler_fn
-            .call1((handler, items_list))
-            .map_err(|e| crate::RpcError::InternalError(format!("Failed to create coroutine: {}", e)))?;
+        let coroutine = run_handler_fn.call1((handler, items_list)).map_err(|e| {
+            crate::RpcError::InternalError(format!("Failed to create coroutine: {}", e))
+        })?;
 
         // Run the coroutine in the event loop
         let result = event_loop
             .call_method1("run_until_complete", (coroutine,))
-            .map_err(|e| crate::RpcError::InternalError(format!("Client streaming handler failed: {}", e)))?;
+            .map_err(|e| {
+                crate::RpcError::InternalError(format!("Client streaming handler failed: {}", e))
+            })?;
 
         // Convert result to bytes
-        result
-            .extract::<Vec<u8>>()
-            .map_err(|e| crate::RpcError::InternalError(format!("Handler must return bytes, got: {}", e)))
+        result.extract::<Vec<u8>>().map_err(|e| {
+            crate::RpcError::InternalError(format!("Handler must return bytes, got: {}", e))
+        })
     }
 
     /// Execute bidirectional streaming implementation (N→M)
@@ -397,13 +408,12 @@ async def run_handler(handler, items):
 
         // Create Python code that defines an async iterator and a runner
         let code = r#"
-async def request_iterator(items):
-    for item in items:
-        yield item
-
 async def run_bidirectional(handler, items):
-    iterator = request_iterator(items)
-    async for response in handler(iterator):
+    async def request_iterator():
+        for item in items:
+            yield item
+
+    async for response in handler(request_iterator()):
         yield response
 "#;
 
@@ -457,7 +467,17 @@ async def run_bidirectional(handler, items):
 
         // Execute the Python code to define the functions
         let locals = PyDict::new(py);
-        if let Err(e) = py.run(code, None, Some(locals)) {
+        let code_cstr = match CString::new(code) {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = response_tx.send(Err(crate::RpcError::InternalError(format!(
+                    "Failed to create CString: {}",
+                    e
+                ))));
+                return;
+            }
+        };
+        if let Err(e) = py.run(&code_cstr, None, Some(&locals)) {
             let _ = response_tx.send(Err(crate::RpcError::InternalError(format!(
                 "Failed to define bidirectional functions: {}",
                 e
@@ -519,7 +539,7 @@ async def run_bidirectional(handler, items):
                                 .ok();
 
                             if let Some(stop_iter_type) = stop_iteration {
-                                if e.is_instance(&stop_iter_type).unwrap_or(false) {
+                                if e.is_instance(py, &stop_iter_type) {
                                     // Normal end of iteration
                                     break;
                                 }
@@ -542,7 +562,7 @@ async def run_bidirectional(handler, items):
                         .ok();
 
                     if let Some(stop_iter_type) = stop_iteration {
-                        if e.is_instance(&stop_iter_type).unwrap_or(false) {
+                        if e.is_instance(py, &stop_iter_type) {
                             // Normal end of iteration
                             break;
                         }
