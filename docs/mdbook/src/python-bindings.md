@@ -509,6 +509,141 @@ async for response in client.generate(request_generator()):
 - **Bidirectional streaming**: Fully supported (both AsyncIterable and AsyncIterator)
 - **Python server implementation**: Generated but needs runtime testing
 
+### Low-Level Streaming API
+
+In addition to the code-generated high-level API, RpcNet provides a **low-level Python streaming API** for direct use of the `_rpcnet` module without code generation. This is useful for:
+- Quick prototyping without running codegen
+- Dynamic handler registration
+- Custom streaming patterns
+
+**Examples**: See `examples/python/streaming/` for complete working examples of all three streaming patterns.
+
+#### Server Streaming (1→N)
+
+Server sends multiple responses for a single request:
+
+```python
+import asyncio
+import _rpcnet
+
+async def stream_numbers(request_bytes):
+    """Async generator that yields multiple responses"""
+    for i in range(5):
+        response = {"number": i, "timestamp": time.time()}
+        yield _rpcnet.python_to_msgpack_py(response)
+        await asyncio.sleep(0.1)
+
+# Register handler
+config = _rpcnet.RpcConfig(
+    cert_path="certs/test_cert.pem",
+    key_path="certs/test_key.pem",
+    bind_addr="127.0.0.1:9001",
+    server_name="localhost"
+)
+
+server = _rpcnet.RpcServer(config)
+server.register_server_streaming_handler("stream_numbers", stream_numbers)
+await server.serve()
+```
+
+**Client usage**:
+```python
+client = await _rpcnet.RpcClient.connect("127.0.0.1:9001", config)
+request = _rpcnet.python_to_msgpack_py({"query": "numbers"})
+
+# Receive stream of responses
+responses = await client.call_streaming("stream_numbers", [request])
+for response_bytes in responses:
+    response = _rpcnet.msgpack_to_python_py(response_bytes)
+    print(f"Received: {response}")
+```
+
+#### Client Streaming (N→1)
+
+Client sends multiple requests, server returns single response:
+
+```python
+async def sum_numbers(request_stream):
+    """Consume stream and return single result"""
+    total = 0
+    async for request_bytes in request_stream:
+        request = _rpcnet.msgpack_to_python_py(request_bytes)
+        total += request["value"]
+
+    response = {"sum": total, "count": len(requests)}
+    return _rpcnet.python_to_msgpack_py(response)
+
+server.register_client_streaming_handler("sum_numbers", sum_numbers)
+```
+
+**Client usage**:
+```python
+# Send multiple requests
+requests = [
+    _rpcnet.python_to_msgpack_py({"value": 1}),
+    _rpcnet.python_to_msgpack_py({"value": 2}),
+    _rpcnet.python_to_msgpack_py({"value": 3}),
+]
+
+response_bytes = await client.call_streaming("sum_numbers", requests)
+response = _rpcnet.msgpack_to_python_py(response_bytes[0])
+print(f"Sum: {response['sum']}")
+```
+
+#### Bidirectional Streaming (N→M)
+
+Both client and server send streams:
+
+```python
+async def echo_transform(request_stream):
+    """Async generator that consumes and yields"""
+    async for request_bytes in request_stream:
+        request = _rpcnet.msgpack_to_python_py(request_bytes)
+
+        # Transform and echo back
+        response = {
+            "echo": request["message"].upper(),
+            "length": len(request["message"])
+        }
+        yield _rpcnet.python_to_msgpack_py(response)
+
+server.register_bidirectional_handler("echo_transform", echo_transform)
+```
+
+**Client usage**:
+```python
+# Send stream of requests
+requests = [
+    _rpcnet.python_to_msgpack_py({"message": "hello"}),
+    _rpcnet.python_to_msgpack_py({"message": "world"}),
+]
+
+# Receive stream of responses
+responses = await client.call_streaming("echo_transform", requests)
+for response_bytes in responses:
+    response = _rpcnet.msgpack_to_python_py(response_bytes)
+    print(f"Echo: {response['echo']}")
+```
+
+#### Running the Examples
+
+```bash
+# Terminal 1 - Start server streaming example
+.venv/bin/python examples/python/streaming/server_streaming_example.py
+
+# Terminal 2 - Test server streaming
+.venv/bin/python examples/python/streaming/test_server_streaming.py
+
+# Run all streaming tests
+./examples/python/streaming/test_all_streaming.sh
+```
+
+**Key differences from codegen API**:
+- Manual serialization with `python_to_msgpack_py()` / `msgpack_to_python_py()`
+- Direct handler registration on `RpcServer`
+- No type hints (dynamic typing)
+- Lower-level control over streaming behavior
+
 ## Type Compatibility
 
 ### Rust-Only Types
