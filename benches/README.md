@@ -71,6 +71,34 @@ Latency:
   P99:             XXX µs
 ```
 
+### `python_event_loop_bench.py` 🔥 **New: Persistent Event Loop**
+Benchmarks the new persistent Python event loop executor implementation.
+
+**Features:**
+- Tests the persistent event loop thread architecture
+- Measures handler invocation latency and throughput
+- Includes payload size scaling tests (10B→10KB)
+- Demonstrates performance improvements over `spawn_blocking` approach
+
+**Run:**
+```bash
+.venv/bin/python benches/python_event_loop_bench.py
+```
+
+**Expected Results:**
+```
+Total calls:        500
+Total time:         0.109 seconds
+Avg latency:        0.22 ms/call
+Throughput:         4,593 calls/sec
+
+Latency by payload size:
+     10 bytes:   0.17 ms/call
+    100 bytes:   0.18 ms/call
+   1024 bytes:   0.20 ms/call
+  10240 bytes:   0.67 ms/call
+```
+
 ## Benchmark Comparison
 
 | Benchmark Type | Overhead | Use Case | Representative? |
