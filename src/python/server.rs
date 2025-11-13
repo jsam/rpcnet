@@ -7,6 +7,7 @@ use crate::RpcServer;
 use pyo3::prelude::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 /// Python wrapper for RPC server
 ///
@@ -39,8 +40,9 @@ impl PyRpcServer {
     #[new]
     fn new(config: &PyRpcConfig) -> PyResult<Self> {
         let server = RpcServer::new(config.inner.clone());
-        let executor = PythonEventLoopExecutor::new()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create executor: {}", e)))?;
+        let executor = PythonEventLoopExecutor::new().map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create executor: {}", e))
+        })?;
 
         Ok(PyRpcServer {
             server: Arc::new(Mutex::new(server)),
@@ -88,6 +90,158 @@ impl PyRpcServer {
             // Register handler with RpcServer
             let server_guard = server.lock().await;
             server_guard.register(&method_name, handler_fn).await;
+            Ok(())
+        })
+    }
+
+    /// Register a server streaming RPC method handler (async generator)
+    ///
+    /// The handler must be a Python async generator function that takes bytes
+    /// and yields multiple bytes responses.
+    ///
+    /// Args:
+    ///     method_name: Name of the RPC method
+    ///     handler: Async generator function (bytes) -> yields bytes
+    ///
+    /// Example:
+    ///     >>> async def stream_numbers(request_bytes):
+    ///     ...     for i in range(10):
+    ///     ...         await asyncio.sleep(0.1)
+    ///     ...         yield str(i).encode()
+    ///     >>> await server.register_server_streaming("stream_numbers", stream_numbers)
+    fn register_server_streaming<'py>(
+        &self,
+        py: Python<'py>,
+        method_name: String,
+        handler: PyObject,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let server = self.server.clone();
+        let executor = self.executor.clone();
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            // Wrap Python async generator to be callable from Rust
+            // The executor handles running the Python handler in a dedicated event loop
+            let handler_fn = move |params: Vec<u8>| {
+                let handler = Python::with_gil(|py| handler.clone_ref(py));
+                let executor = executor.clone();
+                async move {
+                    // Use the executor to run the Python async generator
+                    // This returns a receiver that yields the stream items
+                    match executor.execute_server_streaming_handler(handler, params).await {
+                        Ok(receiver) => {
+                            // Convert the receiver to a Stream
+                            UnboundedReceiverStream::new(receiver)
+                        }
+                        Err(_e) => {
+                            // Return an empty stream on error (error already sent through channel)
+                            let (_, rx) = tokio::sync::mpsc::unbounded_channel();
+                            UnboundedReceiverStream::new(rx)
+                        }
+                    }
+                }
+            };
+
+            // Register server streaming handler with RpcServer
+            let server_guard = server.lock().await;
+            server_guard.register_server_streaming(&method_name, handler_fn).await;
+            Ok(())
+        })
+    }
+
+    /// Register a client streaming RPC method handler (N→1)
+    ///
+    /// The handler must be a Python async function that takes an async iterator
+    /// (consuming multiple requests) and returns a single bytes response.
+    ///
+    /// Args:
+    ///     method_name: Name of the RPC method
+    ///     handler: Async Python function (async_iterator) -> bytes
+    ///
+    /// Example:
+    ///     >>> async def upload_handler(request_stream):
+    ///     ...     total_size = 0
+    ///     ...     async for chunk in request_stream:
+    ///     ...         total_size += len(chunk)
+    ///     ...     return json.dumps({"total_size": total_size}).encode()
+    ///     >>> await server.register_client_streaming("upload", upload_handler)
+    fn register_client_streaming<'py>(
+        &self,
+        py: Python<'py>,
+        method_name: String,
+        handler: PyObject,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let server = self.server.clone();
+        let executor = self.executor.clone();
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            // Wrap Python async function to be callable from Rust
+            // The executor handles running the Python handler with a request stream
+            let handler_fn = move |request_stream: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>| {
+                let handler = Python::with_gil(|py| handler.clone_ref(py));
+                let executor = executor.clone();
+                async move {
+                    // Use the executor to run the Python handler with the request stream
+                    executor.execute_client_streaming_handler(handler, request_stream).await
+                }
+            };
+
+            // Register handler with RpcServer
+            let server_guard = server.lock().await;
+            server_guard.register_client_streaming(&method_name, handler_fn).await;
+            Ok(())
+        })
+    }
+
+    /// Register a bidirectional streaming RPC method handler (N→M)
+    ///
+    /// The handler must be a Python async generator function that takes an async iterator
+    /// (consuming multiple requests) and yields multiple bytes responses.
+    ///
+    /// Args:
+    ///     method_name: Name of the RPC method
+    ///     handler: Async generator function (async_iterator) -> yields bytes
+    ///
+    /// Example:
+    ///     >>> async def bidirectional_handler(request_stream):
+    ///     ...     async for chunk in request_stream:
+    ///     ...         # Process each request and yield response
+    ///     ...         yield process(chunk)
+    ///     >>> await server.register_bidirectional("process_stream", bidirectional_handler)
+    fn register_bidirectional<'py>(
+        &self,
+        py: Python<'py>,
+        method_name: String,
+        handler: PyObject,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let server = self.server.clone();
+        let executor = self.executor.clone();
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            // Wrap Python async generator to be callable from Rust
+            // The executor handles running the Python handler with a request stream
+            let handler_fn = move |request_stream: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>| {
+                let handler = Python::with_gil(|py| handler.clone_ref(py));
+                let executor = executor.clone();
+                async move {
+                    // Use the executor to run the Python handler with the request stream
+                    // This returns a receiver that yields the response stream items
+                    match executor.execute_bidirectional_handler(handler, request_stream).await {
+                        Ok(receiver) => {
+                            // Convert the receiver to a Stream
+                            tokio_stream::wrappers::UnboundedReceiverStream::new(receiver)
+                        }
+                        Err(_e) => {
+                            // Return an empty stream on error
+                            let (_, rx) = tokio::sync::mpsc::unbounded_channel();
+                            tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
+                        }
+                    }
+                }
+            };
+
+            // Register bidirectional handler with RpcServer
+            let server_guard = server.lock().await;
+            server_guard.register_bidirectional(&method_name, handler_fn).await;
             Ok(())
         })
     }

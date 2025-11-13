@@ -19,7 +19,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::{
-    sync::{oneshot, RwLock},
+    sync::{mpsc, oneshot, RwLock},
     task::JoinHandle,
 };
 use tracing::debug;
@@ -260,11 +260,44 @@ type AsyncStreamingHandlerFn = Box<
         + Sync,
 >;
 
+type AsyncServerStreamingHandlerFn = Box<
+    dyn Fn(Vec<u8>) -> Pin<
+        Box<
+            dyn Future<Output = Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>>
+                + Send,
+        >,
+    > + Send
+        + Sync,
+>;
+
+type AsyncClientStreamingHandlerFn = Box<
+    dyn Fn(mpsc::UnboundedReceiver<Vec<u8>>) -> Pin<
+        Box<dyn Future<Output = Result<Vec<u8>, RpcError>> + Send>,
+    > + Send
+        + Sync,
+>;
+
+type AsyncBidirectionalHandlerFn = Box<
+    dyn Fn(mpsc::UnboundedReceiver<Vec<u8>>) -> Pin<
+        Box<
+            dyn Future<Output = Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>>
+                + Send,
+        >,
+    > + Send
+        + Sync,
+>;
+
 #[derive(Clone)]
 pub struct RpcServer {
     pub handlers: Arc<RwLock<HashMap<String, AsyncHandlerFn>>>,
 
     pub streaming_handlers: Arc<RwLock<HashMap<String, AsyncStreamingHandlerFn>>>,
+
+    pub server_streaming_handlers: Arc<RwLock<HashMap<String, AsyncServerStreamingHandlerFn>>>,
+
+    pub client_streaming_handlers: Arc<RwLock<HashMap<String, AsyncClientStreamingHandlerFn>>>,
+
+    pub bidirectional_handlers: Arc<RwLock<HashMap<String, AsyncBidirectionalHandlerFn>>>,
 
     pub socket_addr: Option<SocketAddr>,
 
@@ -407,6 +440,9 @@ impl RpcServer {
         Self {
             handlers: Arc::new(RwLock::new(HashMap::new())),
             streaming_handlers: Arc::new(RwLock::new(HashMap::new())),
+            server_streaming_handlers: Arc::new(RwLock::new(HashMap::new())),
+            client_streaming_handlers: Arc::new(RwLock::new(HashMap::new())),
+            bidirectional_handlers: Arc::new(RwLock::new(HashMap::new())),
             socket_addr: None,
             config,
             cluster: Arc::new(RwLock::new(None)),
@@ -523,6 +559,81 @@ impl RpcServer {
         );
     }
 
+    /// Register a server streaming RPC handler (1 request → N responses)
+    ///
+    /// The handler receives a single request and returns a stream of responses.
+    /// This is useful for operations like:
+    /// - Listing large datasets in chunks
+    /// - Real-time updates or notifications
+    /// - Long-running operations with progress updates
+    pub async fn register_server_streaming<F, Fut, S>(&self, method: &str, handler: F)
+    where
+        F: Fn(Vec<u8>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = S> + Send + 'static,
+        S: Stream<Item = Result<Vec<u8>, RpcError>> + Send + 'static,
+    {
+        let mut handlers = self.server_streaming_handlers.write().await;
+        let handler = Arc::new(handler);
+        handlers.insert(
+            method.to_string(),
+            Box::new(move |params| {
+                let handler = handler.clone();
+                Box::pin(async move {
+                    let response_stream = handler(params).await;
+                    Box::pin(response_stream)
+                        as Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>
+                })
+            }),
+        );
+    }
+
+    /// Register a client streaming RPC handler (N→1)
+    ///
+    /// Client streaming handlers receive multiple requests from the client and return a single response.
+    /// The handler function receives an `UnboundedReceiver<Vec<u8>>` stream of incoming requests
+    /// and returns a single `Result<Vec<u8>, RpcError>` response.
+    pub async fn register_client_streaming<F, Fut>(&self, method: &str, handler: F)
+    where
+        F: Fn(mpsc::UnboundedReceiver<Vec<u8>>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Vec<u8>, RpcError>> + Send + 'static,
+    {
+        let mut handlers = self.client_streaming_handlers.write().await;
+        let handler = Arc::new(handler);
+        handlers.insert(
+            method.to_string(),
+            Box::new(move |request_rx| {
+                let handler = handler.clone();
+                Box::pin(async move { handler(request_rx).await })
+            }),
+        );
+    }
+
+    /// Register a bidirectional streaming RPC handler (N→M)
+    ///
+    /// Bidirectional streaming handlers receive multiple requests from the client and return multiple responses.
+    /// The handler function receives an `UnboundedReceiver<Vec<u8>>` stream of incoming requests
+    /// and returns a `Stream` of `Result<Vec<u8>, RpcError>` responses.
+    pub async fn register_bidirectional<F, Fut, S>(&self, method: &str, handler: F)
+    where
+        F: Fn(mpsc::UnboundedReceiver<Vec<u8>>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = S> + Send + 'static,
+        S: Stream<Item = Result<Vec<u8>, RpcError>> + Send + 'static,
+    {
+        let mut handlers = self.bidirectional_handlers.write().await;
+        let handler = Arc::new(handler);
+        handlers.insert(
+            method.to_string(),
+            Box::new(move |request_rx| {
+                let handler = handler.clone();
+                Box::pin(async move {
+                    let response_stream = handler(request_rx).await;
+                    Box::pin(response_stream)
+                        as Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>
+                })
+            }),
+        );
+    }
+
     pub async fn start(&mut self, server: s2n_quic::Server) -> Result<(), RpcError> {
         let mut adapter = RealServerAdapter::new(server);
         self.start_with_adapter(&mut adapter).await
@@ -535,6 +646,9 @@ impl RpcServer {
         while let Some(mut connection) = server.accept().await {
             let handlers = self.handlers.clone();
             let streaming_handlers = self.streaming_handlers.clone();
+            let server_streaming_handlers = self.server_streaming_handlers.clone();
+            let client_streaming_handlers = self.client_streaming_handlers.clone();
+            let bidirectional_handlers = self.bidirectional_handlers.clone();
             let cluster = self.cluster.clone();
 
             tokio::spawn(async move {
@@ -542,11 +656,17 @@ impl RpcServer {
                 while let Ok(Some(stream)) = connection.accept_bidirectional_stream().await {
                     let handlers = handlers.clone();
                     let streaming_handlers = streaming_handlers.clone();
+                    let server_streaming_handlers = server_streaming_handlers.clone();
+                    let client_streaming_handlers = client_streaming_handlers.clone();
+                    let bidirectional_handlers = bidirectional_handlers.clone();
                     let cluster = cluster.clone();
 
                     tokio::spawn(Self::handle_stream(
                         handlers,
                         streaming_handlers,
+                        server_streaming_handlers,
+                        client_streaming_handlers,
+                        bidirectional_handlers,
                         cluster,
                         stream,
                     ));
@@ -560,6 +680,9 @@ impl RpcServer {
     async fn handle_stream(
         handlers: Arc<RwLock<HashMap<String, AsyncHandlerFn>>>,
         streaming_handlers: Arc<RwLock<HashMap<String, AsyncStreamingHandlerFn>>>,
+        server_streaming_handlers: Arc<RwLock<HashMap<String, AsyncServerStreamingHandlerFn>>>,
+        client_streaming_handlers: Arc<RwLock<HashMap<String, AsyncClientStreamingHandlerFn>>>,
+        bidirectional_handlers: Arc<RwLock<HashMap<String, AsyncBidirectionalHandlerFn>>>,
         cluster: Arc<RwLock<Option<Arc<cluster::ClusterMembership>>>>,
         stream: Box<dyn QuicStreamAdapter + Send>,
     ) {
@@ -617,6 +740,196 @@ impl RpcServer {
             match rmp_serde::from_slice::<RpcRequest>(&request_data) {
                 Ok(request) => {
                     debug!("📨 Received RPC request: {}", request.method);
+
+                    // Check if it's a server streaming handler first
+                    let server_streaming_handlers_guard = server_streaming_handlers.read().await;
+                    if let Some(handler) = server_streaming_handlers_guard.get(request.method()) {
+                        debug!("🌊 Found server streaming handler for: {}", request.method);
+                        let mut response_stream = handler(request.params().to_vec()).await;
+                        drop(server_streaming_handlers_guard); // Release lock
+
+                        // Stream responses back to the client
+                        use futures::StreamExt;
+                        while let Some(result) = response_stream.next().await {
+                            let response_data = match result {
+                                Ok(data) => {
+                                    // Wrap in RpcResponse
+                                    let response = RpcResponse::from_result(request.id(), Ok(data));
+                                    rmp_serde::to_vec_named(&response).unwrap_or_default()
+                                }
+                                Err(e) => {
+                                    // Send error response
+                                    let response = RpcResponse::from_result(request.id(), Err(e));
+                                    rmp_serde::to_vec_named(&response).unwrap_or_default()
+                                }
+                            };
+
+                            if !response_data.is_empty() {
+                                let mut stream_guard = stream.lock().await;
+                                if stream_guard.send_bytes(Bytes::from(response_data)).await.is_err() {
+                                    debug!("❌ Failed to send streaming response, client disconnected");
+                                    break;
+                                }
+                            }
+                        }
+                        break; // Streaming complete
+                    }
+                    drop(server_streaming_handlers_guard);
+
+                    // Check if it's a client streaming handler (N→1)
+                    let client_streaming_handlers_guard = client_streaming_handlers.read().await;
+                    if client_streaming_handlers_guard.contains_key(request.method()) {
+                        debug!("🌊 Found client streaming handler for: {}", request.method());
+
+                        // Create a channel to collect all incoming requests
+                        let (request_tx, request_rx) = mpsc::unbounded_channel();
+
+                        // Send the first request (already parsed)
+                        if request_tx.send(request.params().to_vec()).is_err() {
+                            debug!("❌ Failed to send first request to channel");
+                            drop(client_streaming_handlers_guard);
+                            break;
+                        }
+
+                        drop(client_streaming_handlers_guard); // Release lock
+
+                        // Collect remaining requests from the stream
+                        loop {
+                            let mut stream_guard = stream.lock().await;
+                            let data_result = stream_guard.receive_bytes().await;
+                            drop(stream_guard);
+
+                            match data_result {
+                                Ok(Some(data)) => {
+                                    // Try to parse as another request
+                                    match rmp_serde::from_slice::<RpcRequest>(&data) {
+                                        Ok(req) => {
+                                            if request_tx.send(req.params().to_vec()).is_err() {
+                                                debug!("❌ Failed to send request to channel (receiver dropped)");
+                                                break;
+                                            }
+                                        }
+                                        Err(_) => {
+                                            debug!("⚠️  Non-request data in client stream, ending stream");
+                                            break;
+                                        }
+                                    }
+                                }
+                                Ok(None) | Err(_) => {
+                                    debug!("🏁 Client streaming ended (stream closed)");
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Drop sender to signal end of stream
+                        drop(request_tx);
+
+                        // Call the handler with the request stream
+                        let client_streaming_handlers_guard = client_streaming_handlers.read().await;
+                        if let Some(handler) = client_streaming_handlers_guard.get(request.method()) {
+                            let result = handler(request_rx).await;
+                            drop(client_streaming_handlers_guard);
+
+                            let response = RpcResponse::from_result(request.id(), result);
+                            if let Ok(response_data) = rmp_serde::to_vec_named(&response) {
+                                let mut stream_guard = stream.lock().await;
+                                let _ = stream_guard.send_bytes(Bytes::from(response_data)).await;
+                            }
+                        }
+
+                        break; // Client streaming complete
+                    }
+                    drop(client_streaming_handlers_guard);
+
+                    // Check if it's a bidirectional streaming handler (N→M)
+                    let bidirectional_handlers_guard = bidirectional_handlers.read().await;
+                    if bidirectional_handlers_guard.contains_key(request.method()) {
+                        debug!("🔄 Found bidirectional streaming handler for: {}", request.method());
+
+                        // Create channels for request collection and response streaming
+                        let (request_tx, request_rx) = mpsc::unbounded_channel();
+
+                        // Send the first request (already parsed)
+                        if request_tx.send(request.params().to_vec()).is_err() {
+                            debug!("❌ Failed to send first request to channel");
+                            drop(bidirectional_handlers_guard);
+                            break;
+                        }
+
+                        // Clone stream for concurrent request collection
+                        let stream_clone = stream.clone();
+
+                        // Spawn task to collect remaining requests from client
+                        tokio::spawn(async move {
+                            loop {
+                                let mut stream_guard = stream_clone.lock().await;
+                                let data_result = stream_guard.receive_bytes().await;
+                                drop(stream_guard);
+
+                                match data_result {
+                                    Ok(Some(data)) => {
+                                        // Try to parse as another request
+                                        match rmp_serde::from_slice::<RpcRequest>(&data) {
+                                            Ok(req) => {
+                                                if request_tx.send(req.params().to_vec()).is_err() {
+                                                    debug!("❌ Failed to send request to channel (receiver dropped)");
+                                                    break;
+                                                }
+                                            }
+                                            Err(_) => {
+                                                debug!("⚠️  Non-request data in bidirectional stream, ending request collection");
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    Ok(None) | Err(_) => {
+                                        debug!("🏁 Bidirectional request streaming ended");
+                                        break;
+                                    }
+                                }
+                            }
+                            // Drop sender to signal end of request stream
+                            drop(request_tx);
+                        });
+
+                        // Call the handler with the request stream
+                        if let Some(handler) = bidirectional_handlers_guard.get(request.method()) {
+                            let mut response_stream = handler(request_rx).await;
+                            drop(bidirectional_handlers_guard);
+
+                            // Stream responses back to the client
+                            use futures::StreamExt;
+                            while let Some(result) = response_stream.next().await {
+                                match result {
+                                    Ok(response_data) => {
+                                        let response = RpcResponse::from_result(request.id(), Ok(response_data));
+                                        if let Ok(serialized) = rmp_serde::to_vec_named(&response) {
+                                            let mut stream_guard = stream.lock().await;
+                                            if stream_guard.send_bytes(Bytes::from(serialized)).await.is_err() {
+                                                debug!("❌ Failed to send response in bidirectional stream");
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        debug!("❌ Error in bidirectional handler: {:?}", e);
+                                        let error_response = RpcResponse::from_result(request.id(), Err(e));
+                                        if let Ok(serialized) = rmp_serde::to_vec_named(&error_response) {
+                                            let mut stream_guard = stream.lock().await;
+                                            let _ = stream_guard.send_bytes(Bytes::from(serialized)).await;
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        break; // Bidirectional streaming complete
+                    }
+                    drop(bidirectional_handlers_guard);
+
+                    // Not a server streaming handler, check regular handlers
                     let handlers = handlers.read().await;
                     let response = match handlers.get(request.method()) {
                         Some(handler) => {
@@ -764,6 +1077,9 @@ impl RpcServer {
     ) -> Result<ConnectionDriveOutcome, RpcError> {
         let handlers = self.handlers.clone();
         let streaming_handlers = self.streaming_handlers.clone();
+        let server_streaming_handlers = self.server_streaming_handlers.clone();
+        let client_streaming_handlers = self.client_streaming_handlers.clone();
+        let bidirectional_handlers = self.bidirectional_handlers.clone();
         let cluster = self.cluster.clone();
         let mut stream_tasks: Vec<JoinHandle<()>> = Vec::new();
 
@@ -780,10 +1096,16 @@ impl RpcServer {
                         Ok(Some(stream)) => {
                             let handlers = handlers.clone();
                             let streaming_handlers = streaming_handlers.clone();
+                            let server_streaming_handlers = server_streaming_handlers.clone();
+                            let client_streaming_handlers = client_streaming_handlers.clone();
+                            let bidirectional_handlers = bidirectional_handlers.clone();
                             let cluster = cluster.clone();
                             let task = tokio::spawn(Self::handle_stream(
                                 handlers,
                                 streaming_handlers,
+                                server_streaming_handlers,
+                                client_streaming_handlers,
+                                bidirectional_handlers,
                                 cluster,
                                 Box::new(stream) as Box<dyn QuicStreamAdapter + Send>,
                             ));
