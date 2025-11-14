@@ -15,6 +15,90 @@ make python-test
 make python-clean
 ```
 
+## Code Generation with Automatic Build
+
+The `rpcnet-gen` CLI tool can generate Python bindings and automatically build the extension in one step:
+
+```bash
+# Generate Python bindings and build automatically
+rpcnet-gen --input service.rpc.rs --output src/generated --python
+
+# Generate without building (just code generation)
+rpcnet-gen --input service.rpc.rs --output src/generated --python --no-build
+```
+
+### How It Works
+
+When you use the `--python` flag, `rpcnet-gen` will:
+
+1. ✅ Generate Python client, server, and types code
+2. ✅ Automatically run `maturin develop --features extension-module`
+3. ✅ Verify the module imports correctly
+4. ✅ Display helpful usage examples
+
+### When to Use Each Approach
+
+**Use `rpcnet-gen --python`** when:
+- Generating new service bindings from `.rpc.rs` files
+- You want code generation + build in one command
+- Starting fresh with a new service
+
+**Use `make python-build`** when:
+- Working on the core Rust implementation (`src/python/`)
+- No service definition changes, just Rust code changes
+- Need a guaranteed clean build
+- Troubleshooting import/build issues
+
+### Error Handling
+
+If maturin is not found or the build fails:
+
+```
+⚠️  Warning: maturin not found in PATH
+   Install with: pip install maturin
+   Or skip build with: --no-build flag
+```
+
+The tool will still generate the Python code, and you can build manually:
+
+```bash
+# Install maturin if needed
+pip install maturin
+
+# Build manually
+maturin develop --features extension-module
+
+# Or use the Makefile
+make python-build
+```
+
+### Example Workflow
+
+```bash
+# 1. Create your service definition
+cat > greeting.rpc.rs <<EOF
+#[rpcnet::service]
+pub trait Greeting {
+    async fn hello(&self, req: HelloRequest) -> Result<HelloResponse, Error>;
+}
+
+pub struct HelloRequest { pub name: String }
+pub struct HelloResponse { pub message: String }
+pub enum Error { InvalidName }
+EOF
+
+# 2. Generate + build Python bindings
+rpcnet-gen --input greeting.rpc.rs --output src/generated --python
+
+# 3. Use in Python
+python3 <<EOF
+import greeting
+client = await greeting.GreetingClient.connect("127.0.0.1:8080", "cert.pem")
+response = await client.hello({"name": "Alice"})
+print(response)
+EOF
+```
+
 ## The Problem
 
 The Python extension module (`_rpcnet`) can have stale artifacts that cause issues:

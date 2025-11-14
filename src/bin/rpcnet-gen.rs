@@ -3,6 +3,7 @@
 use clap::Parser;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[derive(Parser)]
 #[command(name = "rpcnet-gen")]
@@ -32,6 +33,10 @@ struct Cli {
     /// Generate only type definitions
     #[arg(long)]
     types_only: bool,
+
+    /// Skip building Python extension with maturin (only applies with --python)
+    #[arg(long)]
+    no_build: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -67,13 +72,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  ✅ Generated Python server");
         println!("  ✅ Generated Python types");
         println!("\n✨ Python bindings generated!");
-        println!("\n📝 To use the generated Python code:");
-        println!("    import {}", service_name.to_lowercase());
-        println!(
-            "    client = await {}.{}Client.connect(...)",
-            service_name.to_lowercase(),
-            service_name
-        );
+
+        // Build Python extension with maturin unless --no-build is specified
+        if !cli.no_build {
+            match build_python_extension() {
+                Ok(()) => {
+                    println!("\n📝 Python bindings are ready to use:");
+                    println!("    import {}", service_name.to_lowercase());
+                    println!(
+                        "    client = await {}.{}Client.connect(...)",
+                        service_name.to_lowercase(),
+                        service_name
+                    );
+                }
+                Err(e) => {
+                    eprintln!("\n⚠️  Build failed: {}", e);
+                    eprintln!("   Python bindings generated but not built.");
+                    eprintln!("   Build manually with: maturin develop --features extension-module");
+                    eprintln!("   Or use: make python-build");
+                }
+            }
+        } else {
+            println!("\n📝 To build and use the generated Python code:");
+            println!("   1. Build: maturin develop --features extension-module");
+            println!("      Or: make python-build");
+            println!("   2. Import: import {}", service_name.to_lowercase());
+            println!(
+                "   3. Use: client = await {}.{}Client.connect(...)",
+                service_name.to_lowercase(),
+                service_name
+            );
+        }
 
         return Ok(());
     }
@@ -133,6 +162,38 @@ fn write_formatted_code(path: &Path, tokens: proc_macro2::TokenStream) -> std::i
     // Format using prettyplease for nice output
     let formatted = prettyplease::unparse(&file);
     fs::write(path, formatted)
+}
+
+/// Build Python extension with maturin
+fn build_python_extension() -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n🔨 Building Python extension with maturin...");
+
+    // Check if maturin is available
+    let maturin_check = Command::new("maturin").arg("--version").output();
+
+    if maturin_check.is_err() {
+        eprintln!("\n⚠️  Warning: maturin not found in PATH");
+        eprintln!("   Install with: pip install maturin");
+        eprintln!("   Or skip build with: --no-build flag");
+        return Err("maturin not found".into());
+    }
+
+    // Run maturin develop with extension-module feature
+    let status = Command::new("maturin")
+        .arg("develop")
+        .arg("--features")
+        .arg("extension-module")
+        .status()?;
+
+    if !status.success() {
+        eprintln!("\n❌ Failed to build Python extension");
+        eprintln!("   Run manually with: maturin develop --features extension-module");
+        return Err("maturin build failed".into());
+    }
+
+    println!("✅ Python extension built successfully!");
+
+    Ok(())
 }
 
 fn generate_mod_file(output_dir: &Path, service_name: &str, cli: &Cli) -> std::io::Result<()> {
