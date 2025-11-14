@@ -302,10 +302,10 @@ WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \
   cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
 ```
 
-### Run Python Client
+### Run Python Worker
 
 ```bash
-python examples/python/cluster/python_client.py
+python examples/python/cluster/python_worker.py
 ```
 
 **Output**:
@@ -751,7 +751,7 @@ async for response in client.generate(request_generator()):
 ✅ **Automatic Deserialization**: Generated client methods call deserializer automatically
 
 **Example**:
-See `examples/python/cluster/python_real_streaming_client.py` for a complete working example.
+See `examples/python/cluster/python_worker.py` for a complete working example.
 
 ## Troubleshooting
 
@@ -915,13 +915,13 @@ for name in names:
 See the full working example at:
 - **`examples/python/cluster/README.md`** - Complete usage guide
 - **`examples/python/cluster/QUICKSTART.md`** - Quick start guide
-- **`examples/python/cluster/python_client.py`** - Simple client example
-- **`examples/python/cluster/python_streaming_client.py`** - Full workflow example
+- **`examples/python/cluster/python_worker.py`** - Python worker implementation
+- **`examples/python/cluster/test_client.py`** - Client example
 
 The Python cluster example demonstrates:
-- ✅ Connecting to Rust director
-- ✅ Getting available workers
-- ✅ Sending inference requests
+- ✅ Python workers joining Rust clusters
+- ✅ SWIM gossip protocol participation
+- ✅ Cluster discovery and communication
 - ✅ Load balancing
 - ✅ Error handling
 - ✅ Type-safe Python API

@@ -1,426 +1,212 @@
-# Python Cluster Example - Generated Bindings
+# Python Inference Worker Example
 
-This directory demonstrates **Python code generation** from RpcNet service definitions using the `--python` flag.
+This example demonstrates how to implement an RPC server in Python using RpcNet's generated bindings.
 
 ## Overview
 
-This example shows how to:
-1. Define RPC services in `.rpc.rs` files
-2. Generate Python client/server code with `rpcnet-gen --python`
-3. Use the generated Python code to interact with Rust services
+- `inference.rpc.rs` - Service definition (unary RPC)
+- `generated/inference/` - Auto-generated Python bindings
+- `python_worker.py` - Python server implementation
+- `test_client.py` - Python test client
 
-**Note**: The actual cluster (director, workers) runs in **Rust** (see `examples/cluster/`). The Python code here shows how Python clients could interact with the cluster.
+## ✅ Cluster Integration
 
-## Architecture
+**SWIM Cluster Support**: The Python bindings now fully expose cluster/SWIM gossip functionality:
+- ✅ Python workers can auto-register with the director via SWIM
+- ✅ Python workers appear in the cluster member list with tags
+- ✅ Full failure detection and recovery
+- ✅ Tag-based routing and load balancing
+- ✅ All RPC functionality (unary, streaming) works correctly
 
-```
-┌─────────────────────────────────────────────────┐
-│  Python Client (using generated bindings)      │
-│  - Connects to Rust director                   │
-│  - Makes RPC calls using Python async/await    │
-└──────────────────┬──────────────────────────────┘
-                   │ RPC over QUIC+TLS
-┌──────────────────▼──────────────────────────────┐
-│  Rust Director (examples/cluster/director)     │
-│  - Registry service (load balancing)           │
-│  - Cluster management                          │
-└──────────────────┬──────────────────────────────┘
-                   │
-         ┌─────────┴─────────┐
-         │                   │
-┌────────▼────────┐  ┌───────▼────────┐
-│  Rust Worker A  │  │  Rust Worker B │
-│  - Compute svc  │  │  - Compute svc │
-└─────────────────┘  └────────────────┘
-```
+## Setup
 
-## Generated Code Structure
+### 1. Build the Python extension module
 
-This example includes generated Python bindings for the actual cluster services:
-
-```
-generated/
-├── directorregistry/  # Director registry service (coordinator)
-│   ├── __init__.py
-│   ├── types.py       # GetWorkerRequest, GetWorkerResponse, DirectorError
-│   ├── client.py      # DirectorRegistryClient
-│   └── server.py      # DirectorRegistryServer
-│
-└── inference/         # Inference service (worker)
-    ├── __init__.py
-    ├── types.py       # InferenceRequest, InferenceResponse, InferenceError
-    ├── client.py      # InferenceClient
-    └── server.py      # InferenceServer
-```
-
-These bindings are generated from the **actual service definitions** used by the running Rust cluster in `examples/cluster/`.
-
-## Service Definitions
-
-### `director_registry.rpc.rs` - Director Registry Service
-
-This is the **actual service** used by the running Rust director:
-
-```rust
-#[rpcnet::service]
-pub trait DirectorRegistry {
-    async fn get_worker(
-        &self,
-        request: GetWorkerRequest
-    ) -> Result<GetWorkerResponse, DirectorError>;
-}
-```
-
-**Python Usage:**
-```python
-from directorregistry import DirectorRegistryClient, GetWorkerRequest
-
-# Connect to director
-director = await DirectorRegistryClient.connect(
-    "127.0.0.1:61000",
-    cert_path="../../../certs/test_cert.pem",
-    server_name="localhost"
-)
-
-# Get an available worker
-worker_info = await director.get_worker(
-    GetWorkerRequest(
-        connection_id=None,
-        prompt="Request from Python"
-    )
-)
-
-if worker_info.success:
-    print(f"Got worker: {worker_info.worker_label} at {worker_info.worker_addr}")
-```
-
-### `inference.rpc.rs` - Worker Inference Service
-
-This is the **actual service** used by the running Rust workers:
-
-```rust
-#[rpcnet::service]
-pub trait Inference {
-    async fn infer(
-        &self,
-        request: InferenceRequest
-    ) -> Result<InferenceResponse, InferenceError>;
-}
-```
-
-**Python Usage:**
-```python
-from inference import InferenceClient, InferenceRequest
-
-# Connect to worker (get address from director first)
-worker = await InferenceClient.connect(
-    worker_info.worker_addr,
-    cert_path="../../../certs/test_cert.pem",
-    server_name="localhost"
-)
-
-# Send inference request
-response = await worker.infer(
-    InferenceRequest(
-        connection_id=worker_info.connection_id,
-        prompt="Hello from Python!"
-    )
-)
-print(f"Response: {response.response} from {response.worker_label}")
-```
-
-## Generating Python Code
-
-**Important**: The Python bindings must match the actual Rust cluster services.
+From the project root:
 
 ```bash
-# From project root directory
-
-# 1. Build the code generator
-cargo build --release --bin rpcnet-gen --features codegen,python
-
-# 2. Generate DirectorRegistry service bindings (matches running director)
-./target/release/rpcnet-gen \
-  --input examples/python/cluster/director_registry.rpc.rs \
-  --output examples/python/cluster/generated \
-  --python
-
-# 3. Generate Inference service bindings (matches running workers)
-./target/release/rpcnet-gen \
-  --input examples/python/cluster/inference.rpc.rs \
-  --output examples/python/cluster/generated \
-  --python
+maturin develop --features extension-module
 ```
 
-**Note**: The service definitions (`director_registry.rpc.rs`, `inference.rpc.rs`) are copied from `examples/cluster/` to ensure they match the running services.
+### 2. Generate Python bindings
 
-## Running the Example
-
-### Prerequisites
-
-1. **Generate TLS Certificates** (if not already done):
 ```bash
+cargo build --bin rpcnet-gen --features codegen,python --release
+./target/release/rpcnet-gen --input examples/python/cluster/inference.rpc.rs --output examples/python/cluster/generated --python
+```
+
+### 3. Ensure TLS certificates exist
+
+```bash
+# From project root
 mkdir -p certs
 cd certs
-openssl req -x509 -newkey rsa:4096 -keyout test_key.pem -out test_cert.pem \
-  -days 365 -nodes -subj "/CN=localhost"
+openssl req -x509 -newkey rsa:4096 -keyout test_key.pem -out test_cert.pem -days 365 -nodes -subj "/CN=localhost"
 cd ..
 ```
 
-2. **Build Python Bindings**:
+## Running the Example
+
+You can run the cluster example in two ways:
+
+### Option A: Using Helper Scripts (Recommended)
+
+The helper scripts automatically handle path resolution, so you can run everything from this directory.
+
+#### Terminal 1: Start the Director
+
 ```bash
-# From project root
-maturin develop --features python --release
+cd examples/python/cluster
+./run_director.sh
 ```
 
-3. **Install Python Dependencies**:
+#### Terminal 2: Start a Rust Worker (optional)
+
 ```bash
-pip install -r examples/python/cluster/requirements.txt
+cd examples/python/cluster
+./run_worker.sh
 ```
 
-### Step 1: Start the Rust Cluster
+#### Terminal 3: Start the Python Worker
 
-The Python clients connect to the actual Rust cluster. Start the cluster components in separate terminals:
-
-**Terminal 1 - Director (Coordinator)**:
 ```bash
-DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
-  cargo run --manifest-path examples/cluster/Cargo.toml --bin director
+cd examples/python/cluster
+
+WORKER_LABEL=python-worker \
+  WORKER_ADDR=127.0.0.1:62002 \
+  DIRECTOR_ADDR=127.0.0.1:61000 \
+  CERT_PATH=../../../certs/test_cert.pem \
+  KEY_PATH=../../../certs/test_key.pem \
+  ../../../.venv/bin/python python_worker.py
 ```
 
-**Terminal 2 - Worker A**:
+#### Terminal 4: Run the Rust Test Client
+
 ```bash
-WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \
-  DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
-  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+cd examples/python/cluster
+./run_client.sh
 ```
 
-**Terminal 3 - Worker B (Optional - for load balancing demo)**:
+Or directly test a Python worker:
+
 ```bash
-WORKER_LABEL=worker-b WORKER_ADDR=127.0.0.1:62002 \
-  DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
-  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+cd examples/python/cluster
+
+WORKER_ADDR=127.0.0.1:62002 \
+  CERT_PATH=../../../certs/test_cert.pem \
+  ../../../.venv/bin/python test_client.py
 ```
 
-### Step 2: Run Python Clients
+### Option B: Manual Approach
 
-Once the Rust cluster is running, test the Python clients:
+#### Terminal 1: Start the Director (from the Rust examples directory)
 
-**Simple Client (Director only)**:
 ```bash
-python examples/python/cluster/python_client.py
+cd examples/cluster
+
+DIRECTOR_ADDR=127.0.0.1:61000 \
+  RUST_LOG=info \
+  cargo run --bin director --release
 ```
 
-**Workflow Client (Director + Worker, multiple unary calls)**:
+#### Terminal 2: Start the Python Worker
+
 ```bash
-python examples/python/cluster/python_streaming_client.py
+cd examples/python/cluster
+
+WORKER_LABEL=python-worker \
+  WORKER_ADDR=127.0.0.1:62002 \
+  DIRECTOR_ADDR=127.0.0.1:61000 \
+  CERT_PATH=../../../certs/test_cert.pem \
+  KEY_PATH=../../../certs/test_key.pem \
+  ../../../.venv/bin/python python_worker.py
 ```
 
-**Real Streaming Client (Bidirectional streaming with AsyncIterable/AsyncIterator)**:
+The Python worker will:
+1. Start the RPC server
+2. Create a QUIC client for cluster communication
+3. Connect to the director via SWIM gossip
+4. Register with tags: `role=worker`, `label=python-worker`, `language=python`
+5. Appear in the cluster member list
+6. Participate in failure detection and heartbeats
+
+### Terminal 3: Run the Test Client
+
 ```bash
-python examples/python/cluster/python_real_streaming_client.py
+cd examples/python/cluster
+
+WORKER_ADDR=127.0.0.1:62002 \
+  CERT_PATH=../../../certs/test_cert.pem \
+  ../../../.venv/bin/python test_client.py
 ```
 
-## Python Client Examples
+## What It Demonstrates
 
-### Simple Client (`python_client.py`)
+1. **Service Definition**: Rust service trait with async methods
+2. **Code Generation**: Automatic Python client/server generation
+3. **Type Safety**: Dataclass-based request/response types
+4. **Enum Support**: Union types for response variants
+5. **Serialization**: Automatic MessagePack serialization
+6. **TLS Security**: QUIC+TLS for encrypted communication
 
-Demonstrates connecting to the director and requesting workers:
+## Implementation Details
+
+### Service Handler (`python_worker.py`)
 
 ```python
-import asyncio
-from directorregistry import DirectorRegistryClient, GetWorkerRequest
+class PythonInferenceWorker(InferenceHandler):
+    """Implement the InferenceHandler interface"""
 
-async def main():
-    # Connect to director
-    director = await DirectorRegistryClient.connect(
-        "127.0.0.1:61000",
-        cert_path="../../../certs/test_cert.pem",
-        server_name="localhost"
-    )
-
-    # Request workers (tests load balancing)
-    for i in range(5):
-        worker_info = await director.get_worker(
-            GetWorkerRequest(
-                connection_id=None,
-                prompt=f"Request {i+1} from Python"
-            )
+    async def infer(self, request: InferenceRequest) -> InferenceResponse:
+        # Business logic here
+        return InferenceResponseToken(
+            text=f"Processed: {request.prompt}",
+            sequence=self.request_count
         )
-
-        if worker_info.success:
-            print(f"Request {i+1}: {worker_info.worker_label} at {worker_info.worker_addr}")
-
-asyncio.run(main())
 ```
 
-### Workflow Client (`python_streaming_client.py`)
+### Generated Types (`generated/inference/types.py`)
 
-Demonstrates the full end-to-end workflow:
+- `InferenceRequest` - Request dataclass
+- `InferenceResponse` - Union type with variants:
+  - `InferenceResponseConnected`
+  - `InferenceResponseToken`
+  - `InferenceResponseError`
+  - `InferenceResponseDone`
+- Serialization helpers for enum variants
 
-1. Connect to director registry
-2. Get available worker
-3. Connect to worker
-4. Send multiple inference requests (unary calls)
-5. Test load balancing
+### Generated Server (`generated/inference/server.py`)
 
-**Note**: Despite the name, this makes multiple separate unary RPC calls, not true streaming.
+- `InferenceHandler` - Abstract base class
+- `InferenceServer` - RPC server wrapper
+- Automatic method registration
+- MessagePack serialization/deserialization
 
-```python
-# 1. Get worker from director
-director = await DirectorRegistryClient.connect("127.0.0.1:61000", ...)
-worker_info = await director.get_worker(GetWorkerRequest(...))
+### Generated Client (`generated/inference/client.py`)
 
-# 2. Connect to worker
-worker = await InferenceClient.connect(worker_info.worker_addr, ...)
+- `InferenceClient` - Type-safe client
+- Async method calls
+- Automatic serialization
 
-# 3. Send multiple unary requests
-for prompt in prompts:
-    response = await worker.infer(
-        InferenceRequest(
-            connection_id=worker_info.connection_id,
-            prompt=prompt
-        )
-    )
-    print(f"Response: {response.response}")
-```
+## Extending the Example
 
-### Real Streaming Client (`python_real_streaming_client.py`)
+To add more RPC methods:
 
-Demonstrates **true bidirectional streaming** using the generated `generate()` method:
+1. Update `inference.rpc.rs` with new methods
+2. Regenerate bindings with `rpcnet-gen --python`
+3. Implement new methods in your handler class
+4. Use the updated client to call new methods
 
-1. Connect to director and get worker
-2. Connect to worker
-3. Create async generator for requests (client → server stream)
-4. Stream responses back (server → client stream)
-5. Process streamed responses
+## Troubleshooting
 
-**Key difference**: Single streaming RPC call with AsyncIterable/AsyncIterator.
+### ModuleNotFoundError: No module named '_rpcnet'
 
-```python
-async def request_generator(connection_id, prompts):
-    """Generate streaming requests"""
-    for prompt in prompts:
-        yield InferenceRequest(
-            connection_id=connection_id,
-            prompt=prompt
-        )
-        await asyncio.sleep(0.1)  # Simulate streaming
+Run `maturin develop --features extension-module` from the project root.
 
-# Bidirectional streaming
-async for response in worker.generate(
-    request_generator(connection_id, prompts)
-):
-    # Handle streamed responses
-    if 'Token' in response or 'text' in response:
-        print(f"Token: {response.get('text')}")
-    elif 'Connected' in response:
-        print(f"Connected to: {response.get('worker')}")
-```
+### Connection refused
 
-**Benefits of true streaming**:
-- Lower latency (continuous data flow)
-- Less connection overhead
-- Better resource utilization
-- Native async iteration support
+Ensure the worker is running and the address/port match in both worker and client.
 
-## Features Demonstrated
+### Certificate errors
 
-### 1. Type-Safe Python API
-
-Generated code provides full type safety:
-- Request/Response dataclasses
-- Async client methods
-- Error handling with typed exceptions
-
-### 2. Async/Await Support
-
-All RPC calls are async and integrate with Python's `asyncio`:
-```python
-response = await client.process(request)  # Non-blocking!
-```
-
-### 3. Automatic Serialization
-
-Request/response objects are automatically serialized:
-```python
-# Python objects...
-request = ComputeRequest(task_id="1", data="test")
-
-# ...automatically converted to bytes for RPC
-response = await client.process(request)
-
-# ...and back to Python objects
-print(response.result)  # Deserialized automatically!
-```
-
-### 4. Error Handling
-
-Service errors are mapped to Python exceptions:
-```python
-try:
-    response = await client.process(request)
-except ComputeError.WorkerBusy:
-    print("Worker is busy, retry later")
-except ComputeError.ProcessingFailed as e:
-    print(f"Processing failed: {e}")
-```
-
-## Comparison with Rust Implementation
-
-| Feature | Rust (`examples/cluster/`) | Python (this example) |
-|---------|---------------------------|----------------------|
-| **Performance** | ⚡ Native speed | 🐍 Python overhead |
-| **Async** | Tokio | asyncio |
-| **Types** | Compile-time checked | Runtime checked |
-| **Serialization** | bincode (Rust↔Rust) | MessagePack (Python↔Rust) |
-| **Use Case** | Production services | Scripting, tools, clients |
-
-## Code Generation Options
-
-```bash
-# Generate only client code
-rpcnet-gen --input compute.rpc.rs --output generated --python --client-only
-
-# Generate only server code
-rpcnet-gen --input compute.rpc.rs --output generated --python --server-only
-
-# Generate only types
-rpcnet-gen --input compute.rpc.rs --output generated --python --types-only
-```
-
-## Next Steps
-
-1. **Implement Python Worker**: Create a Python worker that implements `ComputeServer`
-2. **Load Balancing**: Python client that tests load balancing across workers
-3. **Monitoring**: Python script to monitor cluster health
-4. **Streaming**: Add streaming RPC examples (server/client/bidirectional)
-
-## Files
-
-- `director_registry.rpc.rs` - Director registry service (from examples/cluster/)
-- `inference.rpc.rs` - Worker inference service (from examples/cluster/)
-- `generated/` - Generated Python bindings
-  - `directorregistry/` - Director client bindings
-  - `inference/` - Worker client bindings
-- `python_client.py` - Simple example (director only)
-- `python_streaming_client.py` - Full workflow example (director + worker)
-- `requirements.txt` - Python dependencies
-- `README.md`, `QUICKSTART.md`, `SUMMARY.md` - Documentation
-
-## See Also
-
-- Main cluster example: `examples/cluster/`
-- Python bindings docs: `PYTHON_BINDINGS_COMPLETE.md`
-- Code generation docs: `docs/codegen.md`
-
-## Summary
-
-This example shows how to:
-- ✅ Define RPC services in Rust
-- ✅ Generate type-safe Python bindings
-- ✅ Call Rust services from Python
-- ✅ Use async/await in Python
-- ✅ Handle errors gracefully
-
-The generated Python code provides a Pythonic API for interacting with RpcNet services!
+Regenerate certificates or ensure paths are correct in environment variables.
