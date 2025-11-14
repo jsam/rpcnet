@@ -222,7 +222,7 @@ asyncio.run(main())
 | Feature | Rust Generation | Python Generation |
 |---------|----------------|-------------------|
 | **Output** | `.rs` files | `.py` files |
-| **Serialization** | bincode | MessagePack |
+| **Serialization** | MessagePack | MessagePack |
 | **Types** | Rust structs/enums | Python dataclasses |
 | **Async** | Tokio | asyncio |
 | **Use Case** | Production services | Tooling, clients, prototyping |

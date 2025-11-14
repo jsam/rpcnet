@@ -35,7 +35,7 @@ edition = "2021"
 [dependencies]
 rpcnet = "0.2"
 serde = { version = "1", features = ["derive"] }
-bincode = "1.3"
+rmp-serde = "1.3"
 async-stream = "0.3"
 futures = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
@@ -43,7 +43,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 
 - `rpcnet` provides the client/server runtime.
 - `async-stream` and `futures` help produce response streams on the server.
-- `serde`/`bincode` handle payload serialization.
+- `serde`/`rmp-serde` handle MessagePack serialization.
 - Tokio is required because RpcNet is async-first.
 
 ## Step 3: Generate development certificates
@@ -101,11 +101,11 @@ pub struct Ack {
 }
 
 pub fn encode<T: Serialize>(value: &T) -> Result<Vec<u8>, RpcError> {
-    Ok(bincode::serialize(value)?)
+    rmp_serde::to_vec(value).map_err(|e| RpcError::SerializationError(e.to_string()))
 }
 
 pub fn decode<T: for<'de> Deserialize<'de>>(bytes: &[u8]) -> Result<T, RpcError> {
-    Ok(bincode::deserialize(bytes)?)
+    rmp_serde::from_slice(bytes).map_err(|e| RpcError::SerializationError(e.to_string()))
 }
 ```
 

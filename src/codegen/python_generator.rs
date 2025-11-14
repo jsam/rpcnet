@@ -743,7 +743,7 @@ impl PythonGenerator {
             method_name
         ));
         code.push_str("            # Deserialize request from MessagePack\n");
-        code.push_str("            request_dict = _rpcnet.bincode_to_python_py(request_bytes)\n");
+        code.push_str("            request_dict = _rpcnet.msgpack_to_python_py(request_bytes)\n");
         code.push_str(&format!(
             "            request = {}(**request_dict)\n",
             request_type
@@ -757,7 +757,7 @@ impl PythonGenerator {
         code.push_str("            \n");
         code.push_str("            # Serialize response to MessagePack\n");
         code.push_str("            response_dict = response.__dict__\n");
-        code.push_str("            return _rpcnet.python_to_bincode_py(response_dict)\n");
+        code.push_str("            return _rpcnet.python_to_msgpack_py(response_dict)\n");
         code.push_str("        \n");
         code.push_str(&format!(
             "        await self.server.register('{}', handle_{})\n",

@@ -58,8 +58,6 @@ fn _rpcnet(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("TlsError", py.get_type::<error::PyTlsError>())?;
 
     // Register serialization functions
-    m.add_function(wrap_pyfunction!(serde::python_to_bincode_py, m)?)?;
-    m.add_function(wrap_pyfunction!(serde::bincode_to_python_py, m)?)?;
     m.add_function(wrap_pyfunction!(serde::python_to_msgpack_py, m)?)?;
     m.add_function(wrap_pyfunction!(serde::msgpack_to_python_py, m)?)?;
 

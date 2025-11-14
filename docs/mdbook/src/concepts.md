@@ -51,7 +51,7 @@ Requests and responses travel as `Vec<u8>`. RpcNet uses **MessagePack** (`rmp-se
 - Consistent serialization across all clients (Rust, Python, etc.)
 - Compact binary format with good performance
 - Native Python support via `msgpack` library
-- Self-describing format makes debugging easier than raw bincode
+- Self-describing format makes debugging easier
 
 ### Concurrency Model
 

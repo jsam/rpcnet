@@ -5,12 +5,6 @@ from enum import Enum
 import json
 
 @dataclass
-class InferenceRequest:
-    connection_id: str
-    prompt: str
-
-
-@dataclass
 class InferenceResponseConnected:
     worker: str
     connection_id: str
@@ -98,6 +92,12 @@ def serialize_inferenceresponse(value: InferenceResponse) -> Dict[str, Any]:
         return {'Done': None}
     
     raise ValueError(f"Unknown value type: {type(value)}")
+
+
+@dataclass
+class InferenceRequest:
+    connection_id: str
+    prompt: str
 
 
 @dataclass

@@ -1,6 +1,6 @@
-//! Serialization bridge between Python and Rust using bincode.
+//! Serialization bridge between Python and Rust using MessagePack.
 //!
-//! This module provides utilities to convert between Python objects and bincode-serialized bytes.
+//! This module provides utilities to convert between Python objects and MessagePack-serialized bytes.
 
 #![allow(clippy::useless_conversion)]
 
@@ -108,69 +108,10 @@ impl SerdeValue {
     }
 }
 
-/// Convert a Python dict-like object to bincode bytes
-///
-/// Note: This uses MessagePack instead of bincode because bincode doesn't support
-/// dynamic types (the SerdeValue enum). MessagePack handles Python's dynamic types better.
-pub fn python_to_bincode(obj: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
-    let value = SerdeValue::from_python(obj)?;
-    rmp_serde::to_vec(&value).map_err(|e| {
-        pyo3::exceptions::PyValueError::new_err(format!("Serialization failed: {}", e))
-    })
-}
-
-/// Convert bincode bytes to a Python object
-///
-/// Note: This uses MessagePack instead of bincode because bincode doesn't support
-/// dynamic types (the SerdeValue enum). MessagePack handles Python's dynamic types better.
-pub fn bincode_to_python<'py>(py: Python<'py>, bytes: &[u8]) -> PyResult<Bound<'py, PyAny>> {
-    let value: SerdeValue = rmp_serde::from_slice(bytes).map_err(|e| {
-        pyo3::exceptions::PyValueError::new_err(format!("Deserialization failed: {}", e))
-    })?;
-    value.to_python(py)
-}
-
-/// Helper to serialize a Python dataclass instance to bincode
-///
-/// Extracts all fields from the dataclass instance into a dict and serializes
-pub fn dataclass_to_bincode(obj: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
-    // Get the __dict__ attribute which contains all fields
-    let dict = obj.getattr("__dict__")?;
-    python_to_bincode(&dict)
-}
-
-/// Helper to deserialize bincode bytes into a Python dataclass
-///
-/// Creates a dict from the bytes and then constructs the dataclass
-pub fn bincode_to_dataclass<'py>(
-    py: Python<'py>,
-    class: &Bound<'py, PyAny>,
-    bytes: &[u8],
-) -> PyResult<Bound<'py, PyAny>> {
-    let dict = bincode_to_python(py, bytes)?;
-    let dict_ref = dict.downcast::<PyDict>()?;
-
-    // Call the dataclass constructor with **kwargs
-    class.call((), Some(dict_ref))
-}
-
-/// Python-exposed function to convert a Python object to bincode bytes
-#[pyfunction]
-pub fn python_to_bincode_py<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyBytes>> {
-    let bytes = python_to_bincode(obj)?;
-    Ok(PyBytes::new(obj.py(), &bytes))
-}
-
-/// Python-exposed function to convert bincode bytes to a Python object
-#[pyfunction]
-pub fn bincode_to_python_py<'py>(py: Python<'py>, bytes: &[u8]) -> PyResult<Bound<'py, PyAny>> {
-    bincode_to_python(py, bytes)
-}
-
-/// Convert Python dict directly to MessagePack bytes without SerdeValue wrapper
+/// Convert Python dict directly to MessagePack bytes
 ///
 /// This is used for Python-Rust interop where Rust expects a raw struct format.
-/// Unlike python_to_bincode which wraps in SerdeValue, this serializes the dict directly.
+/// This serializes the dict directly to MessagePack without any wrapper.
 #[pyfunction]
 pub fn python_to_msgpack_py<'py>(obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyBytes>> {
     // Convert Python dict to rmpv::Value directly (preserves order and structure)

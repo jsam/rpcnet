@@ -5,6 +5,21 @@ from enum import Enum
 import json
 
 @dataclass
+class GetWorkerRequest:
+    connection_id: Optional[str]
+    prompt: str
+
+
+@dataclass
+class GetWorkerResponse:
+    success: bool
+    worker_addr: Optional[str]
+    worker_label: Optional[str]
+    connection_id: str
+    message: Optional[str]
+
+
+@dataclass
 class DirectorErrorNoWorkersAvailable:
     pass
 
@@ -52,20 +67,5 @@ def serialize_directorerror(value: DirectorError) -> Dict[str, Any]:
         ]}
     
     raise ValueError(f"Unknown value type: {type(value)}")
-
-
-@dataclass
-class GetWorkerRequest:
-    connection_id: Optional[str]
-    prompt: str
-
-
-@dataclass
-class GetWorkerResponse:
-    success: bool
-    worker_addr: Optional[str]
-    worker_label: Optional[str]
-    connection_id: str
-    message: Optional[str]
 
 
