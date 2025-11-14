@@ -162,25 +162,22 @@ let config = ServerConfig::builder()
 #### Use Efficient Formats
 
 ```rust
-// Fastest: bincode (binary)
-use bincode;
-let bytes = bincode::serialize(&data)?;
-
-// Fast: rmp-serde (MessagePack)
+// Recommended: rmp-serde (MessagePack) - default for all RpcNet communication
 use rmp_serde;
 let bytes = rmp_serde::to_vec(&data)?;
 
-// Slower: serde_json (human-readable, but slower)
+// Alternative: serde_json (human-readable, but slower) - for debugging
 let bytes = serde_json::to_vec(&data)?;
 ```
 
 **Benchmark** (10KB struct):
 
-| Format | Serialize | Deserialize | Size |
-|--------|-----------|-------------|------|
-| **bincode** | 12 μs | 18 μs | 10240 bytes |
-| **MessagePack** | 28 μs | 35 μs | 9800 bytes |
-| **JSON** | 85 μs | 120 μs | 15300 bytes |
+| Format | Serialize | Deserialize | Size | Use Case |
+|--------|-----------|-------------|------|----------|
+| **MessagePack** | 28 μs | 35 μs | 9800 bytes | All RpcNet communication (default) |
+| **JSON** | 85 μs | 120 μs | 15300 bytes | Debugging (human-readable) |
+
+**Recommendation**: Use MessagePack for all RpcNet services (Rust ↔ Rust and Python ↔ Rust).
 
 #### Minimize Allocations
 
@@ -500,14 +497,14 @@ sudo perf report
 - 10 GPU workers
 - 1000 concurrent clients
 
-**Before tuning**: 45K RPS, 15ms P99 latency  
+**Before tuning**: 45K RPS, 15ms P99 latency
 **After tuning**: 180K RPS, 2ms P99 latency
 
 **Changes**:
 1. Used optimized connection management
 2. Tuned gossip interval (1s → 2s)
 3. Used Least Connections strategy
-4. Optimized message serialization (JSON → bincode)
+4. Optimized message serialization (JSON → MessagePack)
 
 ## Next Steps
 

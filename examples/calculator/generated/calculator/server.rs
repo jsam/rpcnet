@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 use super::types::*;
 use async_trait::async_trait;
 use rpcnet::{RpcConfig, RpcError, RpcServer};
@@ -18,7 +15,7 @@ pub trait CalculatorHandler: Send + Sync + 'static {
 /// Generated server that manages RPC registration and routing.
 pub struct CalculatorServer<H: CalculatorHandler> {
     handler: Arc<H>,
-    rpc_server: RpcServer,
+    pub rpc_server: RpcServer,
 }
 impl<H: CalculatorHandler> CalculatorServer<H> {
     /// Creates a new server with the given handler and configuration.
@@ -36,12 +33,9 @@ impl<H: CalculatorHandler> CalculatorServer<H> {
                 .register("Calculator.add", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: AddRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: AddRequest = rmp_serde::from_slice(&params)?;
                         match handler.add(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }
@@ -54,12 +48,9 @@ impl<H: CalculatorHandler> CalculatorServer<H> {
                 .register("Calculator.subtract", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: SubtractRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: SubtractRequest = rmp_serde::from_slice(&params)?;
                         match handler.subtract(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }
@@ -72,12 +63,9 @@ impl<H: CalculatorHandler> CalculatorServer<H> {
                 .register("Calculator.multiply", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: MultiplyRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: MultiplyRequest = rmp_serde::from_slice(&params)?;
                         match handler.multiply(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }
@@ -90,12 +78,9 @@ impl<H: CalculatorHandler> CalculatorServer<H> {
                 .register("Calculator.divide", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: DivideRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: DivideRequest = rmp_serde::from_slice(&params)?;
                         match handler.divide(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }

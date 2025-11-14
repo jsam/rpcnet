@@ -66,8 +66,8 @@ async fn start_server() -> Result<SocketAddr, RpcError> {
     // Register compute handler (CPU-intensive)
     server
         .register("compute", |params| async move {
-            let iterations: u32 =
-                bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+            let iterations: u32 = rmp_serde::from_slice(&params)
+                .map_err(|e| RpcError::SerializationError(e.to_string()))?;
 
             // Simulate some work
             let mut result = 0u64;
@@ -75,7 +75,7 @@ async fn start_server() -> Result<SocketAddr, RpcError> {
                 result = result.wrapping_add(i as u64);
             }
 
-            bincode::serialize(&result).map_err(RpcError::SerializationError)
+            rmp_serde::to_vec(&result).map_err(|e| RpcError::SerializationError(e.to_string()))
         })
         .await;
 
@@ -253,7 +253,7 @@ fn bench_compute_operations(c: &mut Criterion) {
 
                     rt.block_on(async {
                         for _ in 0..iterations {
-                            let params = bincode::serialize(&work).unwrap();
+                            let params = rmp_serde::to_vec(&work).unwrap();
                             client.call("compute", params).await.unwrap();
                         }
                     });

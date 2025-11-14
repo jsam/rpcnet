@@ -50,12 +50,12 @@ impl SwimMessage {
         }
     }
 
-    pub fn serialize(&self) -> Result<Vec<u8>, Box<bincode::ErrorKind>> {
-        bincode::serialize(self)
+    pub fn serialize(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
+        rmp_serde::to_vec(self)
     }
 
-    pub fn deserialize(bytes: &[u8]) -> Result<Self, Box<bincode::ErrorKind>> {
-        bincode::deserialize(bytes)
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, rmp_serde::decode::Error> {
+        rmp_serde::from_slice(bytes)
     }
 }
 

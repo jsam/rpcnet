@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 //! Generated code for Echo service.
 //!
 //! This module contains auto-generated code from rpcnet-gen.

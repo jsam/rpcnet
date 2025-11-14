@@ -8,17 +8,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LoadBalancingStrategy {
+    #[default]
     RoundRobin,
     Random,
     LeastConnections,
-}
-
-impl Default for LoadBalancingStrategy {
-    fn default() -> Self {
-        Self::RoundRobin
-    }
 }
 
 #[derive(Debug, Clone)]

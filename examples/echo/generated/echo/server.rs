@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use super::types::*;
 use async_trait::async_trait;
 use rpcnet::{RpcConfig, RpcError, RpcServer};
@@ -16,7 +14,7 @@ pub trait EchoHandler: Send + Sync + 'static {
 /// Generated server that manages RPC registration and routing.
 pub struct EchoServer<H: EchoHandler> {
     handler: Arc<H>,
-    rpc_server: RpcServer,
+    pub rpc_server: RpcServer,
 }
 impl<H: EchoHandler> EchoServer<H> {
     /// Creates a new server with the given handler and configuration.
@@ -34,12 +32,9 @@ impl<H: EchoHandler> EchoServer<H> {
                 .register("Echo.echo", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: EchoRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: EchoRequest = rmp_serde::from_slice(&params)?;
                         match handler.echo(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }
@@ -52,12 +47,9 @@ impl<H: EchoHandler> EchoServer<H> {
                 .register("Echo.binary_echo", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: BinaryEchoRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: BinaryEchoRequest = rmp_serde::from_slice(&params)?;
                         match handler.binary_echo(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }

@@ -36,18 +36,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let request = GreetRequest {
         name: "World".to_string(),
     };
-    let params = bincode::serialize(&request)?;
+    let params = rmp_serde::to_vec(&request)?;
     let response_bytes = client.call("greet", params).await?;
-    let response: GreetResponse = bincode::deserialize(&response_bytes)?;
+    let response: GreetResponse = rmp_serde::from_slice(&response_bytes)?;
     println!("Response: {}", response.message);
 
     // Test greeting with empty name
     let request = GreetRequest {
         name: "".to_string(),
     };
-    let params = bincode::serialize(&request)?;
+    let params = rmp_serde::to_vec(&request)?;
     let response_bytes = client.call("greet", params).await?;
-    let response: GreetResponse = bincode::deserialize(&response_bytes)?;
+    let response: GreetResponse = rmp_serde::from_slice(&response_bytes)?;
     println!("Empty name response: {}", response.message);
 
     // Test echo with binary data

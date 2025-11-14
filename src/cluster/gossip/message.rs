@@ -64,7 +64,7 @@ impl GossipMessage {
         }
 
         let serialized =
-            bincode::serialize(self).map_err(|e| GossipError::SerializationError { source: e })?;
+            rmp_serde::to_vec(self).map_err(|e| GossipError::SerializationError(e.to_string()))?;
 
         if serialized.len() > MAX_MESSAGE_SIZE {
             return Err(GossipError::MessageTooLarge {
@@ -85,8 +85,8 @@ pub enum GossipError {
     #[error("Message size {size} exceeds maximum {max}")]
     MessageTooLarge { size: usize, max: usize },
 
-    #[error("Serialization error: {source}")]
-    SerializationError { source: Box<bincode::ErrorKind> },
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
 }
 
 #[cfg(test)]
@@ -145,7 +145,7 @@ mod tests {
         let updates = vec![update; 20];
         let msg = GossipMessage::new(updates);
 
-        let serialized = bincode::serialize(&msg).unwrap();
+        let serialized = rmp_serde::to_vec(&msg).unwrap();
         if serialized.len() > MAX_MESSAGE_SIZE {
             assert!(msg.check_size().is_err());
         } else {

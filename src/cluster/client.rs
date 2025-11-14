@@ -152,8 +152,87 @@ mod tests {
         Arc::new(client)
     }
 
+    async fn create_test_cluster_client(
+        strategy: LoadBalancingStrategy,
+    ) -> (ClusterClient, Arc<ClusterMembership>) {
+        let config = ClusterConfig::default();
+        let addr: SocketAddr = "127.0.0.1:10000".parse().unwrap();
+        let quic_client = create_test_client().await;
+
+        let cluster = Arc::new(
+            ClusterMembership::new(addr, config, quic_client)
+                .await
+                .unwrap(),
+        );
+        let registry = Arc::new(WorkerRegistry::new(cluster.clone(), strategy));
+
+        let rpc_config = RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0");
+        let cluster_client = ClusterClient::new(registry, rpc_config);
+
+        (cluster_client, cluster)
+    }
+
     #[tokio::test]
     async fn test_cluster_client_creation() {
+        let (cluster_client, _) =
+            create_test_cluster_client(LoadBalancingStrategy::RoundRobin).await;
+
+        assert_eq!(cluster_client.worker_count().await, 0);
+        assert_eq!(cluster_client.strategy(), LoadBalancingStrategy::RoundRobin);
+    }
+
+    #[tokio::test]
+    async fn test_cluster_client_with_random_strategy() {
+        let (cluster_client, _) = create_test_cluster_client(LoadBalancingStrategy::Random).await;
+
+        assert_eq!(cluster_client.worker_count().await, 0);
+        assert_eq!(cluster_client.strategy(), LoadBalancingStrategy::Random);
+    }
+
+    #[tokio::test]
+    async fn test_cluster_client_with_least_connections_strategy() {
+        let (cluster_client, _) =
+            create_test_cluster_client(LoadBalancingStrategy::LeastConnections).await;
+
+        assert_eq!(cluster_client.worker_count().await, 0);
+        assert_eq!(
+            cluster_client.strategy(),
+            LoadBalancingStrategy::LeastConnections
+        );
+    }
+
+    #[tokio::test]
+    async fn test_call_worker_no_workers_available() {
+        let (cluster_client, _) =
+            create_test_cluster_client(LoadBalancingStrategy::RoundRobin).await;
+
+        let result = cluster_client
+            .call_worker("test_method", vec![1, 2, 3], None)
+            .await;
+
+        assert!(result.is_err());
+        match result {
+            Err(RpcError::ConnectionError(msg)) => {
+                assert_eq!(msg, "No available workers");
+            }
+            _ => panic!("Expected ConnectionError with 'No available workers'"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_call_all_workers_empty() {
+        let (cluster_client, _) =
+            create_test_cluster_client(LoadBalancingStrategy::RoundRobin).await;
+
+        let results = cluster_client
+            .call_all_workers("test_method", vec![1, 2, 3], None)
+            .await;
+
+        assert_eq!(results.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_cluster_client_new_creates_empty_clients_map() {
         let config = ClusterConfig::default();
         let addr: SocketAddr = "127.0.0.1:10000".parse().unwrap();
         let quic_client = create_test_client().await;
@@ -169,9 +248,48 @@ mod tests {
         ));
 
         let rpc_config = RpcConfig::new("certs/test_cert.pem", "127.0.0.1:0");
-        let cluster_client = ClusterClient::new(registry, rpc_config);
+        let cluster_client = ClusterClient::new(registry.clone(), rpc_config);
 
+        // Verify internal state is initialized
         assert_eq!(cluster_client.worker_count().await, 0);
-        assert_eq!(cluster_client.strategy(), LoadBalancingStrategy::RoundRobin);
+        let clients_lock = cluster_client.clients.read().await;
+        assert_eq!(clients_lock.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_strategy_returns_correct_value() {
+        let strategies = vec![
+            LoadBalancingStrategy::RoundRobin,
+            LoadBalancingStrategy::Random,
+            LoadBalancingStrategy::LeastConnections,
+        ];
+
+        for strategy in strategies {
+            let (cluster_client, _) = create_test_cluster_client(strategy).await;
+            assert_eq!(cluster_client.strategy(), strategy);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_worker_count_returns_zero_initially() {
+        let (cluster_client, _) =
+            create_test_cluster_client(LoadBalancingStrategy::RoundRobin).await;
+        let count = cluster_client.worker_count().await;
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_call_all_workers_with_filter_empty() {
+        let (cluster_client, _) =
+            create_test_cluster_client(LoadBalancingStrategy::RoundRobin).await;
+
+        let mut filter = HashMap::new();
+        filter.insert("role".to_string(), "gpu".to_string());
+
+        let results = cluster_client
+            .call_all_workers("test_method", vec![1, 2, 3], Some(&filter))
+            .await;
+
+        assert_eq!(results.len(), 0);
     }
 }

@@ -34,9 +34,9 @@ RpcNet’s streaming frames follow this layout:
 <u32 payload_length in little endian><payload bytes>
 ```
 
-- `payload_length == 0` means “no more frames”.
+- `payload_length == 0` means "no more frames".
 - Payloads contain arbitrary user-defined bytes; most examples serialize using
-  `bincode` or `serde_json`.
+  `rmp_serde` (MessagePack) or `serde_json`.
 - The library allocates buffers lazily and only keeps a single frame in memory
   per direction.
 

@@ -84,6 +84,7 @@ Usage: rpcnet-gen [OPTIONS] --input <INPUT>
 Options:
   -i, --input <INPUT>    Input .rpc file (Rust source with service trait)
   -o, --output <OUTPUT>  Output directory for generated code [default: src/generated]
+      --python           Generate Python bindings instead of Rust code
       --server-only      Generate only server code
       --client-only      Generate only client code
       --types-only       Generate only type definitions
@@ -164,6 +165,69 @@ fn main() {
 
 Each input produces a sibling directory under `src/generated/` (`user/`,
 `billing/`, `audit/`).
+
+## Generating Python Bindings
+
+The `--python` flag generates Python client and server code instead of Rust:
+
+```bash
+# Generate Python bindings
+rpcnet-gen --input greeting.rpc.rs --output generated --python
+```
+
+This produces Python packages with type-safe dataclasses and async APIs:
+
+```
+generated/
+└── greeting/
+    ├── __init__.py      # Package exports
+    ├── types.py         # GreetRequest, GreetResponse, GreetError
+    ├── client.py        # GreetingClient with async methods
+    └── server.py        # GreetingServer base class
+```
+
+### Prerequisites for Python
+
+Before using Python bindings, build the native `_rpcnet` module:
+
+```bash
+# Install maturin
+pip install maturin
+
+# Build Python module
+maturin develop --features python --release
+```
+
+### Using Python Bindings
+
+```python
+import asyncio
+from greeting import GreetingClient, GreetRequest
+
+async def main():
+    client = await GreetingClient.connect(
+        "127.0.0.1:50051",
+        cert_path="certs/test_cert.pem",
+        server_name="localhost"
+    )
+
+    response = await client.greet(GreetRequest(name="Alice"))
+    print(response.message)
+
+asyncio.run(main())
+```
+
+### Key Differences: Rust vs Python
+
+| Feature | Rust Generation | Python Generation |
+|---------|----------------|-------------------|
+| **Output** | `.rs` files | `.py` files |
+| **Serialization** | MessagePack | MessagePack |
+| **Types** | Rust structs/enums | Python dataclasses |
+| **Async** | Tokio | asyncio |
+| **Use Case** | Production services | Tooling, clients, prototyping |
+
+For complete documentation on Python bindings, see the [Python Bindings](python-bindings.md) chapter.
 
 ## Version-Control Strategy
 

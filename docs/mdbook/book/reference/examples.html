@@ -181,6 +181,8 @@
 <p>All examples are located in the <code>examples/</code> directory:</p>
 <pre><code>examples/
 ├── cluster/          - Distributed cluster with auto-discovery
+├── python/
+│   └── cluster/      - Python bindings for cluster example
 └── (more to come)
 </code></pre>
 <h2 id="cluster-example"><a class="header" href="#cluster-example">Cluster Example</a></h2>
@@ -330,8 +332,181 @@ match worker_client.generate(request).await {
     }
 }
 <span class="boring">}</span></code></pre></pre>
-<h2 id="running-examples-from-repository"><a class="header" href="#running-examples-from-repository">Running Examples from Repository</a></h2>
+<h2 id="python-cluster-example"><a class="header" href="#python-cluster-example">Python Cluster Example</a></h2>
+<p><strong>Location</strong>: <code>examples/python/cluster/</code>
+<strong>Documentation</strong>: <a href="../python-bindings.html">Python Bindings</a></p>
+<p>Demonstrates Python code generation from Rust service definitions, enabling Python clients to interact with Rust cluster services.</p>
+<h3 id="components-1"><a class="header" href="#components-1">Components</a></h3>
+<p><strong>Python Clients</strong>:</p>
+<ul>
+<li><code>python_client.py</code> - Simple example connecting to director</li>
+<li><code>python_streaming_client.py</code> - Full workflow (director → worker → inference)</li>
+</ul>
+<p><strong>Generated Bindings</strong>:</p>
+<ul>
+<li><code>generated/directorregistry/</code> - Python bindings for director service</li>
+<li><code>generated/inference/</code> - Python bindings for worker service</li>
+</ul>
+<p><strong>Service Definitions</strong>:</p>
+<ul>
+<li><code>director_registry.rpc.rs</code> - Director registry service</li>
+<li><code>inference.rpc.rs</code> - Worker inference service</li>
+</ul>
 <h3 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h3>
+<pre><code class="language-bash"># 1. Generate TLS certificates (if needed)
+mkdir -p certs &amp;&amp; cd certs
+openssl req -x509 -newkey rsa:4096 -keyout test_key.pem -out test_cert.pem \
+  -days 365 -nodes -subj "/CN=localhost"
+cd ..
+
+# 2. Build code generator with Python support
+cargo build --bin rpcnet-gen --features codegen,python --release
+
+# 3. Generate Python bindings
+./target/release/rpcnet-gen \
+  --input examples/python/cluster/director_registry.rpc.rs \
+  --output examples/python/cluster/generated \
+  --python
+
+./target/release/rpcnet-gen \
+  --input examples/python/cluster/inference.rpc.rs \
+  --output examples/python/cluster/generated \
+  --python
+
+# 4. Build Python module
+maturin develop --features python --release
+</code></pre>
+<h3 id="quick-start-1"><a class="header" href="#quick-start-1">Quick Start</a></h3>
+<pre><code class="language-bash"># Terminal 1: Start Director
+DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin director
+
+# Terminal 2: Start Worker
+WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \
+  DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+
+# Terminal 3: Run Python Client
+python examples/python/cluster/python_client.py
+
+# Or run full workflow demo
+python examples/python/cluster/python_streaming_client.py
+</code></pre>
+<h3 id="features-demonstrated-1"><a class="header" href="#features-demonstrated-1">Features Demonstrated</a></h3>
+<ul>
+<li>✅ <strong>Type-Safe Python API</strong>: Generated dataclasses with type hints</li>
+<li>✅ <strong>Async/Await</strong>: Native Python asyncio integration</li>
+<li>✅ <strong>Cross-Language RPC</strong>: Python ↔ Rust communication</li>
+<li>✅ <strong>MessagePack Serialization</strong>: Binary serialization for efficiency</li>
+<li>✅ <strong>QUIC+TLS Transport</strong>: Same protocol as Rust services</li>
+<li>✅ <strong>Error Handling</strong>: Service errors mapped to Python exceptions</li>
+<li>✅ <strong>Load Balancing</strong>: Multiple workers with round-robin selection</li>
+</ul>
+<h3 id="example-output"><a class="header" href="#example-output">Example Output</a></h3>
+<p><strong>Simple Client</strong> (<code>python_client.py</code>):</p>
+<pre><code>====================================================================
+Python Client for RpcNet Cluster - Director Connection Demo
+====================================================================
+
+📁 Using certificate: ../../../certs/test_cert.pem
+🎯 Director address: 127.0.0.1:61000
+
+1️⃣  Connecting to director registry...
+   ✅ Connected to director at 127.0.0.1:61000
+
+2️⃣  Requesting workers (testing load balancing)...
+   Request 1:
+      ✅ Worker: worker-a
+      📍 Address: 127.0.0.1:62001
+      🔗 Connection ID: conn-1234
+
+✅ Python client completed successfully!
+</code></pre>
+<p><strong>Streaming Client</strong> (<code>python_streaming_client.py</code>):</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│ STEP 1: Connecting to Director Registry                        │
+└─────────────────────────────────────────────────────────────────┘
+✅ Connected to director at 127.0.0.1:61000
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 2: Getting Available Worker                               │
+└─────────────────────────────────────────────────────────────────┘
+✅ Got worker: worker-a at 127.0.0.1:62001
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 3: Connecting to Worker                                   │
+└─────────────────────────────────────────────────────────────────┘
+✅ Connected to worker at 127.0.0.1:62001
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 4: Sending Inference Requests                             │
+└─────────────────────────────────────────────────────────────────┘
+Request 1/5:
+  ✅ Success (45.2ms)
+  📝 Prompt:   Hello, how are you?
+  📊 Response: I'm doing well, thank you for asking!
+  🔧 Worker:   worker-a
+
+✅ Python Streaming Client Demo Completed Successfully!
+</code></pre>
+<h3 id="code-example"><a class="header" href="#code-example">Code Example</a></h3>
+<pre><code class="language-python">import asyncio
+from directorregistry import DirectorRegistryClient, GetWorkerRequest
+from inference import InferenceClient, InferenceRequest
+
+async def main():
+    # 1. Connect to director
+    director = await DirectorRegistryClient.connect(
+        "127.0.0.1:61000",
+        cert_path="../../../certs/test_cert.pem",
+        server_name="localhost"
+    )
+
+    # 2. Get available worker
+    worker_info = await director.get_worker(
+        GetWorkerRequest(connection_id=None, prompt="Test request")
+    )
+
+    # 3. Connect to worker
+    worker = await InferenceClient.connect(
+        worker_info.worker_addr,
+        cert_path="../../../certs/test_cert.pem",
+        server_name="localhost"
+    )
+
+    # 4. Send inference request
+    response = await worker.infer(
+        InferenceRequest(
+            connection_id=worker_info.connection_id,
+            prompt="Hello from Python!"
+        )
+    )
+    print(f"Response: {response.response}")
+
+asyncio.run(main())
+</code></pre>
+<h3 id="documentation"><a class="header" href="#documentation">Documentation</a></h3>
+<ul>
+<li><strong><code>examples/python/cluster/README.md</code></strong> - Complete usage guide</li>
+<li><strong><code>examples/python/cluster/QUICKSTART.md</code></strong> - Quick start guide</li>
+<li><strong><code>examples/python/cluster/SUMMARY.md</code></strong> - Feature summary</li>
+</ul>
+<h3 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h3>
+<p><strong>"Module not found: _rpcnet"</strong></p>
+<pre><code class="language-bash">maturin develop --features python --release
+</code></pre>
+<p><strong>"Unknown method: Registry.get_worker"</strong></p>
+<ul>
+<li>Ensure you're using actual service definitions from <code>examples/cluster/</code></li>
+<li>Regenerate Python bindings after copying service files</li>
+</ul>
+<p><strong>"Connection refused"</strong></p>
+<ul>
+<li>Start Rust cluster first (director + worker)</li>
+<li>Check that ports 61000 (director) and 62001 (worker) are available</li>
+</ul>
+<h2 id="running-examples-from-repository"><a class="header" href="#running-examples-from-repository">Running Examples from Repository</a></h2>
+<h3 id="prerequisites-1"><a class="header" href="#prerequisites-1">Prerequisites</a></h3>
 <ol>
 <li><strong>Clone repository</strong>:</li>
 </ol>
@@ -452,6 +627,7 @@ cargo test --examples
 <h2 id="example-comparison"><a class="header" href="#example-comparison">Example Comparison</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Example</th><th>Complexity</th><th>Features</th><th>Best For</th></tr></thead><tbody>
 <tr><td><strong>cluster</strong></td><td>Intermediate</td><td>Discovery, Load Balancing, Failover, Streaming</td><td>Understanding distributed systems</td></tr>
+<tr><td><strong>python/cluster</strong></td><td>Beginner</td><td>Python Bindings, Type Safety, Async API</td><td>Cross-language RPC, Python integration</td></tr>
 </tbody></table>
 </div>
 <h2 id="common-issues"><a class="header" href="#common-issues">Common Issues</a></h2>

@@ -30,8 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Text echo with repetition
     server
         .register("echo", |params| async move {
-            let request: EchoRequest =
-                bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+            let request: EchoRequest = rmp_serde::from_slice(&params)?;
 
             if request.times > 100 {
                 return Err(RpcError::StreamError("Too many repetitions".to_string()));
@@ -47,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
 
             let response = EchoResponse { echoed_message };
-            bincode::serialize(&response).map_err(RpcError::SerializationError)
+            rmp_serde::to_vec(&response).map_err(Into::into)
         })
         .await;
 

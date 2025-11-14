@@ -4,15 +4,18 @@ use async_trait::async_trait;
 use std::sync::Arc;
 /// Handler trait that users implement for the service.
 #[async_trait]
-pub trait GreetingHandler: Send + Sync + 'static {
-    async fn greet(&self, request: GreetRequest) -> Result<GreetResponse, GreetingError>;
+pub trait DirectorRegistryHandler: Send + Sync + 'static {
+    async fn get_worker(
+        &self,
+        request: GetWorkerRequest,
+    ) -> Result<GetWorkerResponse, DirectorError>;
 }
 /// Generated server that manages RPC registration and routing.
-pub struct GreetingServer<H: GreetingHandler> {
+pub struct DirectorRegistryServer<H: DirectorRegistryHandler> {
     handler: Arc<H>,
-    rpc_server: RpcServer,
+    pub rpc_server: RpcServer,
 }
-impl<H: GreetingHandler> GreetingServer<H> {
+impl<H: DirectorRegistryHandler> DirectorRegistryServer<H> {
     /// Creates a new server with the given handler and configuration.
     pub fn new(handler: H, config: RpcConfig) -> Self {
         Self {
@@ -26,16 +29,16 @@ impl<H: GreetingHandler> GreetingServer<H> {
             let handler = self.handler.clone();
             self.rpc_server
                 .register(
-                    "Greeting.greet",
+                    "DirectorRegistry.get_worker",
                     move |params| {
                         let handler = handler.clone();
                         async move {
-                            let request: GreetRequest = bincode::deserialize(&params)
-                                .map_err(RpcError::SerializationError)?;
-                            match handler.greet(request).await {
+                            let request: GetWorkerRequest = rmp_serde::from_slice(
+                                &params,
+                            )?;
+                            match handler.get_worker(request).await {
                                 Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
+                                    rmp_serde::to_vec(&response).map_err(Into::into)
                                 }
                                 Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                             }

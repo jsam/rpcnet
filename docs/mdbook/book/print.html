@@ -450,8 +450,18 @@ of parsing strings:</p>
 }
 <span class="boring">}</span></code></pre></pre>
 <h3 id="serialization-strategy"><a class="header" href="#serialization-strategy">Serialization Strategy</a></h3>
-<p>Requests and responses travel as <code>Vec&lt;u8&gt;</code>. Examples use <code>bincode</code> for compact
-frames, but any serialization format can be layered on top.</p>
+<p>Requests and responses travel as <code>Vec&lt;u8&gt;</code>. RpcNet supports multiple serialization formats:</p>
+<ul>
+<li><strong>bincode</strong>: Default for Rust-to-Rust communication (most efficient)</li>
+<li><strong>MessagePack</strong> (<code>rmp-serde</code>): Used for Python-to-Rust interop (better cross-language support)</li>
+<li><strong>Custom formats</strong>: Any serialization format can be layered on top</li>
+</ul>
+<p>The choice depends on your use case:</p>
+<ul>
+<li>Pure Rust services → use <code>bincode</code> for maximum performance</li>
+<li>Python/Rust polyglot services → use MessagePack for compatibility</li>
+<li>Human-readable debugging → consider JSON (with performance trade-off)</li>
+</ul>
 <h3 id="concurrency-model"><a class="header" href="#concurrency-model">Concurrency Model</a></h3>
 <p>Each accepted QUIC connection runs inside its own Tokio task. Within that
 connection, every RPC request is processed on another task so long-running
@@ -758,6 +768,7 @@ Usage: rpcnet-gen [OPTIONS] --input &lt;INPUT&gt;
 Options:
   -i, --input &lt;INPUT&gt;    Input .rpc file (Rust source with service trait)
   -o, --output &lt;OUTPUT&gt;  Output directory for generated code [default: src/generated]
+      --python           Generate Python bindings instead of Rust code
       --server-only      Generate only server code
       --client-only      Generate only client code
       --types-only       Generate only type definitions
@@ -819,6 +830,53 @@ fn main() {
 }</code></pre></pre>
 <p>Each input produces a sibling directory under <code>src/generated/</code> (<code>user/</code>,
 <code>billing/</code>, <code>audit/</code>).</p>
+<h2 id="generating-python-bindings"><a class="header" href="#generating-python-bindings">Generating Python Bindings</a></h2>
+<p>The <code>--python</code> flag generates Python client and server code instead of Rust:</p>
+<pre><code class="language-bash"># Generate Python bindings
+rpcnet-gen --input greeting.rpc.rs --output generated --python
+</code></pre>
+<p>This produces Python packages with type-safe dataclasses and async APIs:</p>
+<pre><code>generated/
+└── greeting/
+    ├── __init__.py      # Package exports
+    ├── types.py         # GreetRequest, GreetResponse, GreetError
+    ├── client.py        # GreetingClient with async methods
+    └── server.py        # GreetingServer base class
+</code></pre>
+<h3 id="prerequisites-for-python"><a class="header" href="#prerequisites-for-python">Prerequisites for Python</a></h3>
+<p>Before using Python bindings, build the native <code>_rpcnet</code> module:</p>
+<pre><code class="language-bash"># Install maturin
+pip install maturin
+
+# Build Python module
+maturin develop --features python --release
+</code></pre>
+<h3 id="using-python-bindings"><a class="header" href="#using-python-bindings">Using Python Bindings</a></h3>
+<pre><code class="language-python">import asyncio
+from greeting import GreetingClient, GreetRequest
+
+async def main():
+    client = await GreetingClient.connect(
+        "127.0.0.1:50051",
+        cert_path="certs/test_cert.pem",
+        server_name="localhost"
+    )
+
+    response = await client.greet(GreetRequest(name="Alice"))
+    print(response.message)
+
+asyncio.run(main())
+</code></pre>
+<h3 id="key-differences-rust-vs-python"><a class="header" href="#key-differences-rust-vs-python">Key Differences: Rust vs Python</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Feature</th><th>Rust Generation</th><th>Python Generation</th></tr></thead><tbody>
+<tr><td><strong>Output</strong></td><td><code>.rs</code> files</td><td><code>.py</code> files</td></tr>
+<tr><td><strong>Serialization</strong></td><td>bincode</td><td>MessagePack</td></tr>
+<tr><td><strong>Types</strong></td><td>Rust structs/enums</td><td>Python dataclasses</td></tr>
+<tr><td><strong>Async</strong></td><td>Tokio</td><td>asyncio</td></tr>
+<tr><td><strong>Use Case</strong></td><td>Production services</td><td>Tooling, clients, prototyping</td></tr>
+</tbody></table>
+</div>
+<p>For complete documentation on Python bindings, see the <a href="python-bindings.html">Python Bindings</a> chapter.</p>
 <h2 id="version-control-strategy"><a class="header" href="#version-control-strategy">Version-Control Strategy</a></h2>
 <p>Generated code is ordinary Rust and can be committed. Most teams either:</p>
 <ol>
@@ -839,6 +897,571 @@ the same crate version so layouts match.</li>
 </ul>
 <p>With these workflows in place you can treat <code>rpcnet-gen</code> like any other build
 step: edit the <code>.rpc.rs</code> trait, regenerate, and keep building.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="python-code-generation"><a class="header" href="#python-code-generation">Python Code Generation</a></h1>
+<p>RpcNet supports generating <strong>type-safe Python bindings</strong> from Rust service definitions. This enables Python clients and servers to communicate with Rust services using the same QUIC+TLS transport, with automatic serialization via MessagePack.</p>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>The <code>rpcnet-gen</code> CLI can generate Python client and server code from <code>.rpc.rs</code> service definitions:</p>
+<pre><code class="language-bash">rpcnet-gen --input service.rpc.rs --output generated/ --python
+</code></pre>
+<p>This produces a Python package with:</p>
+<ul>
+<li>Type-safe dataclasses for requests/responses/errors</li>
+<li>Async client with typed methods</li>
+<li>Server base class for implementing services in Python</li>
+<li>Automatic MessagePack serialization for cross-language compatibility</li>
+</ul>
+<h2 id="quick-example"><a class="header" href="#quick-example">Quick Example</a></h2>
+<h3 id="1-define-service-in-rust"><a class="header" href="#1-define-service-in-rust">1. Define Service in Rust</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// greeting.rpc.rs
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GreetRequest {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GreetResponse {
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GreetError {
+    InvalidName(String),
+}
+
+#[rpcnet::service]
+pub trait Greeting {
+    async fn greet(&amp;self, request: GreetRequest)
+        -&gt; Result&lt;GreetResponse, GreetError&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="2-generate-python-bindings"><a class="header" href="#2-generate-python-bindings">2. Generate Python Bindings</a></h3>
+<pre><code class="language-bash"># Build code generator with Python support
+cargo build --bin rpcnet-gen --features codegen,python --release
+
+# Generate Python bindings
+./target/release/rpcnet-gen \
+  --input greeting.rpc.rs \
+  --output generated \
+  --python
+</code></pre>
+<h3 id="3-build-python-module"><a class="header" href="#3-build-python-module">3. Build Python Module</a></h3>
+<p>The Python bindings require the <code>_rpcnet</code> native module (PyO3-based):</p>
+<pre><code class="language-bash"># Install maturin if needed
+pip install maturin
+
+# Build and install the native module
+maturin develop --features python --release
+</code></pre>
+<h3 id="4-use-in-python"><a class="header" href="#4-use-in-python">4. Use in Python</a></h3>
+<pre><code class="language-python">import asyncio
+from greeting import GreetingClient, GreetRequest
+
+async def main():
+    # Connect to Rust service
+    client = await GreetingClient.connect(
+        "127.0.0.1:50051",
+        cert_path="certs/test_cert.pem",
+        server_name="localhost"
+    )
+
+    # Make RPC call
+    response = await client.greet(
+        GreetRequest(name="Alice")
+    )
+
+    print(response.message)  # "Hello, Alice!"
+
+asyncio.run(main())
+</code></pre>
+<h2 id="generated-code-structure"><a class="header" href="#generated-code-structure">Generated Code Structure</a></h2>
+<p>For a service named <code>Greeting</code>, the generator produces:</p>
+<pre><code>generated/
+└── greeting/
+    ├── __init__.py      # Package exports
+    ├── types.py         # GreetRequest, GreetResponse, GreetError
+    ├── client.py        # GreetingClient
+    └── server.py        # GreetingServer
+</code></pre>
+<h3 id="types-module-typespy"><a class="header" href="#types-module-typespy">Types Module (<code>types.py</code>)</a></h3>
+<p>Python dataclasses with type hints:</p>
+<pre><code class="language-python">from dataclasses import dataclass
+from enum import Enum
+from typing import Optional
+
+@dataclass
+class GreetRequest:
+    name: str
+
+@dataclass
+class GreetResponse:
+    message: str
+
+class GreetError(Enum):
+    InvalidName = "InvalidName"
+</code></pre>
+<h3 id="client-module-clientpy"><a class="header" href="#client-module-clientpy">Client Module (<code>client.py</code>)</a></h3>
+<p>Async client with typed methods:</p>
+<pre><code class="language-python">class GreetingClient:
+    @staticmethod
+    async def connect(
+        addr: str,
+        cert_path: str,
+        server_name: str = "localhost",
+        timeout_secs: int = 30
+    ) -&gt; 'GreetingClient':
+        """Connect to Greeting service"""
+        ...
+
+    async def greet(self, request: GreetRequest) -&gt; GreetResponse:
+        """Call greet RPC method"""
+        ...
+</code></pre>
+<h3 id="server-module-serverpy"><a class="header" href="#server-module-serverpy">Server Module (<code>server.py</code>)</a></h3>
+<p>Base class for implementing services:</p>
+<pre><code class="language-python">class GreetingServer:
+    """Implement this to create a Python Greeting service"""
+
+    async def greet_impl(
+        self,
+        request: GreetRequest
+    ) -&gt; GreetResponse:
+        """Implement this method"""
+        raise NotImplementedError()
+
+    async def serve(
+        self,
+        addr: str,
+        cert_path: str,
+        key_path: str
+    ):
+        """Start serving requests"""
+        ...
+</code></pre>
+<h2 id="command-line-options-1"><a class="header" href="#command-line-options-1">Command-Line Options</a></h2>
+<p>Python-specific options for <code>rpcnet-gen</code>:</p>
+<pre><code class="language-bash">rpcnet-gen --help
+</code></pre>
+<pre><code>Generate RPC client and server code from service definitions
+
+Options:
+  -i, --input &lt;INPUT&gt;    Input .rpc file
+  -o, --output &lt;OUTPUT&gt;  Output directory [default: src/generated]
+      --python           Generate Python bindings
+      --server-only      Generate only server code
+      --client-only      Generate only client code
+      --types-only       Generate only type definitions
+</code></pre>
+<p><strong>Python-specific behavior</strong>:</p>
+<ul>
+<li><code>--python</code> flag enables Python code generation</li>
+<li>Output structure is <code>&lt;output&gt;/&lt;service_name&gt;/</code> (snake_case)</li>
+<li>Generates Python package with <code>__init__.py</code></li>
+<li>Types use Python dataclasses and type hints</li>
+</ul>
+<h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
+<h3 id="1-python-client--rust-service"><a class="header" href="#1-python-client--rust-service">1. Python Client → Rust Service</a></h3>
+<p><strong>Most common</strong>: Use Python for scripting/tooling while running high-performance Rust services.</p>
+<pre><code class="language-python"># Python client
+from directorregistry import DirectorRegistryClient, GetWorkerRequest
+
+director = await DirectorRegistryClient.connect("127.0.0.1:61000", ...)
+worker_info = await director.get_worker(GetWorkerRequest(...))
+</code></pre>
+<p><strong>Benefits</strong>:</p>
+<ul>
+<li>Rapid development in Python</li>
+<li>Production performance from Rust</li>
+<li>Type-safe API with auto-completion</li>
+</ul>
+<h3 id="2-python-service--rust-client"><a class="header" href="#2-python-service--rust-client">2. Python Service → Rust Client</a></h3>
+<p>Implement services in Python for rapid prototyping or ML integration:</p>
+<pre><code class="language-python">from greeting import GreetingServer, GreetRequest, GreetResponse
+
+class MyGreeter(GreetingServer):
+    async def greet_impl(self, request: GreetRequest) -&gt; GreetResponse:
+        # Use Python ML libraries, etc.
+        return GreetResponse(message=f"Hello, {request.name}!")
+
+# Start service
+server = MyGreeter()
+await server.serve("0.0.0.0:50051", cert_path="...", key_path="...")
+</code></pre>
+<p><strong>Benefits</strong>:</p>
+<ul>
+<li>Access Python ecosystem (ML, data processing)</li>
+<li>Rapid iteration during development</li>
+<li>Same protocol as Rust services</li>
+</ul>
+<h3 id="3-polyglot-microservices"><a class="header" href="#3-polyglot-microservices">3. Polyglot Microservices</a></h3>
+<p>Mix Python and Rust services in a distributed system:</p>
+<pre><code>┌─────────────────┐
+│  Rust Director  │  ← High performance coordinator
+└────────┬────────┘
+         │
+    ┌────┴────┬──────────┐
+    ▼         ▼          ▼
+┌────────┐ ┌──────┐  ┌──────────┐
+│Rust    │ │Python│  │Python ML │
+│Worker  │ │Worker│  │Worker    │
+└────────┘ └──────┘  └──────────┘
+</code></pre>
+<p><strong>Benefits</strong>:</p>
+<ul>
+<li>Right tool for each job</li>
+<li>Unified RPC protocol</li>
+<li>Type-safe boundaries</li>
+</ul>
+<h2 id="real-world-example-cluster-client"><a class="header" href="#real-world-example-cluster-client">Real-World Example: Cluster Client</a></h2>
+<p>See <code>examples/python/cluster/</code> for a complete example demonstrating Python clients connecting to a Rust cluster.</p>
+<h3 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h3>
+<pre><code class="language-bash"># 1. Generate TLS certificates
+mkdir -p certs &amp;&amp; cd certs
+openssl req -x509 -newkey rsa:4096 -keyout test_key.pem -out test_cert.pem \
+  -days 365 -nodes -subj "/CN=localhost"
+cd ..
+
+# 2. Build Python module
+maturin develop --features python --release
+</code></pre>
+<h3 id="start-rust-cluster"><a class="header" href="#start-rust-cluster">Start Rust Cluster</a></h3>
+<pre><code class="language-bash"># Terminal 1 - Director
+DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin director
+
+# Terminal 2 - Worker
+WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \
+  DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+</code></pre>
+<h3 id="run-python-client"><a class="header" href="#run-python-client">Run Python Client</a></h3>
+<pre><code class="language-bash">python examples/python/cluster/python_client.py
+</code></pre>
+<p><strong>Output</strong>:</p>
+<pre><code>====================================================================
+Python Client for RpcNet Cluster - Director Connection Demo
+====================================================================
+
+1️⃣  Connecting to director registry...
+   ✅ Connected to director at 127.0.0.1:61000
+
+2️⃣  Requesting workers (testing load balancing)...
+   Request 1:
+      ✅ Worker: worker-a
+      📍 Address: 127.0.0.1:62001
+      🔗 Connection ID: conn-1234
+
+✅ Python client completed successfully!
+</code></pre>
+<h3 id="full-workflow-example"><a class="header" href="#full-workflow-example">Full Workflow Example</a></h3>
+<p><code>python_streaming_client.py</code> demonstrates the complete flow:</p>
+<ol>
+<li>Connect to director to get available worker</li>
+<li>Connect to worker for inference</li>
+<li>Send multiple inference requests</li>
+<li>Test load balancing</li>
+</ol>
+<pre><code class="language-python"># 1. Get worker from director
+director = await DirectorRegistryClient.connect("127.0.0.1:61000", ...)
+worker_info = await director.get_worker(GetWorkerRequest(...))
+
+# 2. Connect to worker
+worker = await InferenceClient.connect(worker_info.worker_addr, ...)
+
+# 3. Send inference request
+response = await worker.infer(InferenceRequest(
+    connection_id=worker_info.connection_id,
+    prompt="Hello from Python!"
+))
+print(response.response)
+</code></pre>
+<h2 id="features"><a class="header" href="#features">Features</a></h2>
+<h3 id="-type-safety"><a class="header" href="#-type-safety">✅ Type Safety</a></h3>
+<ul>
+<li>Python dataclasses with type hints</li>
+<li>IDE auto-completion support</li>
+<li>Runtime type checking via dataclasses</li>
+</ul>
+<pre><code class="language-python"># Type-safe request construction
+request = GreetRequest(name="Alice")  # ✅
+request = GreetRequest(age=25)        # ❌ Type error
+</code></pre>
+<h3 id="-asyncawait"><a class="header" href="#-asyncawait">✅ Async/Await</a></h3>
+<ul>
+<li>Native Python asyncio integration</li>
+<li>Non-blocking I/O</li>
+<li>Concurrent request handling</li>
+</ul>
+<pre><code class="language-python"># Parallel requests
+responses = await asyncio.gather(
+    client.greet(GreetRequest(name="Alice")),
+    client.greet(GreetRequest(name="Bob")),
+    client.greet(GreetRequest(name="Charlie")),
+)
+</code></pre>
+<h3 id="-automatic-serialization"><a class="header" href="#-automatic-serialization">✅ Automatic Serialization</a></h3>
+<ul>
+<li>MessagePack encoding/decoding</li>
+<li>Handles complex nested types</li>
+<li>Compatible with Rust bincode for primitive types</li>
+</ul>
+<pre><code class="language-python"># Automatic serialization
+request = GreetRequest(name="Alice")
+response = await client.greet(request)  # Serialized → sent → deserialized
+</code></pre>
+<h3 id="-error-handling"><a class="header" href="#-error-handling">✅ Error Handling</a></h3>
+<p>Service errors are raised as Python exceptions:</p>
+<pre><code class="language-python">try:
+    response = await client.greet(request)
+except GreetError.InvalidName as e:
+    print(f"Invalid name: {e}")
+except ConnectionError:
+    print("Connection failed")
+</code></pre>
+<h3 id="-connection-management"><a class="header" href="#-connection-management">✅ Connection Management</a></h3>
+<ul>
+<li>Automatic connection pooling</li>
+<li>Configurable timeouts</li>
+<li>TLS certificate verification</li>
+</ul>
+<pre><code class="language-python">client = await GreetingClient.connect(
+    addr="127.0.0.1:50051",
+    cert_path="certs/test_cert.pem",
+    server_name="localhost",
+    timeout_secs=30  # Configurable timeout
+)
+</code></pre>
+<h2 id="performance-considerations"><a class="header" href="#performance-considerations">Performance Considerations</a></h2>
+<h3 id="serialization"><a class="header" href="#serialization">Serialization</a></h3>
+<ul>
+<li><strong>MessagePack</strong>: ~10-50µs overhead per call</li>
+<li><strong>Faster than JSON</strong>: Binary format, compact encoding</li>
+<li><strong>Cross-language</strong>: Python ↔ Rust compatibility</li>
+</ul>
+<h3 id="network"><a class="header" href="#network">Network</a></h3>
+<ul>
+<li><strong>QUIC+TLS</strong>: Same transport as Rust-to-Rust</li>
+<li><strong>Throughput</strong>: 10K+ requests/sec from Python</li>
+<li><strong>Latency</strong>: Minimal overhead (~100µs) vs native Rust</li>
+</ul>
+<h3 id="python-overhead"><a class="header" href="#python-overhead">Python Overhead</a></h3>
+<p>Python adds overhead compared to Rust:</p>
+<div class="table-wrapper"><table><thead><tr><th>Aspect</th><th>Rust</th><th>Python</th></tr></thead><tbody>
+<tr><td><strong>CPU</strong></td><td>⚡⚡⚡</td><td>⚡⚡</td></tr>
+<tr><td><strong>Latency</strong></td><td>~1-10µs</td><td>~10-50µs</td></tr>
+<tr><td><strong>Throughput</strong></td><td>100K+ req/s</td><td>10K+ req/s</td></tr>
+</tbody></table>
+</div>
+<p><strong>Recommendation</strong>: Use Python for:</p>
+<ul>
+<li>Non-critical path operations</li>
+<li>Tooling and monitoring</li>
+<li>Rapid prototyping</li>
+<li>ML inference workloads</li>
+</ul>
+<p>Use Rust for:</p>
+<ul>
+<li>Hot path / critical services</li>
+<li>High-throughput systems</li>
+<li>Low-latency requirements</li>
+</ul>
+<h2 id="streaming-support"><a class="header" href="#streaming-support">Streaming Support</a></h2>
+<h3 id="-bidirectional-streaming-supported"><a class="header" href="#-bidirectional-streaming-supported">✅ Bidirectional Streaming Supported</a></h3>
+<p>Python codegen <strong>supports bidirectional streaming</strong> RPCs using <code>AsyncIterable</code> and <code>AsyncIterator</code>:</p>
+<p><strong>Rust Service Definition</strong>:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use futures::Stream;
+use std::pin::Pin;
+
+#[rpcnet::service]
+pub trait Inference {
+    async fn generate(
+        &amp;self,
+        request: Pin&lt;Box&lt;dyn Stream&lt;Item = InferenceRequest&gt; + Send&gt;&gt;
+    ) -&gt; Result&lt;Pin&lt;Box&lt;dyn Stream&lt;Item = Result&lt;InferenceResponse, InferenceError&gt;&gt; + Send&gt;&gt;, InferenceError&gt;;
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Generated Python Client</strong>:</p>
+<pre><code class="language-python">class InferenceClient:
+    async def generate(
+        self,
+        request_stream: AsyncIterable[InferenceRequest]
+    ) -&gt; AsyncIterator[InferenceResponse]:
+        """Streaming RPC method: generate"""
+        ...
+</code></pre>
+<p><strong>Python Usage Example</strong>:</p>
+<pre><code class="language-python">async def request_generator():
+    """Generate streaming requests"""
+    for i in range(10):
+        yield InferenceRequest(
+            connection_id="conn-123",
+            prompt=f"Request {i}"
+        )
+
+# Send streaming requests and receive streaming responses
+async for response in client.generate(request_generator()):
+    print(f"Received: {response}")
+</code></pre>
+<h3 id="current-limitations"><a class="header" href="#current-limitations">Current Limitations</a></h3>
+<ul>
+<li><strong>Client-side streaming</strong>: Fully supported (AsyncIterable input)</li>
+<li><strong>Server-side streaming</strong>: Fully supported (AsyncIterator output)</li>
+<li><strong>Bidirectional streaming</strong>: Fully supported (both AsyncIterable and AsyncIterator)</li>
+<li><strong>Python server implementation</strong>: Generated but needs runtime testing</li>
+</ul>
+<h2 id="type-compatibility"><a class="header" href="#type-compatibility">Type Compatibility</a></h2>
+<h3 id="rust-only-types"><a class="header" href="#rust-only-types">Rust-Only Types</a></h3>
+<p>Some Rust types don't have direct Python equivalents:</p>
+<ul>
+<li><code>std::time::Duration</code> → Use integer milliseconds</li>
+<li>Custom enums with data → Use struct variants</li>
+<li><code>Option&lt;T&gt;</code> → Use <code>Optional[T]</code></li>
+</ul>
+<p><strong>Best practice</strong>: Keep <code>.rpc.rs</code> types simple and cross-language compatible.</p>
+<h2 id="troubleshooting-1"><a class="header" href="#troubleshooting-1">Troubleshooting</a></h2>
+<h3 id="module-not-found-_rpcnet"><a class="header" href="#module-not-found-_rpcnet">"Module not found: _rpcnet"</a></h3>
+<p><strong>Problem</strong>: Python can't import the native module.</p>
+<p><strong>Solution</strong>: Build the native module:</p>
+<pre><code class="language-bash">maturin develop --features python --release
+</code></pre>
+<h3 id="unknown-method-servicemethod"><a class="header" href="#unknown-method-servicemethod">"Unknown method: Service.method"</a></h3>
+<p><strong>Problem</strong>: Python bindings don't match the running Rust service.</p>
+<p><strong>Solution</strong>: Ensure you're using the actual service definitions:</p>
+<pre><code class="language-bash"># Copy actual service definition
+cp examples/cluster/director_registry.rpc.rs examples/python/cluster/
+
+# Regenerate bindings
+./target/release/rpcnet-gen \
+  --input examples/python/cluster/director_registry.rpc.rs \
+  --output examples/python/cluster/generated \
+  --python
+</code></pre>
+<h3 id="connection-refused"><a class="header" href="#connection-refused">"Connection refused"</a></h3>
+<p><strong>Problem</strong>: Rust service isn't running.</p>
+<p><strong>Solution</strong>: Start the Rust service first:</p>
+<pre><code class="language-bash">DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin director
+</code></pre>
+<h3 id="certificate-verification-failed"><a class="header" href="#certificate-verification-failed">"Certificate verification failed"</a></h3>
+<p><strong>Problem</strong>: TLS certificates missing or invalid.</p>
+<p><strong>Solution</strong>: Generate test certificates:</p>
+<pre><code class="language-bash">mkdir -p certs &amp;&amp; cd certs
+openssl req -x509 -newkey rsa:4096 -keyout test_key.pem -out test_cert.pem \
+  -days 365 -nodes -subj "/CN=localhost"
+</code></pre>
+<h3 id="type-mismatches"><a class="header" href="#type-mismatches">Type Mismatches</a></h3>
+<p><strong>Problem</strong>: Request/response types don't match between Python and Rust.</p>
+<p><strong>Solution</strong>:</p>
+<ol>
+<li>Ensure both use the same <code>.rpc.rs</code> file</li>
+<li>Regenerate Python bindings after any Rust changes</li>
+<li>Restart Python interpreter to reload modules</li>
+</ol>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<h3 id="1-version-control-generated-code"><a class="header" href="#1-version-control-generated-code">1. Version Control Generated Code</a></h3>
+<p><strong>Option A - Commit generated code</strong>:</p>
+<pre><code class="language-bash"># .gitignore
+# (no ignore for generated/)
+</code></pre>
+<p><strong>Option B - Regenerate on demand</strong>:</p>
+<pre><code class="language-bash"># .gitignore
+generated/
+
+# README.md
+Run: rpcnet-gen --input service.rpc.rs --output generated --python
+</code></pre>
+<p><strong>Recommendation</strong>: Commit for libraries, regenerate for applications.</p>
+<h3 id="2-keep-service-definitions-simple"><a class="header" href="#2-keep-service-definitions-simple">2. Keep Service Definitions Simple</a></h3>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// ✅ Good - simple, cross-language types
+#[derive(Serialize, Deserialize)]
+pub struct Request {
+    pub id: String,
+    pub count: i32,
+    pub tags: Vec&lt;String&gt;,
+}
+
+// ❌ Avoid - Rust-specific types
+pub struct Request {
+    pub id: Uuid,                    // Not in Python
+    pub timeout: Duration,           // Use i64 millis instead
+    pub callback: Box&lt;dyn Fn()&gt;,     // Can't serialize
+}
+<span class="boring">}</span></code></pre></pre>
+<h3 id="3-document-your-api"><a class="header" href="#3-document-your-api">3. Document Your API</a></h3>
+<p>Add docstrings to generated code:</p>
+<pre><code class="language-python"># Manually enhance generated code with docs
+class GreetingClient:
+    async def greet(self, request: GreetRequest) -&gt; GreetResponse:
+        """
+        Send a greeting request.
+
+        Args:
+            request: Request with name to greet
+
+        Returns:
+            Response with greeting message
+
+        Raises:
+            GreetError.InvalidName: If name is empty
+        """
+        ...
+</code></pre>
+<h3 id="4-handle-errors-gracefully"><a class="header" href="#4-handle-errors-gracefully">4. Handle Errors Gracefully</a></h3>
+<pre><code class="language-python">async def safe_greet(client, name):
+    try:
+        response = await client.greet(GreetRequest(name=name))
+        return response.message
+    except GreetError.InvalidName:
+        return "Invalid name provided"
+    except ConnectionError:
+        return "Service unavailable"
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return "Error occurred"
+</code></pre>
+<h3 id="5-use-connection-pooling"><a class="header" href="#5-use-connection-pooling">5. Use Connection Pooling</a></h3>
+<pre><code class="language-python"># ✅ Reuse client connections
+client = await GreetingClient.connect(...)
+
+for name in names:
+    response = await client.greet(GreetRequest(name=name))
+
+# ❌ Don't reconnect every time
+for name in names:
+    client = await GreetingClient.connect(...)  # Wasteful!
+    response = await client.greet(GreetRequest(name=name))
+</code></pre>
+<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<ul>
+<li><strong><a href="reference/examples.html">Example Programs</a></strong> - See <code>examples/python/cluster/</code></li>
+<li><strong><a href="rpcnet-gen.html">rpcnet-gen CLI</a></strong> - Full code generation documentation</li>
+<li><strong><a href="cluster-example.html">Cluster Example</a></strong> - Distributed systems with Python</li>
+</ul>
+<h2 id="complete-example-code"><a class="header" href="#complete-example-code">Complete Example Code</a></h2>
+<p>See the full working example at:</p>
+<ul>
+<li><strong><code>examples/python/cluster/README.md</code></strong> - Complete usage guide</li>
+<li><strong><code>examples/python/cluster/QUICKSTART.md</code></strong> - Quick start guide</li>
+<li><strong><code>examples/python/cluster/python_client.py</code></strong> - Simple client example</li>
+<li><strong><code>examples/python/cluster/python_streaming_client.py</code></strong> - Full workflow example</li>
+</ul>
+<p>The Python cluster example demonstrates:</p>
+<ul>
+<li>✅ Connecting to Rust director</li>
+<li>✅ Getting available workers</li>
+<li>✅ Sending inference requests</li>
+<li>✅ Load balancing</li>
+<li>✅ Error handling</li>
+<li>✅ Type-safe Python API</li>
+</ul>
+<p>Generate the bindings and try it yourself!</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="cluster-example"><a class="header" href="#cluster-example">Cluster Example</a></h1>
 <p>This chapter demonstrates building a distributed RPC cluster with automatic worker discovery, load balancing, and failure detection using RpcNet's built-in cluster features.</p>
 <h2 id="architecture-overview"><a class="header" href="#architecture-overview">Architecture Overview</a></h2>
@@ -908,7 +1531,7 @@ step: edit the <code>.rpc.rs</code> trait, regenerate, and keep building.</p>
 <li><strong>75% code reduction!</strong></li>
 </ul>
 <h2 id="running-the-example"><a class="header" href="#running-the-example">Running the Example</a></h2>
-<h3 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h3>
+<h3 id="prerequisites-1"><a class="header" href="#prerequisites-1">Prerequisites</a></h3>
 <p>Ensure test certificates exist:</p>
 <pre><code class="language-bash">ls certs/test_cert.pem certs/test_key.pem
 </code></pre>
@@ -1131,7 +1754,7 @@ let config = ClusterConfig::default()
     .with_gossip_interval(Duration::from_secs(1))
     .with_health_check_interval(Duration::from_secs(2));
 <span class="boring">}</span></code></pre></pre>
-<h2 id="troubleshooting-1"><a class="header" href="#troubleshooting-1">Troubleshooting</a></h2>
+<h2 id="troubleshooting-2"><a class="header" href="#troubleshooting-2">Troubleshooting</a></h2>
 <p><strong>Workers not discovered:</strong></p>
 <ul>
 <li>Ensure director starts first (it's the seed node)</li>
@@ -1160,7 +1783,7 @@ let config = ClusterConfig::default()
 <li><strong>Security</strong>: Add authentication and authorization</li>
 <li><strong>Network</strong>: Plan for network partitions and split-brain scenarios</li>
 </ol>
-<h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
+<h2 id="next-steps-1"><a class="header" href="#next-steps-1">Next Steps</a></h2>
 <ul>
 <li>Try different load balancing strategies</li>
 <li>Add more workers dynamically</li>
@@ -1448,7 +2071,7 @@ let result = client.call_worker("compute", request, Some("role=worker")).await?;
 <li><strong>Low CPU</strong>: &lt; 1% for gossip maintenance</li>
 <li><strong>Low network</strong>: ~1KB/s per node for gossip</li>
 </ul>
-<h2 id="next-steps-1"><a class="header" href="#next-steps-1">Next Steps</a></h2>
+<h2 id="next-steps-2"><a class="header" href="#next-steps-2">Next Steps</a></h2>
 <p>Now that you understand the cluster architecture, you can:</p>
 <ol>
 <li><strong><a href="cluster/tutorial.html">Follow the Tutorial</a></strong> - Build your first cluster step-by-step</li>
@@ -1470,7 +2093,7 @@ let result = client.call_worker("compute", request, Some("role=worker")).await?;
 </ul>
 <p><strong>Time</strong>: ~30 minutes<br />
 <strong>Difficulty</strong>: Intermediate</p>
-<h2 id="prerequisites-1"><a class="header" href="#prerequisites-1">Prerequisites</a></h2>
+<h2 id="prerequisites-2"><a class="header" href="#prerequisites-2">Prerequisites</a></h2>
 <h3 id="1-install-rpcnet"><a class="header" href="#1-install-rpcnet">1. Install RpcNet</a></h3>
 <pre><code class="language-bash">cargo install rpcnet
 </code></pre>
@@ -1922,7 +2545,7 @@ path = "src/bin/client.rs"
 ✅ <strong>Failure Detection</strong>: Gossip protocol detects and handles node failures<br />
 ✅ <strong>Client Failover</strong>: Clients handle worker failures gracefully<br />
 ✅ <strong>Tag-Based Routing</strong>: Filter workers by role (<code>role=worker</code>)</p>
-<h2 id="next-steps-2"><a class="header" href="#next-steps-2">Next Steps</a></h2>
+<h2 id="next-steps-3"><a class="header" href="#next-steps-3">Next Steps</a></h2>
 <h3 id="add-more-workers"><a class="header" href="#add-more-workers">Add More Workers</a></h3>
 <p>Scale up by adding more workers with different labels:</p>
 <pre><code class="language-bash">WORKER_LABEL=worker-c \
@@ -2347,7 +2970,7 @@ Partition heals:
 - Incarnation numbers resolve conflicts
 </code></pre>
 <p><strong>Result</strong>: Both partitions continue operating; merge when healed.</p>
-<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<h2 id="best-practices-1"><a class="header" href="#best-practices-1">Best Practices</a></h2>
 <h3 id="1-use-multiple-seed-nodes"><a class="header" href="#1-use-multiple-seed-nodes">1. Use Multiple Seed Nodes</a></h3>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -2427,7 +3050,7 @@ cluster.leave().await?;
 <li>Small clusters (&lt; 5 nodes) → Direct RPC simpler</li>
 <li>Centralized control desired → Use coordinator pattern</li>
 </ul>
-<h2 id="troubleshooting-2"><a class="header" href="#troubleshooting-2">Troubleshooting</a></h2>
+<h2 id="troubleshooting-3"><a class="header" href="#troubleshooting-3">Troubleshooting</a></h2>
 <h3 id="nodes-not-discovering"><a class="header" href="#nodes-not-discovering">Nodes Not Discovering</a></h3>
 <p><strong>Symptom</strong>: Workers join but director doesn't see them.</p>
 <p><strong>Debug</strong>:</p>
@@ -2477,7 +3100,7 @@ let config = ClusterConfig::default()
 <li>Node overloaded (GC pauses)</li>
 <li>Timeout too aggressive</li>
 </ul>
-<h2 id="next-steps-3"><a class="header" href="#next-steps-3">Next Steps</a></h2>
+<h2 id="next-steps-4"><a class="header" href="#next-steps-4">Next Steps</a></h2>
 <ul>
 <li><strong><a href="cluster/load-balancing.html">Load Balancing</a></strong> - Use discovered nodes for routing</li>
 <li><strong><a href="cluster/health.html">Health Checking</a></strong> - Understand Phi Accrual algorithm</li>
@@ -2844,7 +3467,7 @@ impl LoadBalancerMetrics {
     }
 }
 <span class="boring">}</span></code></pre></pre>
-<h2 id="best-practices-1"><a class="header" href="#best-practices-1">Best Practices</a></h2>
+<h2 id="best-practices-2"><a class="header" href="#best-practices-2">Best Practices</a></h2>
 <h3 id="1-choose-the-right-strategy"><a class="header" href="#1-choose-the-right-strategy">1. Choose the Right Strategy</a></h3>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -2922,7 +3545,7 @@ async fn bench_load_balancing() {
     }
 }
 <span class="boring">}</span></code></pre></pre>
-<h2 id="troubleshooting-3"><a class="header" href="#troubleshooting-3">Troubleshooting</a></h2>
+<h2 id="troubleshooting-4"><a class="header" href="#troubleshooting-4">Troubleshooting</a></h2>
 <h3 id="uneven-load-distribution"><a class="header" href="#uneven-load-distribution">Uneven Load Distribution</a></h3>
 <p><strong>Symptom</strong>: One worker consistently gets more requests than others.</p>
 <p><strong>Debug</strong>:</p>
@@ -3011,7 +3634,7 @@ With Random:                       170K RPS (-1.1%)
 With Least Connections:            168K RPS (-2.3%)
 </code></pre>
 <p><strong>Conclusion</strong>: Load balancing overhead is minimal, well worth the improved distribution.</p>
-<h2 id="next-steps-4"><a class="header" href="#next-steps-4">Next Steps</a></h2>
+<h2 id="next-steps-5"><a class="header" href="#next-steps-5">Next Steps</a></h2>
 <ul>
 <li><strong><a href="cluster/health.html">Health Checking</a></strong> - Ensure selected workers are healthy</li>
 <li><strong><a href="cluster/failures.html">Failures</a></strong> - Handle worker failures gracefully</li>
@@ -3325,7 +3948,7 @@ Gossip + Phi:
   ✓ Adapts to network conditions
   ✓ More accurate detection
 </code></pre>
-<h2 id="best-practices-2"><a class="header" href="#best-practices-2">Best Practices</a></h2>
+<h2 id="best-practices-3"><a class="header" href="#best-practices-3">Best Practices</a></h2>
 <h3 id="1-tune-for-your-network"><a class="header" href="#1-tune-for-your-network">1. Tune for Your Network</a></h3>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -3423,7 +4046,7 @@ while let Some(event) = events.recv().await {
 // Higher min = less sensitive to small variations
 .with_min_std_deviation(Duration::from_millis(100))
 <span class="boring">}</span></code></pre></pre>
-<h2 id="troubleshooting-4"><a class="header" href="#troubleshooting-4">Troubleshooting</a></h2>
+<h2 id="troubleshooting-5"><a class="header" href="#troubleshooting-5">Troubleshooting</a></h2>
 <h3 id="false-positives-node-marked-failed-but-is-alive"><a class="header" href="#false-positives-node-marked-failed-but-is-alive">False Positives (Node marked failed but is alive)</a></h3>
 <p><strong>Symptoms</strong>:</p>
 <ul>
@@ -3520,7 +4143,7 @@ impl CompositeHealthCheck {
     }
 }
 <span class="boring">}</span></code></pre></pre>
-<h2 id="next-steps-5"><a class="header" href="#next-steps-5">Next Steps</a></h2>
+<h2 id="next-steps-6"><a class="header" href="#next-steps-6">Next Steps</a></h2>
 <ul>
 <li><strong><a href="cluster/failures.html">Failures</a></strong> - Handle node failures and partitions</li>
 <li><strong><a href="cluster/discovery.html">Discovery</a></strong> - How nodes discover each other via gossip</li>
@@ -4082,7 +4705,7 @@ async fn monitor_failures(cluster: Arc&lt;ClusterMembership&gt;) {
     )
 }
 <span class="boring">}</span></code></pre></pre>
-<h2 id="best-practices-3"><a class="header" href="#best-practices-3">Best Practices</a></h2>
+<h2 id="best-practices-4"><a class="header" href="#best-practices-4">Best Practices</a></h2>
 <h3 id="1-design-for-failure"><a class="header" href="#1-design-for-failure">1. Design for Failure</a></h3>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -4156,7 +4779,7 @@ async fn test_worker_failure() {
     assert!(result.is_ok());
 }
 <span class="boring">}</span></code></pre></pre>
-<h2 id="next-steps-6"><a class="header" href="#next-steps-6">Next Steps</a></h2>
+<h2 id="next-steps-7"><a class="header" href="#next-steps-7">Next Steps</a></h2>
 <ul>
 <li><strong><a href="cluster/discovery.html">Discovery</a></strong> - Understand how nodes discover failures</li>
 <li><strong><a href="cluster/health.html">Health Checking</a></strong> - Learn about Phi Accrual detection</li>
@@ -4714,24 +5337,25 @@ let config = ServerConfig::builder()
 <h4 id="use-efficient-formats"><a class="header" href="#use-efficient-formats">Use Efficient Formats</a></h4>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>// Fastest: bincode (binary)
+</span>// Fastest: bincode (binary) - for Rust-to-Rust communication
 use bincode;
 let bytes = bincode::serialize(&amp;data)?;
 
-// Fast: rmp-serde (MessagePack)
+// Fast: rmp-serde (MessagePack) - for Python-to-Rust or cross-language
 use rmp_serde;
 let bytes = rmp_serde::to_vec(&amp;data)?;
 
-// Slower: serde_json (human-readable, but slower)
+// Slower: serde_json (human-readable, but slower) - for debugging
 let bytes = serde_json::to_vec(&amp;data)?;
 <span class="boring">}</span></code></pre></pre>
 <p><strong>Benchmark</strong> (10KB struct):</p>
-<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Serialize</th><th>Deserialize</th><th>Size</th></tr></thead><tbody>
-<tr><td><strong>bincode</strong></td><td>12 μs</td><td>18 μs</td><td>10240 bytes</td></tr>
-<tr><td><strong>MessagePack</strong></td><td>28 μs</td><td>35 μs</td><td>9800 bytes</td></tr>
-<tr><td><strong>JSON</strong></td><td>85 μs</td><td>120 μs</td><td>15300 bytes</td></tr>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Serialize</th><th>Deserialize</th><th>Size</th><th>Use Case</th></tr></thead><tbody>
+<tr><td><strong>bincode</strong></td><td>12 μs</td><td>18 μs</td><td>10240 bytes</td><td>Rust ↔ Rust (fastest)</td></tr>
+<tr><td><strong>MessagePack</strong></td><td>28 μs</td><td>35 μs</td><td>9800 bytes</td><td>Python ↔ Rust (polyglot)</td></tr>
+<tr><td><strong>JSON</strong></td><td>85 μs</td><td>120 μs</td><td>15300 bytes</td><td>Debugging (human-readable)</td></tr>
 </tbody></table>
 </div>
+<p><strong>Recommendation</strong>: Use <code>bincode</code> for pure Rust services, MessagePack when integrating with Python bindings.</p>
 <h4 id="minimize-allocations"><a class="header" href="#minimize-allocations">Minimize Allocations</a></h4>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -5035,7 +5659,7 @@ sudo perf report
 <li>Used Least Connections strategy</li>
 <li>Optimized message serialization (JSON → bincode)</li>
 </ol>
-<h2 id="next-steps-7"><a class="header" href="#next-steps-7">Next Steps</a></h2>
+<h2 id="next-steps-8"><a class="header" href="#next-steps-8">Next Steps</a></h2>
 <ul>
 <li><strong><a href="advanced/production.html">Production Guide</a></strong> - Deploy optimized clusters</li>
 <li><strong><a href="advanced/../cluster/load-balancing.html">Load Balancing</a></strong> - Strategy selection</li>
@@ -5809,7 +6433,7 @@ Verify backups working</li>
 <li><input disabled="" type="checkbox"/>
 Update documentation</li>
 </ul>
-<h2 id="next-steps-8"><a class="header" href="#next-steps-8">Next Steps</a></h2>
+<h2 id="next-steps-9"><a class="header" href="#next-steps-9">Next Steps</a></h2>
 <ul>
 <li><strong><a href="advanced/performance.html">Performance Tuning</a></strong> - Optimize for production load</li>
 <li><strong><a href="advanced/../cluster/failures.html">Failure Handling</a></strong> - Handle production incidents</li>
@@ -6342,7 +6966,7 @@ Update documentation</li>
 <li>Phi Accrual: 6-8s detection time (better accuracy)</li>
 <li>Built-in connection management: &lt;1ms latency (98% reduction)</li>
 </ul>
-<h2 id="next-steps-9"><a class="header" href="#next-steps-9">Next Steps</a></h2>
+<h2 id="next-steps-10"><a class="header" href="#next-steps-10">Next Steps</a></h2>
 <ul>
 <li><strong><a href="advanced/../cluster/tutorial.html">Cluster Tutorial</a></strong> - Build cluster from scratch</li>
 <li><strong><a href="advanced/production.html">Production Guide</a></strong> - Deploy migrated cluster</li>
@@ -6821,7 +7445,7 @@ async fn main() -&gt; Result&lt;()&gt; {
     println!("Response: {}", response);
     Ok(())
 }</code></pre></pre>
-<h2 id="next-steps-10"><a class="header" href="#next-steps-10">Next Steps</a></h2>
+<h2 id="next-steps-11"><a class="header" href="#next-steps-11">Next Steps</a></h2>
 <ul>
 <li><strong><a href="reference/examples.html">Examples</a></strong> - Complete example programs</li>
 <li><strong><a href="reference/../cluster/tutorial.html">Cluster Tutorial</a></strong> - Build a cluster</li>
@@ -6833,6 +7457,8 @@ async fn main() -&gt; Result&lt;()&gt; {
 <p>All examples are located in the <code>examples/</code> directory:</p>
 <pre><code>examples/
 ├── cluster/          - Distributed cluster with auto-discovery
+├── python/
+│   └── cluster/      - Python bindings for cluster example
 └── (more to come)
 </code></pre>
 <h2 id="cluster-example-1"><a class="header" href="#cluster-example-1">Cluster Example</a></h2>
@@ -6982,8 +7608,181 @@ match worker_client.generate(request).await {
     }
 }
 <span class="boring">}</span></code></pre></pre>
+<h2 id="python-cluster-example"><a class="header" href="#python-cluster-example">Python Cluster Example</a></h2>
+<p><strong>Location</strong>: <code>examples/python/cluster/</code>
+<strong>Documentation</strong>: <a href="reference/../python-bindings.html">Python Bindings</a></p>
+<p>Demonstrates Python code generation from Rust service definitions, enabling Python clients to interact with Rust cluster services.</p>
+<h3 id="components-2"><a class="header" href="#components-2">Components</a></h3>
+<p><strong>Python Clients</strong>:</p>
+<ul>
+<li><code>python_client.py</code> - Simple example connecting to director</li>
+<li><code>python_streaming_client.py</code> - Full workflow (director → worker → inference)</li>
+</ul>
+<p><strong>Generated Bindings</strong>:</p>
+<ul>
+<li><code>generated/directorregistry/</code> - Python bindings for director service</li>
+<li><code>generated/inference/</code> - Python bindings for worker service</li>
+</ul>
+<p><strong>Service Definitions</strong>:</p>
+<ul>
+<li><code>director_registry.rpc.rs</code> - Director registry service</li>
+<li><code>inference.rpc.rs</code> - Worker inference service</li>
+</ul>
+<h3 id="prerequisites-3"><a class="header" href="#prerequisites-3">Prerequisites</a></h3>
+<pre><code class="language-bash"># 1. Generate TLS certificates (if needed)
+mkdir -p certs &amp;&amp; cd certs
+openssl req -x509 -newkey rsa:4096 -keyout test_key.pem -out test_cert.pem \
+  -days 365 -nodes -subj "/CN=localhost"
+cd ..
+
+# 2. Build code generator with Python support
+cargo build --bin rpcnet-gen --features codegen,python --release
+
+# 3. Generate Python bindings
+./target/release/rpcnet-gen \
+  --input examples/python/cluster/director_registry.rpc.rs \
+  --output examples/python/cluster/generated \
+  --python
+
+./target/release/rpcnet-gen \
+  --input examples/python/cluster/inference.rpc.rs \
+  --output examples/python/cluster/generated \
+  --python
+
+# 4. Build Python module
+maturin develop --features python --release
+</code></pre>
+<h3 id="quick-start-1"><a class="header" href="#quick-start-1">Quick Start</a></h3>
+<pre><code class="language-bash"># Terminal 1: Start Director
+DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin director
+
+# Terminal 2: Start Worker
+WORKER_LABEL=worker-a WORKER_ADDR=127.0.0.1:62001 \
+  DIRECTOR_ADDR=127.0.0.1:61000 RUST_LOG=info \
+  cargo run --manifest-path examples/cluster/Cargo.toml --bin worker
+
+# Terminal 3: Run Python Client
+python examples/python/cluster/python_client.py
+
+# Or run full workflow demo
+python examples/python/cluster/python_streaming_client.py
+</code></pre>
+<h3 id="features-demonstrated-1"><a class="header" href="#features-demonstrated-1">Features Demonstrated</a></h3>
+<ul>
+<li>✅ <strong>Type-Safe Python API</strong>: Generated dataclasses with type hints</li>
+<li>✅ <strong>Async/Await</strong>: Native Python asyncio integration</li>
+<li>✅ <strong>Cross-Language RPC</strong>: Python ↔ Rust communication</li>
+<li>✅ <strong>MessagePack Serialization</strong>: Binary serialization for efficiency</li>
+<li>✅ <strong>QUIC+TLS Transport</strong>: Same protocol as Rust services</li>
+<li>✅ <strong>Error Handling</strong>: Service errors mapped to Python exceptions</li>
+<li>✅ <strong>Load Balancing</strong>: Multiple workers with round-robin selection</li>
+</ul>
+<h3 id="example-output"><a class="header" href="#example-output">Example Output</a></h3>
+<p><strong>Simple Client</strong> (<code>python_client.py</code>):</p>
+<pre><code>====================================================================
+Python Client for RpcNet Cluster - Director Connection Demo
+====================================================================
+
+📁 Using certificate: ../../../certs/test_cert.pem
+🎯 Director address: 127.0.0.1:61000
+
+1️⃣  Connecting to director registry...
+   ✅ Connected to director at 127.0.0.1:61000
+
+2️⃣  Requesting workers (testing load balancing)...
+   Request 1:
+      ✅ Worker: worker-a
+      📍 Address: 127.0.0.1:62001
+      🔗 Connection ID: conn-1234
+
+✅ Python client completed successfully!
+</code></pre>
+<p><strong>Streaming Client</strong> (<code>python_streaming_client.py</code>):</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│ STEP 1: Connecting to Director Registry                        │
+└─────────────────────────────────────────────────────────────────┘
+✅ Connected to director at 127.0.0.1:61000
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 2: Getting Available Worker                               │
+└─────────────────────────────────────────────────────────────────┘
+✅ Got worker: worker-a at 127.0.0.1:62001
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 3: Connecting to Worker                                   │
+└─────────────────────────────────────────────────────────────────┘
+✅ Connected to worker at 127.0.0.1:62001
+
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 4: Sending Inference Requests                             │
+└─────────────────────────────────────────────────────────────────┘
+Request 1/5:
+  ✅ Success (45.2ms)
+  📝 Prompt:   Hello, how are you?
+  📊 Response: I'm doing well, thank you for asking!
+  🔧 Worker:   worker-a
+
+✅ Python Streaming Client Demo Completed Successfully!
+</code></pre>
+<h3 id="code-example"><a class="header" href="#code-example">Code Example</a></h3>
+<pre><code class="language-python">import asyncio
+from directorregistry import DirectorRegistryClient, GetWorkerRequest
+from inference import InferenceClient, InferenceRequest
+
+async def main():
+    # 1. Connect to director
+    director = await DirectorRegistryClient.connect(
+        "127.0.0.1:61000",
+        cert_path="../../../certs/test_cert.pem",
+        server_name="localhost"
+    )
+
+    # 2. Get available worker
+    worker_info = await director.get_worker(
+        GetWorkerRequest(connection_id=None, prompt="Test request")
+    )
+
+    # 3. Connect to worker
+    worker = await InferenceClient.connect(
+        worker_info.worker_addr,
+        cert_path="../../../certs/test_cert.pem",
+        server_name="localhost"
+    )
+
+    # 4. Send inference request
+    response = await worker.infer(
+        InferenceRequest(
+            connection_id=worker_info.connection_id,
+            prompt="Hello from Python!"
+        )
+    )
+    print(f"Response: {response.response}")
+
+asyncio.run(main())
+</code></pre>
+<h3 id="documentation"><a class="header" href="#documentation">Documentation</a></h3>
+<ul>
+<li><strong><code>examples/python/cluster/README.md</code></strong> - Complete usage guide</li>
+<li><strong><code>examples/python/cluster/QUICKSTART.md</code></strong> - Quick start guide</li>
+<li><strong><code>examples/python/cluster/SUMMARY.md</code></strong> - Feature summary</li>
+</ul>
+<h3 id="troubleshooting-6"><a class="header" href="#troubleshooting-6">Troubleshooting</a></h3>
+<p><strong>"Module not found: _rpcnet"</strong></p>
+<pre><code class="language-bash">maturin develop --features python --release
+</code></pre>
+<p><strong>"Unknown method: Registry.get_worker"</strong></p>
+<ul>
+<li>Ensure you're using actual service definitions from <code>examples/cluster/</code></li>
+<li>Regenerate Python bindings after copying service files</li>
+</ul>
+<p><strong>"Connection refused"</strong></p>
+<ul>
+<li>Start Rust cluster first (director + worker)</li>
+<li>Check that ports 61000 (director) and 62001 (worker) are available</li>
+</ul>
 <h2 id="running-examples-from-repository"><a class="header" href="#running-examples-from-repository">Running Examples from Repository</a></h2>
-<h3 id="prerequisites-2"><a class="header" href="#prerequisites-2">Prerequisites</a></h3>
+<h3 id="prerequisites-4"><a class="header" href="#prerequisites-4">Prerequisites</a></h3>
 <ol>
 <li><strong>Clone repository</strong>:</li>
 </ol>
@@ -7104,6 +7903,7 @@ cargo test --examples
 <h2 id="example-comparison"><a class="header" href="#example-comparison">Example Comparison</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Example</th><th>Complexity</th><th>Features</th><th>Best For</th></tr></thead><tbody>
 <tr><td><strong>cluster</strong></td><td>Intermediate</td><td>Discovery, Load Balancing, Failover, Streaming</td><td>Understanding distributed systems</td></tr>
+<tr><td><strong>python/cluster</strong></td><td>Beginner</td><td>Python Bindings, Type Safety, Async API</td><td>Cross-language RPC, Python integration</td></tr>
 </tbody></table>
 </div>
 <h2 id="common-issues"><a class="header" href="#common-issues">Common Issues</a></h2>
@@ -7147,7 +7947,7 @@ DIRECTOR_ADDR=127.0.0.1:61001 cargo run --bin director
 <li>Custom load balancing strategy</li>
 <li>Monitoring and metrics integration</li>
 </ul>
-<h2 id="next-steps-11"><a class="header" href="#next-steps-11">Next Steps</a></h2>
+<h2 id="next-steps-12"><a class="header" href="#next-steps-12">Next Steps</a></h2>
 <ul>
 <li><strong><a href="reference/../cluster/tutorial.html">Cluster Tutorial</a></strong> - Build cluster from scratch</li>
 <li><strong><a href="reference/api.html">API Reference</a></strong> - API documentation</li>

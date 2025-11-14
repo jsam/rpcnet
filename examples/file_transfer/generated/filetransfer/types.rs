@@ -1,7 +1,13 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 //! Type definitions for the service.
 use serde::{Deserialize, Serialize};
+/// Request to upload a file chunk.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UploadChunkRequest {
+    pub file_id: String,
+    pub chunk_number: u32,
+    pub total_chunks: u32,
+    pub data: Vec<u8>,
+}
 /// Response from downloading a file chunk.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DownloadChunkResponse {
@@ -20,13 +26,11 @@ pub struct DownloadChunkRequest {
     pub file_id: String,
     pub chunk_number: u32,
 }
-/// Response with file information.
+/// Response from uploading a file chunk.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct FileInfoResponse {
-    pub file_id: String,
-    pub total_size: u64,
-    pub total_chunks: u32,
-    pub chunk_size: u32,
+pub struct UploadChunkResponse {
+    pub success: bool,
+    pub bytes_received: usize,
 }
 /// Errors that can occur in file transfer operations.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -42,17 +46,11 @@ pub enum FileTransferError {
     /// Storage error.
     StorageError(String),
 }
-/// Response from uploading a file chunk.
+/// Response with file information.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct UploadChunkResponse {
-    pub success: bool,
-    pub bytes_received: usize,
-}
-/// Request to upload a file chunk.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct UploadChunkRequest {
+pub struct FileInfoResponse {
     pub file_id: String,
-    pub chunk_number: u32,
+    pub total_size: u64,
     pub total_chunks: u32,
-    pub data: Vec<u8>,
+    pub chunk_size: u32,
 }

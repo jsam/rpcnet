@@ -53,8 +53,8 @@ mod unit_tests {
     fn test_rpc_request_serialization() {
         let original = RpcRequest::new(42, "serialize_test".to_string(), vec![0xFF, 0x00, 0xAA]);
 
-        let serialized = bincode::serialize(&original).unwrap();
-        let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
+        let serialized = rmp_serde::to_vec(&original).unwrap();
+        let deserialized: RpcRequest = rmp_serde::from_slice(&serialized).unwrap();
 
         assert_eq!(deserialized.id(), original.id());
         assert_eq!(deserialized.method(), original.method());
@@ -107,8 +107,8 @@ mod unit_tests {
     fn test_rpc_response_serialization() {
         let original = RpcResponse::new(999, Some(vec![0xDE, 0xAD, 0xBE, 0xEF]), None);
 
-        let serialized = bincode::serialize(&original).unwrap();
-        let deserialized: RpcResponse = bincode::deserialize(&serialized).unwrap();
+        let serialized = rmp_serde::to_vec(&original).unwrap();
+        let deserialized: RpcResponse = rmp_serde::from_slice(&serialized).unwrap();
 
         assert_eq!(deserialized.id(), original.id());
         assert_eq!(deserialized.result(), original.result());
@@ -247,12 +247,11 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_rpc_error_from_bincode() {
-        let bincode_error = bincode::Error::from(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "test error",
-        ));
-        let rpc_error = RpcError::from(bincode_error);
+    fn test_rpc_error_from_msgpack() {
+        // Test conversion from rmp_serde encode error
+        let encode_error: rmp_serde::encode::Error =
+            rmp_serde::encode::Error::InvalidDataModel("test error");
+        let rpc_error = RpcError::from(encode_error);
 
         if let RpcError::SerializationError(_) = rpc_error {
             // Expected
@@ -289,8 +288,8 @@ mod unit_tests {
         let large_data = vec![0xFF; 1_000_000]; // 1MB of data
         let request = RpcRequest::new(1, "large_data".to_string(), large_data.clone());
 
-        let serialized = bincode::serialize(&request).unwrap();
-        let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
+        let serialized = rmp_serde::to_vec(&request).unwrap();
+        let deserialized: RpcRequest = rmp_serde::from_slice(&serialized).unwrap();
 
         assert_eq!(deserialized.params().len(), 1_000_000);
         assert_eq!(deserialized.params(), &large_data);
@@ -302,8 +301,8 @@ mod unit_tests {
         assert_eq!(request.method(), "");
 
         // Should be serializable
-        let serialized = bincode::serialize(&request).unwrap();
-        let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
+        let serialized = rmp_serde::to_vec(&request).unwrap();
+        let deserialized: RpcRequest = rmp_serde::from_slice(&serialized).unwrap();
         assert_eq!(deserialized.method(), "");
     }
 
@@ -315,8 +314,8 @@ mod unit_tests {
         assert_eq!(request.method(), &long_method);
 
         // Should be serializable
-        let serialized = bincode::serialize(&request).unwrap();
-        let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
+        let serialized = rmp_serde::to_vec(&request).unwrap();
+        let deserialized: RpcRequest = rmp_serde::from_slice(&serialized).unwrap();
         assert_eq!(deserialized.method(), &long_method);
     }
 
@@ -328,8 +327,8 @@ mod unit_tests {
         assert_eq!(response.error(), Some(&large_error));
 
         // Should be serializable
-        let serialized = bincode::serialize(&response).unwrap();
-        let deserialized: RpcResponse = bincode::deserialize(&serialized).unwrap();
+        let serialized = rmp_serde::to_vec(&response).unwrap();
+        let deserialized: RpcResponse = rmp_serde::from_slice(&serialized).unwrap();
         assert_eq!(deserialized.error(), Some(&large_error));
     }
 

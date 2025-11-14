@@ -41,14 +41,14 @@ async fn test_malformed_request_handling() {
     );
 
     // Serialize and check size
-    let serialized = bincode::serialize(&request);
+    let serialized = rmp_serde::to_vec(&request);
     assert!(serialized.is_ok());
 
     // Test deserialization of truncated data (should fail)
     let serialized_data = serialized.unwrap();
     let truncated = &serialized_data[..serialized_data.len().saturating_sub(10)];
 
-    let deserialized: Result<RpcRequest, _> = bincode::deserialize(truncated);
+    let deserialized: Result<RpcRequest, _> = rmp_serde::from_slice(truncated);
     assert!(deserialized.is_err());
 }
 
@@ -231,11 +231,11 @@ async fn test_large_payload_errors() {
     let request = RpcRequest::new(999, "large_test".to_string(), huge_payload.clone());
 
     // Should be able to serialize
-    let serialized = bincode::serialize(&request).unwrap();
+    let serialized = rmp_serde::to_vec(&request).unwrap();
     assert!(serialized.len() > 10 * 1024 * 1024);
 
     // Should be able to deserialize
-    let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
+    let deserialized: RpcRequest = rmp_serde::from_slice(&serialized).unwrap();
     assert_eq!(deserialized.params().len(), huge_payload.len());
 }
 

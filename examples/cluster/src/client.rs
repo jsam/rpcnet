@@ -107,8 +107,8 @@ async fn main() -> Result<()> {
                         
                         let conn_id = response.connection_id.clone();
                         let req_prompt = prompt.clone();
-                        
-                        let mut bidir_stream = rpcnet::streaming::BidirectionalStream::with_task(10, {
+
+                        let bidir_stream = rpcnet::streaming::BidirectionalStream::with_task(10, {
                             let conn_id = conn_id.clone();
                             move |sender| async move {
                                 for i in 0..100 {

@@ -39,8 +39,19 @@ match client.call("ping", vec![]).await {
 
 ### Serialization Strategy
 
-Requests and responses travel as `Vec<u8>`. Examples use `bincode` for compact
-frames, but any serialization format can be layered on top.
+Requests and responses travel as `Vec<u8>`. RpcNet uses **MessagePack** (`rmp-serde`) as the standard serialization format:
+
+- **MessagePack** (`rmp-serde`): Default for all communication (Rust-to-Rust and Python-to-Rust)
+  - Efficient binary format (comparable to bincode)
+  - Excellent cross-language support
+  - Works seamlessly with Python bindings via PyO3
+- **Custom formats**: Any serialization format can be layered on top if needed
+
+**Why MessagePack?**
+- Consistent serialization across all clients (Rust, Python, etc.)
+- Compact binary format with good performance
+- Native Python support via `msgpack` library
+- Self-describing format makes debugging easier
 
 ### Concurrency Model
 
@@ -74,10 +85,11 @@ closure executes inside a Tokio task, so async IO is allowed.
 use rpcnet::{RpcError, RpcServer};
 
 server.register("add", |params| async move {
-    let (a, b): (i32, i32) = bincode::deserialize(&params)
-        .map_err(RpcError::SerializationError)?;
+    let (a, b): (i32, i32) = rmp_serde::from_slice(&params)
+        .map_err(|e| RpcError::SerializationError(e.to_string()))?;
     let sum = a + b;
-    Ok(bincode::serialize(&sum)? )
+    rmp_serde::to_vec(&sum)
+        .map_err(|e| RpcError::SerializationError(e.to_string()))
 }).await;
 ```
 
@@ -142,9 +154,9 @@ keep-alive.
 ### Unary Calls
 
 ```rust
-let payload = bincode::serialize(&(21, 21))?;
+let payload = rmp_serde::to_vec(&(21, 21))?;
 let response = client.call("add", payload).await?;
-let result: i32 = bincode::deserialize(&response)?;
+let result: i32 = rmp_serde::from_slice(&response)?;
 assert_eq!(result, 42);
 ```
 

@@ -7,6 +7,7 @@
 - [Getting Started](getting-started.md)
 - [Core Concepts](concepts.md)
 - [rpcnet-gen CLI](rpcnet-gen.md)
+- [Python Bindings](python-bindings.md)
 
 # Cluster Management
 

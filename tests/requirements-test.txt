@@ -1,0 +1,4 @@
+# Test dependencies for RpcNet Python integration tests
+
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
