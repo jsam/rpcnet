@@ -1,12 +1,57 @@
+# Rust build artifacts
 /target
 **/target
+*profraw
+
+# Python build artifacts
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.so
+*.dylib
+_rpcnet*.so
+librpcnet*.so
+librpcnet*.dylib
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# IDE
 .DS_Store
+.vscode/
+.idea/
+
+# Project specific
 CLAUDE.md
 COVERAGE_BASELINE.md
 .specify
 specs/
 .claude
 docs/COVERAGE.md
-*profraw
-*.pyc
-.vscode/
