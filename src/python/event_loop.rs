@@ -17,6 +17,7 @@
 //! - **Client Streaming (N→1)**: Python async handler consumes stream, returns single response
 //! - **Bidirectional (N→M)**: Python async generator consumes and yields messages
 
+use pyo3::ffi::c_str;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use std::ffi::CString;
@@ -114,7 +115,7 @@ impl PythonEventLoopExecutor {
                         response_tx,
                     } => {
                         let result = Python::with_gil(|py| {
-                            Self::execute_handler_impl(py, &event_loop.bind(py), handler, params)
+                            Self::execute_handler_impl(py, event_loop.bind(py), handler, params)
                         });
                         // Send the result back (ignore errors if receiver dropped)
                         let _ = response_tx.send(result);
@@ -128,7 +129,7 @@ impl PythonEventLoopExecutor {
                         Python::with_gil(|py| {
                             Self::execute_server_streaming_impl(
                                 py,
-                                &event_loop.bind(py),
+                                event_loop.bind(py),
                                 handler,
                                 params,
                                 stream_tx,
@@ -143,7 +144,7 @@ impl PythonEventLoopExecutor {
                         let result = Python::with_gil(|py| {
                             Self::execute_client_streaming_impl(
                                 py,
-                                &event_loop.bind(py),
+                                event_loop.bind(py),
                                 handler,
                                 request_rx,
                             )
@@ -158,7 +159,7 @@ impl PythonEventLoopExecutor {
                         Python::with_gil(|py| {
                             Self::execute_bidirectional_impl(
                                 py,
-                                &event_loop.bind(py),
+                                event_loop.bind(py),
                                 handler,
                                 request_rx,
                                 response_tx,
@@ -418,9 +419,7 @@ async def run_bidirectional(handler, items):
 "#;
 
         // Collect all items from the receiver into a Python list
-        let items_list = match pyo3::types::PyList::empty(py) {
-            l => l,
-        };
+        let items_list = pyo3::types::PyList::empty(py);
 
         // Try to collect items without blocking
         while let Ok(item) = request_rx.try_recv() {

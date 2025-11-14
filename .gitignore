@@ -9,3 +9,4 @@ specs/
 docs/COVERAGE.md
 *profraw
 *.pyc
+.vscode/

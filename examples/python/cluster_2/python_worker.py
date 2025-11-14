@@ -57,14 +57,16 @@ async def main():
     # Configuration
     worker_label = os.getenv("WORKER_LABEL", "python-worker")
     worker_addr = os.getenv("WORKER_ADDR", "127.0.0.1:62002")
+    director_addr = os.getenv("DIRECTOR_ADDR", "127.0.0.1:61000")
     cert_path = os.getenv("CERT_PATH", "certs/test_cert.pem")
     key_path = os.getenv("KEY_PATH", "certs/test_key.pem")
 
     print("=" * 70)
-    print("🐍 Python Inference Worker")
+    print("🐍 Python Inference Worker with SWIM Cluster")
     print("=" * 70)
     print(f"Worker Label: {worker_label}")
     print(f"Worker Address: {worker_addr}")
+    print(f"Director Address: {director_addr}")
     print(f"Certificate: {cert_path}")
     print(f"Key: {key_path}")
     print("=" * 70)
@@ -81,14 +83,47 @@ async def main():
         server_name="localhost"
     )
 
-    # Create and start server
+    # Create server
     server = InferenceServer(handler, config)
 
-    print(f"🚀 Starting Python worker on {worker_addr}...")
-    print(f"✅ Ready to serve inference requests!")
+    # Register handlers
+    await server._register_handlers()
+
+    # Bind the server (this sets socket_addr which is required for enable_cluster)
+    print(f"🔌 Binding server to {worker_addr}...")
+    await server.server.bind()
+    print(f"✅ Server bound")
+
+    # Enable cluster
+    print(f"🌐 Creating QUIC client...")
+    quic_client = await _rpcnet.QuicClient.create(cert_path=cert_path)
+    print(f"✅ QUIC client created")
+
+    print(f"🔗 Enabling cluster, connecting to director at {director_addr}...")
+    cluster_config = _rpcnet.ClusterConfig()
+    await server.server.enable_cluster(cluster_config, [director_addr], quic_client)
+    print(f"✅ Cluster enabled")
+
+    # Get cluster handle and update tags
+    cluster = await server.server.cluster()
+    if cluster:
+        print(f"🏷️  Updating cluster tags...")
+        await cluster.update_tags(
+            [
+                ("role", "worker"),
+                ("label", worker_label),
+                ("language", "python"),
+            ]
+        )
+        print(f"✅ Tags updated")
+
+    print(f"🚀 Python worker on {worker_addr} is now ready!")
+    print(f"✅ Starting to serve inference requests...")
     print(f"💡 Press Ctrl+C to stop")
     print()
 
+    # Note: We already called bind() and enable_cluster(), but serve() will handle
+    # the case where bind() was already called and just start serving.
     try:
         await server.serve()
     except (KeyboardInterrupt, asyncio.CancelledError):

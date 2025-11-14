@@ -6,6 +6,8 @@
 #[cfg(feature = "python")]
 pub mod client;
 #[cfg(feature = "python")]
+pub mod cluster;
+#[cfg(feature = "python")]
 pub mod config;
 #[cfg(feature = "python")]
 pub mod error;
@@ -35,6 +37,15 @@ fn _rpcnet(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<client::PyRpcClient>()?;
     m.add_class::<server::PyRpcServer>()?;
     m.add_class::<streaming::PyAsyncStream>()?;
+
+    // Register cluster classes
+    m.add_class::<cluster::PyGossipConfig>()?;
+    m.add_class::<cluster::PyHealthCheckConfig>()?;
+    m.add_class::<cluster::PyPoolConfig>()?;
+    m.add_class::<cluster::PyClusterConfig>()?;
+    m.add_class::<cluster::PyQuicClient>()?;
+    m.add_class::<cluster::PyCluster>()?;
+    m.add_class::<cluster::PyClusterEventReceiver>()?;
 
     // Register exception types
     m.add("RpcError", py.get_type::<error::PyRpcError>())?;

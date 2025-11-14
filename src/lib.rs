@@ -309,6 +309,9 @@ pub struct RpcServer {
     pub config: RpcConfig,
 
     cluster: Arc<RwLock<Option<Arc<cluster::ClusterMembership>>>>,
+
+    #[allow(dead_code)]
+    quic_server: Arc<tokio::sync::Mutex<Option<s2n_quic::Server>>>,
 }
 
 #[derive(Debug)]
@@ -451,6 +454,7 @@ impl RpcServer {
             socket_addr: None,
             config,
             cluster: Arc::new(RwLock::new(None)),
+            quic_server: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
 

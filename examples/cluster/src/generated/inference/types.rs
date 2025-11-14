@@ -1,7 +1,5 @@
 //! Type definitions for the service.
 use serde::{Deserialize, Serialize};
-use futures::Stream;
-use std::pin::Pin;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InferenceRequest {
     pub connection_id: String,

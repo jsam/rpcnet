@@ -2,9 +2,14 @@
 
 #![allow(clippy::useless_conversion)]
 
-use super::{config::PyRpcConfig, error::to_py_err, event_loop::PythonEventLoopExecutor};
+use super::{
+    cluster::PyCluster, cluster::PyClusterConfig, cluster::PyQuicClient, config::PyRpcConfig,
+    error::to_py_err, event_loop::PythonEventLoopExecutor,
+};
 use crate::RpcServer;
 use pyo3::prelude::*;
+use pyo3_async_runtimes::tokio::future_into_py;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -262,10 +267,113 @@ impl PyRpcServer {
         })
     }
 
+    /// Enable SWIM cluster functionality
+    ///
+    /// This enables the server to join a cluster using the SWIM gossip protocol
+    /// for node discovery, failure detection, and load balancing.
+    ///
+    /// Args:
+    ///     config: ClusterConfig with gossip, health check, and pool settings
+    ///     seeds: List of seed node addresses (e.g., ["127.0.0.1:61000"])
+    ///     quic_client: QuicClient instance for cluster communication
+    ///
+    /// Raises:
+    ///     ValueError: If seed addresses are invalid
+    ///     RuntimeError: If cluster initialization fails
+    ///
+    /// Example:
+    ///     >>> quic_client = await QuicClient.create("certs/cert.pem")
+    ///     >>> config = ClusterConfig()
+    ///     >>> await server.enable_cluster(config, ["127.0.0.1:61000"], quic_client)
+    fn enable_cluster<'py>(
+        &self,
+        py: Python<'py>,
+        config: PyClusterConfig,
+        seeds: Vec<String>,
+        quic_client: PyQuicClient,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let server = self.server.clone();
+        future_into_py(py, async move {
+            // Parse seed addresses
+            let seed_addrs: Vec<SocketAddr> = seeds
+                .iter()
+                .map(|s| s.parse())
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                        "Invalid seed address: {}",
+                        e
+                    ))
+                })?;
+
+            // Enable cluster
+            let server_guard = server.lock().await;
+            server_guard
+                .enable_cluster(config.inner, seed_addrs, quic_client.inner)
+                .await
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                        "Failed to enable cluster: {}",
+                        e
+                    ))
+                })?;
+
+            Ok(())
+        })
+    }
+
+    /// Get cluster handle if cluster is enabled
+    ///
+    /// Returns None if cluster has not been enabled via enable_cluster().
+    ///
+    /// Returns:
+    ///     Optional[Cluster]: Cluster handle or None
+    ///
+    /// Example:
+    ///     >>> cluster = await server.cluster()
+    ///     >>> if cluster:
+    ///     ...     await cluster.update_tag("role", "worker")
+    fn cluster<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let server = self.server.clone();
+        future_into_py(py, async move {
+            let server_guard = server.lock().await;
+            match server_guard.cluster().await {
+                Some(membership) => Ok(Some(PyCluster::new(membership))),
+                None => Ok(None),
+            }
+        })
+    }
+
+    /// Bind the server to the configured address
+    ///
+    /// This sets up the server socket and is required before enable_cluster().
+    /// After calling bind(), you must call serve() to start serving requests.
+    ///
+    /// Typical usage for cluster: bind() -> enable_cluster() -> serve()
+    ///
+    /// Raises:
+    ///     TlsError: If TLS setup fails
+    ///     ConnectionError: If bind fails
+    fn bind<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let server = self.server.clone();
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut server_guard = server.lock().await;
+            // Call bind() which returns the QUIC server and store it
+            let quic_server = server_guard.bind().map_err(to_py_err)?;
+            let mut quic_server_guard = server_guard.quic_server.lock().await;
+            *quic_server_guard = Some(quic_server);
+            Ok(())
+        })
+    }
+
     /// Start the RPC server (async, blocking until shutdown)
     ///
     /// This method will block until the server is shut down.
     /// Run it with asyncio.create_task() to run in background.
+    ///
+    /// If bind() was already called (e.g., for cluster setup), this will use the
+    /// existing QUIC server. Otherwise, it will call bind() first.
     ///
     /// Raises:
     ///     TlsError: If TLS setup fails
@@ -278,7 +386,21 @@ impl PyRpcServer {
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let mut server_guard = server.lock().await;
-            let quic_server = server_guard.bind().map_err(to_py_err)?;
+
+            // Check if quic_server is already set (from a previous bind() call)
+            let quic_server = {
+                let mut quic_server_guard = server_guard.quic_server.lock().await;
+                if quic_server_guard.is_some() {
+                    // Take the existing quic_server
+                    quic_server_guard.take().unwrap()
+                } else {
+                    // Drop the guard before calling bind() to avoid deadlock
+                    drop(quic_server_guard);
+                    // No existing server, call bind() to create one
+                    server_guard.bind().map_err(to_py_err)?
+                }
+            };
+
             server_guard.start(quic_server).await.map_err(to_py_err)?;
             Ok(())
         })

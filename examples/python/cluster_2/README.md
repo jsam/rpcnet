@@ -9,15 +9,14 @@ This example demonstrates how to implement an RPC server in Python using RpcNet'
 - `python_worker.py` - Python server implementation
 - `test_client.py` - Python test client
 
-## ⚠️ Current Limitation
+## ✅ Cluster Integration
 
-**Cluster Integration**: The Python bindings do not yet expose the cluster/SWIM gossip functionality. This means:
-- ❌ Python workers cannot auto-register with the director via SWIM
-- ❌ Python workers won't appear in the cluster member list
-- ✅ Python workers can still handle RPC requests when connected directly
+**SWIM Cluster Support**: The Python bindings now fully expose cluster/SWIM gossip functionality:
+- ✅ Python workers can auto-register with the director via SWIM
+- ✅ Python workers appear in the cluster member list with tags
+- ✅ Full failure detection and recovery
+- ✅ Tag-based routing and load balancing
 - ✅ All RPC functionality (unary, streaming) works correctly
-
-To add full cluster support, the Rust `_rpcnet` extension module would need to expose the cluster APIs.
 
 ## Setup
 
@@ -48,19 +47,38 @@ cd ..
 
 ## Running the Example
 
-### Terminal 1: Start the Python Worker
+### Terminal 1: Start the Director (Rust)
+
+```bash
+cd examples/cluster
+
+DIRECTOR_ADDR=127.0.0.1:61000 \
+  RUST_LOG=info \
+  cargo run --bin director --release
+```
+
+### Terminal 2: Start the Python Worker
 
 ```bash
 cd examples/python/cluster_2
 
 WORKER_LABEL=python-worker \
   WORKER_ADDR=127.0.0.1:62002 \
+  DIRECTOR_ADDR=127.0.0.1:61000 \
   CERT_PATH=../../../certs/test_cert.pem \
   KEY_PATH=../../../certs/test_key.pem \
   ../../../.venv/bin/python python_worker.py
 ```
 
-### Terminal 2: Run the Test Client
+The Python worker will:
+1. Start the RPC server
+2. Create a QUIC client for cluster communication
+3. Connect to the director via SWIM gossip
+4. Register with tags: `role=worker`, `label=python-worker`, `language=python`
+5. Appear in the cluster member list
+6. Participate in failure detection and heartbeats
+
+### Terminal 3: Run the Test Client
 
 ```bash
 cd examples/python/cluster_2
