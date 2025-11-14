@@ -54,6 +54,12 @@ help:
 	@echo "Benchmarks:"
 	@echo "  bench           - Run performance benchmarks"
 	@echo ""
+	@echo "Python Extension:"
+	@echo "  python-setup    - Setup Python venv and install dependencies"
+	@echo "  python-build    - Clean build of Python extension module"
+	@echo "  python-test     - Run Python integration tests"
+	@echo "  python-clean    - Clean Python build artifacts"
+	@echo ""
 	@echo "Examples:"
 	@echo "  examples        - Run all examples (for testing)"
 
@@ -351,6 +357,46 @@ bench-python:
 		echo "   Run: uv venv && uv run maturin develop --features python --release"; \
 		exit 1; \
 	fi
+
+# Python Extension commands
+python-build:
+	@echo "Building Python extension module..."
+	@./scripts/build_python.sh
+
+python-build-release:
+	@echo "Building Python extension module (release mode)..."
+	@./scripts/build_python.sh --release
+
+python-test:
+	@echo "Running Python integration tests..."
+	@if [ ! -d ".venv" ]; then \
+		echo "❌ Error: No .venv directory found"; \
+		echo "   Run: make python-build first"; \
+		exit 1; \
+	fi
+	@.venv/bin/pytest tests/test_python_*.py -v
+
+python-clean:
+	@echo "Cleaning Python build artifacts..."
+	@find . -name "_rpcnet*.so" -delete 2>/dev/null || true
+	@find . -name "librpcnet*.so" -delete 2>/dev/null || true
+	@find . -name "librpcnet*.dylib" -delete 2>/dev/null || true
+	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	@rm -rf target/wheels/ .pytest_cache/ build/ dist/ *.egg-info/ 2>/dev/null || true
+	@echo "✅ Python artifacts cleaned"
+
+python-setup:
+	@echo "Setting up Python development environment..."
+	@if [ ! -d ".venv" ]; then \
+		echo "Creating virtual environment..."; \
+		python3 -m venv .venv; \
+	fi
+	@echo "Installing dependencies..."
+	@.venv/bin/pip install -q maturin pytest pytest-asyncio
+	@echo "✅ Python environment ready"
+	@echo ""
+	@echo "Next step: make python-build"
 
 # Example commands
 examples:
