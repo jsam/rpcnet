@@ -1030,7 +1030,11 @@ fn extract_method_types(method: &TraitItemFn) -> (String, String) {
     // Find the request parameter (second parameter after &self)
     let request_type = if method.sig.inputs.len() >= 2 {
         if let syn::FnArg::Typed(pat_type) = &method.sig.inputs[1] {
-            if let Type::Path(type_path) = &*pat_type.ty {
+            // Check if this is a streaming type (Pin<Box<dyn Stream<...>>>)
+            if is_stream_type(&pat_type.ty) {
+                // Extract the Item type from the Stream
+                extract_stream_item_type(&pat_type.ty).unwrap_or_else(|| "Any".to_string())
+            } else if let Type::Path(type_path) = &*pat_type.ty {
                 type_path
                     .path
                     .segments

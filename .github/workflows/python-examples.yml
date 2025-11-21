@@ -7,6 +7,7 @@ on:
       - 'examples/python/**'
       - 'src/python/**'
       - 'pyproject.toml'
+      - 'Makefile'
       - '.github/workflows/python-examples.yml'
   push:
     branches: [ main ]
@@ -14,6 +15,7 @@ on:
       - 'examples/python/**'
       - 'src/python/**'
       - 'pyproject.toml'
+      - 'Makefile'
       - '.github/workflows/python-examples.yml'
   workflow_dispatch:
 
@@ -27,9 +29,8 @@ env:
   PYTHON_VERSION: '3.13'
 
 jobs:
-  # Build rpcnet Python package and rpcnet-gen CLI
-  build-rpcnet:
-    name: Build RpcNet Package
+  test-python-examples:
+    name: Test Python Examples
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -47,6 +48,10 @@ jobs:
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
+
+    - name: Install timeout utility (macOS)
+      if: runner.os == 'macOS'
+      run: brew install coreutils
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -62,441 +67,26 @@ jobs:
         key: ${{ runner.os }}-cargo-python-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: ${{ runner.os }}-cargo-python-
 
-    - name: Generate test certificates
+    - name: Run all Python examples via Makefile
       run: |
-        mkdir -p certs
-        openssl req -x509 -newkey rsa:4096 -keyout certs/test_key.pem -out certs/test_cert.pem -days 365 -nodes -subj "/CN=localhost"
-
-    - name: Create virtual environment
-      run: |
-        python -m venv .venv
-
-    - name: Install Python dependencies
-      run: |
-        .venv/bin/pip install --upgrade pip
-        .venv/bin/pip install maturin cloudpickle
-
-    - name: Build Python extension
-      run: |
-        .venv/bin/maturin develop --release --features extension-module,codegen,python
-
-    - name: Build rpcnet-gen CLI
-      run: |
-        cargo build --release --bin rpcnet-gen --features codegen,python
-
-    - name: Verify installations
-      run: |
-        .venv/bin/python -c "import rpcnet; print('✅ rpcnet module imported successfully'); print(f'rpcnet location: {rpcnet.__file__}')"
-        .venv/bin/python -c "import sys; print('Python path:', sys.path)"
-        ./target/release/rpcnet-gen --help
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: rpcnet-${{ matrix.os }}
-        path: |
-          target/release/rpcnet-gen
-          certs/
-        retention-days: 1
-
-  # Test client_server example
-  test-client-server:
-    name: Test Client/Server Example
-    needs: build-rpcnet
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: rpcnet-${{ matrix.os }}
-
-    - name: Create virtual environment
-      run: |
-        python -m venv .venv
-
-    - name: Install Python dependencies
-      run: |
-        .venv/bin/pip install --upgrade pip
-        .venv/bin/pip install maturin cloudpickle
-
-    - name: Build Python extension
-      run: |
-        .venv/bin/maturin develop --release --features extension-module,codegen,python
-
-    - name: Install timeout utility (macOS)
-      if: runner.os == 'macOS'
-      run: brew install coreutils
-
-    - name: Make rpcnet-gen executable
-      run: chmod +x target/release/rpcnet-gen
-
-    - name: Generate client code
-      working-directory: examples/python/client_server
-      run: |
-        ../../../target/release/rpcnet-gen \
-          --input benchmark.rpc.rs \
-          --output generated \
-          --python
-
-    - name: Start server in background
-      working-directory: examples/python/client_server
-      run: |
-        echo "Checking rpcnet installation..."
-        ../../../.venv/bin/python -c "import rpcnet; print(f'rpcnet found at: {rpcnet.__file__}')" || echo "⚠️ rpcnet not found in venv"
-        echo "Starting server..."
-        PYTHON=$(pwd)/../../../.venv/bin/python ../../../.venv/bin/python server.py > /tmp/server.log 2>&1 &
-        SERVER_PID=$!
-        echo $SERVER_PID > /tmp/server.pid
-        echo "Server PID: $SERVER_PID"
-        echo "Waiting for server to start..."
-        sleep 10
-        if ! ps -p $SERVER_PID > /dev/null; then
-          echo "❌ Server failed to start!"
-          echo "Server log:"
-          cat /tmp/server.log
-          exit 1
-        fi
-        echo "✅ Server is running"
-        echo "Server log so far:"
-        cat /tmp/server.log || true
-
-    - name: Run client test (blocking)
-      working-directory: examples/python/client_server
-      run: |
-        TIMEOUT_CMD="timeout"
+        # Use gtimeout on macOS, timeout on Linux
         if [ "$RUNNER_OS" = "macOS" ]; then
-          TIMEOUT_CMD="gtimeout"
+          export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:$PATH"
         fi
-        if ! $TIMEOUT_CMD 60 ../../../.venv/bin/python client.py; then
-          echo "❌ Blocking client test failed"
-          echo "Server log:"
-          cat /tmp/server.log || true
-          kill $(cat /tmp/server.pid) 2>/dev/null
-          exit 1
-        fi
-        echo "✅ Blocking client test passed"
-
-    - name: Run client test (async)
-      working-directory: examples/python/client_server
-      run: |
-        TIMEOUT_CMD="timeout"
-        if [ "$RUNNER_OS" = "macOS" ]; then
-          TIMEOUT_CMD="gtimeout"
-        fi
-        if ! $TIMEOUT_CMD 60 ../../../.venv/bin/python async_client.py; then
-          echo "❌ Async client test failed"
-          echo "Server log:"
-          cat /tmp/server.log || true
-          kill $(cat /tmp/server.pid) 2>/dev/null
-          exit 1
-        fi
-        echo "✅ Async client test passed"
-
-    - name: Stop server
-      if: always()
-      run: |
-        if [ -f /tmp/server.pid ]; then
-          kill $(cat /tmp/server.pid) 2>/dev/null || true
-          rm /tmp/server.pid
-        fi
-        pkill -f "python.*server.py" || true
-
-  # Test streaming example
-  test-streaming:
-    name: Test Streaming Example
-    needs: build-rpcnet
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: rpcnet-${{ matrix.os }}
-
-    - name: Create virtual environment
-      run: |
-        python -m venv .venv
-
-    - name: Install Python dependencies
-      run: |
-        .venv/bin/pip install --upgrade pip
-        .venv/bin/pip install maturin cloudpickle
-
-    - name: Build Python extension
-      run: |
-        .venv/bin/maturin develop --release --features extension-module,codegen,python
-
-    - name: Install timeout utility (macOS)
-      if: runner.os == 'macOS'
-      run: brew install coreutils
-
-    - name: Make rpcnet-gen executable
-      run: chmod +x target/release/rpcnet-gen
-
-    - name: Build streaming example
-      working-directory: examples/python/streaming
-      run: |
-        cargo build --release
-
-    - name: Generate Python client code
-      working-directory: examples/python/streaming
-      run: |
-        ../../../target/release/rpcnet-gen \
-          --input streaming.rpc.rs \
-          --output . \
-          --python
-        echo "Generated files:"
-        ls -la streamingservice/
-        echo "Testing import..."
-        cd $(pwd) && ../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); import streamingservice; from streamingservice.client import StreamingServiceClient; print('✅ streamingservice.client imports successfully')"
-
-    - name: Start server in background
-      working-directory: examples/python/streaming
-      run: |
-        BIND_ADDR=127.0.0.1:50052 ./target/release/server > /tmp/streaming_server.log 2>&1 &
-        SERVER_PID=$!
-        echo $SERVER_PID > /tmp/streaming_server.pid
-        echo "Server PID: $SERVER_PID"
-        echo "Waiting for server to start..."
-        sleep 5
-        if ! ps -p $SERVER_PID > /dev/null; then
-          echo "❌ Server failed to start!"
-          echo "Server log:"
-          cat /tmp/streaming_server.log
-          exit 1
-        fi
-        echo "✅ Server is running"
-        echo "Server log so far:"
-        cat /tmp/streaming_server.log || true
-
-    - name: Run unary client test
-      working-directory: examples/python/streaming
-      run: |
-        TIMEOUT_CMD="timeout"
-        if [ "$RUNNER_OS" = "macOS" ]; then
-          TIMEOUT_CMD="gtimeout"
-        fi
-        if ! $TIMEOUT_CMD 30 ../../../.venv/bin/python unary_client.py; then
-          echo "❌ Unary client test failed"
-          echo "Server log:"
-          cat /tmp/streaming_server.log || true
-          kill $(cat /tmp/streaming_server.pid) 2>/dev/null
-          exit 1
-        fi
-        echo "✅ Unary client test passed"
-
-    - name: Stop server
-      if: always()
-      run: |
-        if [ -f /tmp/streaming_server.pid ]; then
-          kill $(cat /tmp/streaming_server.pid) 2>/dev/null || true
-          rm /tmp/streaming_server.pid
-        fi
-        pkill -f "target/release/server" || true
-
-  # Test cluster example
-  test-cluster:
-    name: Test Cluster Example
-    needs: build-rpcnet
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: rpcnet-${{ matrix.os }}
-
-    - name: Create virtual environment
-      run: |
-        python -m venv .venv
-
-    - name: Install Python dependencies
-      run: |
-        .venv/bin/pip install --upgrade pip
-        .venv/bin/pip install maturin cloudpickle
-
-    - name: Build Python extension
-      run: |
-        .venv/bin/maturin develop --release --features extension-module,codegen,python
-
-    - name: Install timeout utility (macOS)
-      if: runner.os == 'macOS'
-      run: brew install coreutils
-
-    - name: Make rpcnet-gen executable
-      run: chmod +x target/release/rpcnet-gen
-
-    - name: Generate Rust code for cluster
-      working-directory: examples/python/cluster
-      run: |
-        mkdir -p src/generated
-        ../../../target/release/rpcnet-gen \
-          --input inference.rpc.rs \
-          --output src/generated
-        ../../../target/release/rpcnet-gen \
-          --input director_registry.rpc.rs \
-          --output src/generated
-
-    - name: Build cluster example
-      working-directory: examples/python/cluster
-      run: |
-        cargo build --release
-
-    - name: Generate Python code for cluster
-      working-directory: examples/python/cluster
-      run: |
-        ../../../target/release/rpcnet-gen \
-          --input inference.rpc.rs \
-          --output . \
-          --python
-        ../../../target/release/rpcnet-gen \
-          --input director_registry.rpc.rs \
-          --output . \
-          --python
-        echo "Generated files:"
-        ls -la inference/ directorregistry/
-        echo "Testing imports..."
-        ../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); import inference; from inference.server import InferenceServer; print('✅ inference.server imports')"
-        ../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); import directorregistry; from directorregistry.client import DirectorRegistryClient; print('✅ directorregistry.client imports')"
-
-    - name: Start director in background
-      working-directory: examples/python/cluster
-      run: |
-        DIRECTOR_ADDR=127.0.0.1:61000 ./target/release/director > /tmp/director.log 2>&1 &
-        DIRECTOR_PID=$!
-        echo $DIRECTOR_PID > /tmp/director.pid
-        echo "Director PID: $DIRECTOR_PID"
-        echo "Waiting for director to start..."
-        sleep 8
-        if ! ps -p $DIRECTOR_PID > /dev/null; then
-          echo "❌ Director failed to start!"
-          echo "Director log:"
-          cat /tmp/director.log
-          exit 1
-        fi
-        echo "✅ Director is running"
-        echo "Director log so far:"
-        cat /tmp/director.log || true
-
-    - name: Start Python worker in background
-      working-directory: examples/python/cluster
-      run: |
-        PYTHON=$(pwd)/../../../.venv/bin/python \
-        WORKER_LABEL=test-worker \
-        WORKER_ADDR=127.0.0.1:62001 \
-        DIRECTOR_ADDR=127.0.0.1:61000 \
-        CERT_PATH=../../../certs/test_cert.pem \
-        KEY_PATH=../../../certs/test_key.pem \
-        PROCESSES=2 \
-        ../../../.venv/bin/python python_worker.py > /tmp/worker.log 2>&1 &
-        WORKER_PID=$!
-        echo $WORKER_PID > /tmp/worker.pid
-        echo "Worker PID: $WORKER_PID"
-        echo "Waiting for worker to start..."
-        sleep 10
-        if ! ps -p $WORKER_PID > /dev/null; then
-          echo "❌ Worker failed to start!"
-          echo "Worker log:"
-          cat /tmp/worker.log
-          kill $(cat /tmp/director.pid) 2>/dev/null
-          exit 1
-        fi
-        echo "✅ Worker is running"
-        echo "Worker log so far:"
-        cat /tmp/worker.log || true
-
-    - name: Run cluster client test
-      working-directory: examples/python/cluster
-      run: |
-        TIMEOUT_CMD="timeout"
-        if [ "$RUNNER_OS" = "macOS" ]; then
-          TIMEOUT_CMD="gtimeout"
-        fi
-        if ! DIRECTOR_ADDR=127.0.0.1:61000 CERT_PATH=../../../certs/test_cert.pem $TIMEOUT_CMD 60 ../../../.venv/bin/python client.py; then
-          echo "❌ Cluster client test failed"
-          echo "Director log:"
-          cat /tmp/director.log || true
-          echo "Worker log:"
-          cat /tmp/worker.log || true
-          exit 1
-        fi
-        echo "✅ Cluster client test passed"
-
-    - name: Stop all processes
-      if: always()
-      run: |
-        if [ -f /tmp/worker.pid ]; then
-          kill $(cat /tmp/worker.pid) 2>/dev/null || true
-          rm /tmp/worker.pid
-        fi
-        if [ -f /tmp/director.pid ]; then
-          kill $(cat /tmp/director.pid) 2>/dev/null || true
-          rm /tmp/director.pid
-        fi
-        pkill -f "python.*python_worker.py" || true
-        pkill -f "target/release/director" || true
-        pkill -f "target/release/worker" || true
+        make ci-python-examples
 
   # Summary job
   python-examples-complete:
     name: All Python Examples Passed
     runs-on: ubuntu-latest
-    needs: [test-client-server, test-streaming, test-cluster]
+    needs: [test-python-examples]
     if: always()
     
     steps:
     - name: Check results
       run: |
-        if [[ "${{ needs.test-client-server.result }}" == "failure" ]] || \
-           [[ "${{ needs.test-streaming.result }}" == "failure" ]] || \
-           [[ "${{ needs.test-cluster.result }}" == "failure" ]]; then
-          echo "❌ One or more Python example tests failed"
+        if [[ "${{ needs.test-python-examples.result }}" == "failure" ]]; then
+          echo "❌ Python example tests failed"
           exit 1
         fi
         echo "✅ All Python example tests passed!"
@@ -505,8 +95,7 @@ jobs:
       run: |
         echo "## 🐍 Python Examples Test Results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Example | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
         echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Client/Server | ${{ needs.test-client-server.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| Streaming | ${{ needs.test-streaming.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| Cluster | ${{ needs.test-cluster.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Ubuntu | ${{ needs.test-python-examples.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| macOS | ${{ needs.test-python-examples.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
