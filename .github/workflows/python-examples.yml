@@ -157,10 +157,19 @@ jobs:
       working-directory: examples/python/client_server
       run: |
         ../../../.venv/bin/python server.py > /tmp/server.log 2>&1 &
-        echo $! > /tmp/server.pid
+        SERVER_PID=$!
+        echo $SERVER_PID > /tmp/server.pid
+        echo "Server PID: $SERVER_PID"
         echo "Waiting for server to start..."
         sleep 10
-        echo "Server log:"
+        if ! ps -p $SERVER_PID > /dev/null; then
+          echo "❌ Server failed to start!"
+          echo "Server log:"
+          cat /tmp/server.log
+          exit 1
+        fi
+        echo "✅ Server is running"
+        echo "Server log so far:"
         cat /tmp/server.log || true
 
     - name: Run client test (blocking)
@@ -170,7 +179,14 @@ jobs:
         if [ "$RUNNER_OS" = "macOS" ]; then
           TIMEOUT_CMD="gtimeout"
         fi
-        $TIMEOUT_CMD 60 ../../../.venv/bin/python client.py || (echo "❌ Blocking client test failed"; kill $(cat /tmp/server.pid) 2>/dev/null; exit 1)
+        if ! $TIMEOUT_CMD 60 ../../../.venv/bin/python client.py; then
+          echo "❌ Blocking client test failed"
+          echo "Server log:"
+          cat /tmp/server.log || true
+          kill $(cat /tmp/server.pid) 2>/dev/null
+          exit 1
+        fi
+        echo "✅ Blocking client test passed"
 
     - name: Run client test (async)
       working-directory: examples/python/client_server
@@ -179,7 +195,14 @@ jobs:
         if [ "$RUNNER_OS" = "macOS" ]; then
           TIMEOUT_CMD="gtimeout"
         fi
-        $TIMEOUT_CMD 60 ../../../.venv/bin/python async_client.py || (echo "❌ Async client test failed"; kill $(cat /tmp/server.pid) 2>/dev/null; exit 1)
+        if ! $TIMEOUT_CMD 60 ../../../.venv/bin/python async_client.py; then
+          echo "❌ Async client test failed"
+          echo "Server log:"
+          cat /tmp/server.log || true
+          kill $(cat /tmp/server.pid) 2>/dev/null
+          exit 1
+        fi
+        echo "✅ Async client test passed"
 
     - name: Stop server
       if: always()
@@ -254,10 +277,19 @@ jobs:
       working-directory: examples/python/streaming
       run: |
         BIND_ADDR=127.0.0.1:50052 ./target/release/server > /tmp/streaming_server.log 2>&1 &
-        echo $! > /tmp/streaming_server.pid
+        SERVER_PID=$!
+        echo $SERVER_PID > /tmp/streaming_server.pid
+        echo "Server PID: $SERVER_PID"
         echo "Waiting for server to start..."
         sleep 5
-        echo "Server log:"
+        if ! ps -p $SERVER_PID > /dev/null; then
+          echo "❌ Server failed to start!"
+          echo "Server log:"
+          cat /tmp/streaming_server.log
+          exit 1
+        fi
+        echo "✅ Server is running"
+        echo "Server log so far:"
         cat /tmp/streaming_server.log || true
 
     - name: Run unary client test
@@ -267,7 +299,14 @@ jobs:
         if [ "$RUNNER_OS" = "macOS" ]; then
           TIMEOUT_CMD="gtimeout"
         fi
-        $TIMEOUT_CMD 30 ../../../.venv/bin/python unary_client.py || (echo "❌ Unary client test failed"; kill $(cat /tmp/streaming_server.pid) 2>/dev/null; exit 1)
+        if ! $TIMEOUT_CMD 30 ../../../.venv/bin/python unary_client.py; then
+          echo "❌ Unary client test failed"
+          echo "Server log:"
+          cat /tmp/streaming_server.log || true
+          kill $(cat /tmp/streaming_server.pid) 2>/dev/null
+          exit 1
+        fi
+        echo "✅ Unary client test passed"
 
     - name: Stop server
       if: always()
@@ -331,12 +370,10 @@ jobs:
         mkdir -p src/generated/inference src/generated/directorregistry
         ../../../target/release/rpcnet-gen \
           --input inference.rpc.rs \
-          --output src/generated/inference \
-          --rust
+          --output src/generated/inference
         ../../../target/release/rpcnet-gen \
           --input director_registry.rpc.rs \
-          --output src/generated/directorregistry \
-          --rust
+          --output src/generated/directorregistry
 
     - name: Build cluster example
       working-directory: examples/python/cluster
@@ -355,10 +392,19 @@ jobs:
       working-directory: examples/python/cluster
       run: |
         DIRECTOR_ADDR=127.0.0.1:61000 ./target/release/director > /tmp/director.log 2>&1 &
-        echo $! > /tmp/director.pid
+        DIRECTOR_PID=$!
+        echo $DIRECTOR_PID > /tmp/director.pid
+        echo "Director PID: $DIRECTOR_PID"
         echo "Waiting for director to start..."
         sleep 8
-        echo "Director log:"
+        if ! ps -p $DIRECTOR_PID > /dev/null; then
+          echo "❌ Director failed to start!"
+          echo "Director log:"
+          cat /tmp/director.log
+          exit 1
+        fi
+        echo "✅ Director is running"
+        echo "Director log so far:"
         cat /tmp/director.log || true
 
     - name: Start Python worker in background
@@ -371,10 +417,20 @@ jobs:
         KEY_PATH=../../../certs/test_key.pem \
         PROCESSES=2 \
         ../../../.venv/bin/python python_worker.py > /tmp/worker.log 2>&1 &
-        echo $! > /tmp/worker.pid
+        WORKER_PID=$!
+        echo $WORKER_PID > /tmp/worker.pid
+        echo "Worker PID: $WORKER_PID"
         echo "Waiting for worker to start..."
         sleep 10
-        echo "Worker log:"
+        if ! ps -p $WORKER_PID > /dev/null; then
+          echo "❌ Worker failed to start!"
+          echo "Worker log:"
+          cat /tmp/worker.log
+          kill $(cat /tmp/director.pid) 2>/dev/null
+          exit 1
+        fi
+        echo "✅ Worker is running"
+        echo "Worker log so far:"
         cat /tmp/worker.log || true
 
     - name: Run cluster client test
@@ -384,9 +440,15 @@ jobs:
         if [ "$RUNNER_OS" = "macOS" ]; then
           TIMEOUT_CMD="gtimeout"
         fi
-        DIRECTOR_ADDR=127.0.0.1:61000 \
-        CERT_PATH=../../../certs/test_cert.pem \
-        $TIMEOUT_CMD 60 ../../../.venv/bin/python client.py || (echo "❌ Cluster client test failed"; exit 1)
+        if ! DIRECTOR_ADDR=127.0.0.1:61000 CERT_PATH=../../../certs/test_cert.pem $TIMEOUT_CMD 60 ../../../.venv/bin/python client.py; then
+          echo "❌ Cluster client test failed"
+          echo "Director log:"
+          cat /tmp/director.log || true
+          echo "Worker log:"
+          cat /tmp/worker.log || true
+          exit 1
+        fi
+        echo "✅ Cluster client test passed"
 
     - name: Stop all processes
       if: always()
