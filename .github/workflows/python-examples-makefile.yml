@@ -1,0 +1,87 @@
+name: Python Examples (Makefile)
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'examples/python/**'
+      - 'src/python/**'
+      - 'pyproject.toml'
+      - 'Makefile'
+      - '.github/workflows/python-examples-makefile.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'examples/python/**'
+      - 'src/python/**'
+      - 'pyproject.toml'
+      - 'Makefile'
+      - '.github/workflows/python-examples-makefile.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  PYTHON_VERSION: '3.13'
+
+jobs:
+  test-python-examples:
+    name: Test Python Examples
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install timeout utility (macOS)
+      if: runner.os == 'macOS'
+      run: brew install coreutils
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry/index
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-registry-
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-python-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: ${{ runner.os }}-cargo-python-
+
+    - name: Run Python examples via Makefile
+      run: |
+        # Use gtimeout on macOS, timeout on Linux
+        if [ "$RUNNER_OS" = "macOS" ]; then
+          export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:$PATH"
+        fi
+        make ci-python-examples
+
+    - name: Summary
+      if: always()
+      run: |
+        echo "## 🐍 Python Examples Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ ${{ job.status }} == 'success' ]; then
+          echo "✅ All Python examples passed on ${{ matrix.os }}" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Python examples failed on ${{ matrix.os }}" >> $GITHUB_STEP_SUMMARY
+        fi

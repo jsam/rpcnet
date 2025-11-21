@@ -478,6 +478,14 @@ python-examples: python-example-client-server python-example-streaming python-ex
 	@echo ""
 	@echo "✅ All Python examples tested successfully!"
 
+# CI Python examples - same as python-examples but with certificate generation
+ci-python-examples:
+	@echo "=== CI Python Examples Testing ==="
+	@echo "Generating test certificates..."
+	@mkdir -p certs
+	@openssl req -x509 -newkey rsa:4096 -keyout certs/test_key.pem -out certs/test_cert.pem -days 365 -nodes -subj "/CN=localhost" 2>/dev/null || true
+	@$(MAKE) python-examples
+
 python-example-client-server:
 	@echo "=== Testing Python Client/Server Example ==="
 	@echo "Building rpcnet-gen..."
@@ -493,13 +501,13 @@ python-example-client-server:
 		echo "Generating Python client code..." && \
 		../../../target/release/rpcnet-gen --input benchmark.rpc.rs --output generated --python && \
 		echo "Starting server..." && \
-		../../../.venv/bin/python server.py & SERVER_PID=$$! && \
-		sleep 5 && \
+		PYTHON=$$(pwd)/../../../.venv/bin/python ../../../.venv/bin/python server.py & SERVER_PID=$$! && \
+		sleep 10 && \
 		echo "Running blocking client test..." && \
-		(timeout 60 ../../../.venv/bin/python client.py || (kill $$SERVER_PID; exit 1)) && \
+		(timeout 60 ../../../.venv/bin/python client.py || (kill $$SERVER_PID 2>/dev/null; exit 1)) && \
 		echo "Running async client test..." && \
-		(timeout 60 ../../../.venv/bin/python async_client.py || (kill $$SERVER_PID; exit 1)) && \
-		kill $$SERVER_PID
+		(timeout 60 ../../../.venv/bin/python async_client.py || (kill $$SERVER_PID 2>/dev/null; exit 1)) && \
+		kill $$SERVER_PID 2>/dev/null || true
 	@echo "✅ Client/Server example passed"
 
 python-example-streaming:
@@ -517,13 +525,15 @@ python-example-streaming:
 		echo "Building Rust server..." && \
 		cargo build --release && \
 		echo "Generating Python client code..." && \
-		../../../target/release/rpcnet-gen --input streaming.rpc.rs --output streamingservice --python && \
+		../../../target/release/rpcnet-gen --input streaming.rpc.rs --output . --python && \
+		echo "Testing import..." && \
+		../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); from streamingservice.client import StreamingServiceClient; print('✅ streamingservice.client imports')" && \
 		echo "Starting server..." && \
 		BIND_ADDR=127.0.0.1:50052 ./target/release/server & SERVER_PID=$$! && \
-		sleep 3 && \
+		sleep 5 && \
 		echo "Running unary client test..." && \
-		(timeout 30 ../../../.venv/bin/python unary_client.py || (kill $$SERVER_PID; exit 1)) && \
-		kill $$SERVER_PID
+		(timeout 30 ../../../.venv/bin/python unary_client.py || (kill $$SERVER_PID 2>/dev/null; exit 1)) && \
+		kill $$SERVER_PID 2>/dev/null || true
 	@echo "✅ Streaming example passed"
 
 python-example-cluster:
@@ -538,20 +548,29 @@ python-example-cluster:
 	fi
 	@.venv/bin/maturin develop --release --features extension-module,codegen,python --quiet
 	@cd examples/python/cluster && \
+		echo "Generating Rust code for cluster..." && \
+		mkdir -p src/generated && \
+		../../../target/release/rpcnet-gen --input inference.rpc.rs --output src/generated && \
+		../../../target/release/rpcnet-gen --input director_registry.rpc.rs --output src/generated && \
 		echo "Building Rust components..." && \
 		cargo build --release && \
 		echo "Generating Python code..." && \
-		../../../target/release/rpcnet-gen --input inference.rpc.rs --output inference --python && \
+		../../../target/release/rpcnet-gen --input inference.rpc.rs --output . --python && \
+		../../../target/release/rpcnet-gen --input director_registry.rpc.rs --output . --python && \
+		echo "Testing imports..." && \
+		../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); from inference.server import InferenceServer; print('✅ inference.server imports')" && \
+		../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); from directorregistry.client import DirectorRegistryClient; print('✅ directorregistry.client imports')" && \
 		echo "Starting director..." && \
 		DIRECTOR_ADDR=127.0.0.1:61000 ./target/release/director & DIRECTOR_PID=$$! && \
-		sleep 5 && \
+		sleep 8 && \
 		echo "Starting Python worker..." && \
+		PYTHON=$$(pwd)/../../../.venv/bin/python \
 		WORKER_LABEL=test-worker WORKER_ADDR=127.0.0.1:62001 DIRECTOR_ADDR=127.0.0.1:61000 \
 		CERT_PATH=../../../certs/test_cert.pem KEY_PATH=../../../certs/test_key.pem PROCESSES=2 \
 		../../../.venv/bin/python python_worker.py & WORKER_PID=$$! && \
-		sleep 8 && \
+		sleep 10 && \
 		echo "Running cluster client test..." && \
 		(DIRECTOR_ADDR=127.0.0.1:61000 CERT_PATH=../../../certs/test_cert.pem \
-		timeout 60 ../../../.venv/bin/python client.py || (kill $$WORKER_PID $$DIRECTOR_PID; exit 1)) && \
-		kill $$WORKER_PID $$DIRECTOR_PID
+		timeout 60 ../../../.venv/bin/python client.py || (kill $$WORKER_PID $$DIRECTOR_PID 2>/dev/null; exit 1)) && \
+		kill $$WORKER_PID $$DIRECTOR_PID 2>/dev/null || true
 	@echo "✅ Cluster example passed"
