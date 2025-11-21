@@ -274,12 +274,12 @@ jobs:
       run: |
         ../../../target/release/rpcnet-gen \
           --input streaming.rpc.rs \
-          --output streamingservice \
+          --output . \
           --python
         echo "Generated files:"
         ls -la streamingservice/
         echo "Testing import..."
-        cd $(pwd) && ../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); import streamingservice; print('✅ streamingservice module imports successfully')"
+        cd $(pwd) && ../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); import streamingservice; from streamingservice.client import StreamingServiceClient; print('✅ streamingservice.client imports successfully')"
 
     - name: Start server in background
       working-directory: examples/python/streaming
@@ -393,12 +393,12 @@ jobs:
       run: |
         ../../../target/release/rpcnet-gen \
           --input inference.rpc.rs \
-          --output inference \
+          --output . \
           --python
         echo "Generated files:"
         ls -la inference/
         echo "Testing import..."
-        ../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); import inference; print('✅ inference module imports successfully')"
+        ../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); import inference; from inference.server import InferenceServer; print('✅ inference.server imports successfully')"
 
     - name: Start director in background
       working-directory: examples/python/cluster
