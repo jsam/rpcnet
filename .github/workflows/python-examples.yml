@@ -138,6 +138,10 @@ jobs:
       run: |
         .venv/bin/maturin develop --release --features extension-module,codegen,python
 
+    - name: Install timeout utility (macOS)
+      if: runner.os == 'macOS'
+      run: brew install coreutils
+
     - name: Make rpcnet-gen executable
       run: chmod +x target/release/rpcnet-gen
 
@@ -152,19 +156,30 @@ jobs:
     - name: Start server in background
       working-directory: examples/python/client_server
       run: |
-        ../../../.venv/bin/python server.py &
+        ../../../.venv/bin/python server.py > /tmp/server.log 2>&1 &
         echo $! > /tmp/server.pid
-        sleep 5
+        echo "Waiting for server to start..."
+        sleep 10
+        echo "Server log:"
+        cat /tmp/server.log || true
 
     - name: Run client test (blocking)
       working-directory: examples/python/client_server
       run: |
-        timeout 60 ../../../.venv/bin/python client.py || (echo "❌ Blocking client test failed"; kill $(cat /tmp/server.pid); exit 1)
+        TIMEOUT_CMD="timeout"
+        if [ "$RUNNER_OS" = "macOS" ]; then
+          TIMEOUT_CMD="gtimeout"
+        fi
+        $TIMEOUT_CMD 60 ../../../.venv/bin/python client.py || (echo "❌ Blocking client test failed"; kill $(cat /tmp/server.pid) 2>/dev/null; exit 1)
 
     - name: Run client test (async)
       working-directory: examples/python/client_server
       run: |
-        timeout 60 ../../../.venv/bin/python async_client.py || (echo "❌ Async client test failed"; kill $(cat /tmp/server.pid); exit 1)
+        TIMEOUT_CMD="timeout"
+        if [ "$RUNNER_OS" = "macOS" ]; then
+          TIMEOUT_CMD="gtimeout"
+        fi
+        $TIMEOUT_CMD 60 ../../../.venv/bin/python async_client.py || (echo "❌ Async client test failed"; kill $(cat /tmp/server.pid) 2>/dev/null; exit 1)
 
     - name: Stop server
       if: always()
@@ -215,6 +230,10 @@ jobs:
       run: |
         .venv/bin/maturin develop --release --features extension-module,codegen,python
 
+    - name: Install timeout utility (macOS)
+      if: runner.os == 'macOS'
+      run: brew install coreutils
+
     - name: Make rpcnet-gen executable
       run: chmod +x target/release/rpcnet-gen
 
@@ -234,14 +253,21 @@ jobs:
     - name: Start server in background
       working-directory: examples/python/streaming
       run: |
-        BIND_ADDR=127.0.0.1:50052 ./target/release/server &
+        BIND_ADDR=127.0.0.1:50052 ./target/release/server > /tmp/streaming_server.log 2>&1 &
         echo $! > /tmp/streaming_server.pid
-        sleep 3
+        echo "Waiting for server to start..."
+        sleep 5
+        echo "Server log:"
+        cat /tmp/streaming_server.log || true
 
     - name: Run unary client test
       working-directory: examples/python/streaming
       run: |
-        timeout 30 ../../../.venv/bin/python unary_client.py || (echo "❌ Unary client test failed"; kill $(cat /tmp/streaming_server.pid); exit 1)
+        TIMEOUT_CMD="timeout"
+        if [ "$RUNNER_OS" = "macOS" ]; then
+          TIMEOUT_CMD="gtimeout"
+        fi
+        $TIMEOUT_CMD 30 ../../../.venv/bin/python unary_client.py || (echo "❌ Unary client test failed"; kill $(cat /tmp/streaming_server.pid) 2>/dev/null; exit 1)
 
     - name: Stop server
       if: always()
@@ -292,15 +318,32 @@ jobs:
       run: |
         .venv/bin/maturin develop --release --features extension-module,codegen,python
 
+    - name: Install timeout utility (macOS)
+      if: runner.os == 'macOS'
+      run: brew install coreutils
+
     - name: Make rpcnet-gen executable
       run: chmod +x target/release/rpcnet-gen
+
+    - name: Generate Rust code for cluster
+      working-directory: examples/python/cluster
+      run: |
+        mkdir -p src/generated/inference src/generated/directorregistry
+        ../../../target/release/rpcnet-gen \
+          --input inference.rpc.rs \
+          --output src/generated/inference \
+          --rust
+        ../../../target/release/rpcnet-gen \
+          --input director_registry.rpc.rs \
+          --output src/generated/directorregistry \
+          --rust
 
     - name: Build cluster example
       working-directory: examples/python/cluster
       run: |
         cargo build --release
 
-    - name: Generate Python code
+    - name: Generate Python code for cluster
       working-directory: examples/python/cluster
       run: |
         ../../../target/release/rpcnet-gen \
@@ -311,9 +354,12 @@ jobs:
     - name: Start director in background
       working-directory: examples/python/cluster
       run: |
-        DIRECTOR_ADDR=127.0.0.1:61000 ./target/release/director &
+        DIRECTOR_ADDR=127.0.0.1:61000 ./target/release/director > /tmp/director.log 2>&1 &
         echo $! > /tmp/director.pid
-        sleep 5
+        echo "Waiting for director to start..."
+        sleep 8
+        echo "Director log:"
+        cat /tmp/director.log || true
 
     - name: Start Python worker in background
       working-directory: examples/python/cluster
@@ -324,16 +370,23 @@ jobs:
         CERT_PATH=../../../certs/test_cert.pem \
         KEY_PATH=../../../certs/test_key.pem \
         PROCESSES=2 \
-        ../../../.venv/bin/python python_worker.py &
+        ../../../.venv/bin/python python_worker.py > /tmp/worker.log 2>&1 &
         echo $! > /tmp/worker.pid
-        sleep 8
+        echo "Waiting for worker to start..."
+        sleep 10
+        echo "Worker log:"
+        cat /tmp/worker.log || true
 
     - name: Run cluster client test
       working-directory: examples/python/cluster
       run: |
+        TIMEOUT_CMD="timeout"
+        if [ "$RUNNER_OS" = "macOS" ]; then
+          TIMEOUT_CMD="gtimeout"
+        fi
         DIRECTOR_ADDR=127.0.0.1:61000 \
         CERT_PATH=../../../certs/test_cert.pem \
-        timeout 60 ../../../.venv/bin/python client.py || (echo "❌ Cluster client test failed"; exit 1)
+        $TIMEOUT_CMD 60 ../../../.venv/bin/python client.py || (echo "❌ Cluster client test failed"; exit 1)
 
     - name: Stop all processes
       if: always()
