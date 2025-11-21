@@ -86,7 +86,8 @@ jobs:
 
     - name: Verify installations
       run: |
-        .venv/bin/python -c "import rpcnet; print('✅ rpcnet module imported successfully')"
+        .venv/bin/python -c "import rpcnet; print('✅ rpcnet module imported successfully'); print(f'rpcnet location: {rpcnet.__file__}')"
+        .venv/bin/python -c "import sys; print('Python path:', sys.path)"
         ./target/release/rpcnet-gen --help
 
     - name: Upload artifacts
@@ -156,6 +157,9 @@ jobs:
     - name: Start server in background
       working-directory: examples/python/client_server
       run: |
+        echo "Checking rpcnet installation..."
+        ../../../.venv/bin/python -c "import rpcnet; print(f'rpcnet found at: {rpcnet.__file__}')" || echo "⚠️ rpcnet not found in venv"
+        echo "Starting server..."
         ../../../.venv/bin/python server.py > /tmp/server.log 2>&1 &
         SERVER_PID=$!
         echo $SERVER_PID > /tmp/server.pid
@@ -367,13 +371,13 @@ jobs:
     - name: Generate Rust code for cluster
       working-directory: examples/python/cluster
       run: |
-        mkdir -p src/generated/inference src/generated/directorregistry
+        mkdir -p src/generated
         ../../../target/release/rpcnet-gen \
           --input inference.rpc.rs \
-          --output src/generated/inference
+          --output src/generated
         ../../../target/release/rpcnet-gen \
           --input director_registry.rpc.rs \
-          --output src/generated/directorregistry
+          --output src/generated
 
     - name: Build cluster example
       working-directory: examples/python/cluster

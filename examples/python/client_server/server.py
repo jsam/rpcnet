@@ -5,7 +5,6 @@ import os
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "python"))
 sys.path.insert(0, str(Path(__file__).parent / "generated"))
 
 import rpcnet
