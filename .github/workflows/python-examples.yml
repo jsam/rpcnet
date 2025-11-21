@@ -160,7 +160,7 @@ jobs:
         echo "Checking rpcnet installation..."
         ../../../.venv/bin/python -c "import rpcnet; print(f'rpcnet found at: {rpcnet.__file__}')" || echo "⚠️ rpcnet not found in venv"
         echo "Starting server..."
-        ../../../.venv/bin/python server.py > /tmp/server.log 2>&1 &
+        PYTHON=$(pwd)/../../../.venv/bin/python ../../../.venv/bin/python server.py > /tmp/server.log 2>&1 &
         SERVER_PID=$!
         echo $SERVER_PID > /tmp/server.pid
         echo "Server PID: $SERVER_PID"
@@ -276,6 +276,10 @@ jobs:
           --input streaming.rpc.rs \
           --output streamingservice \
           --python
+        echo "Generated files:"
+        ls -la streamingservice/
+        echo "Testing import..."
+        cd $(pwd) && ../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); import streamingservice; print('✅ streamingservice module imports successfully')"
 
     - name: Start server in background
       working-directory: examples/python/streaming
@@ -391,6 +395,10 @@ jobs:
           --input inference.rpc.rs \
           --output inference \
           --python
+        echo "Generated files:"
+        ls -la inference/
+        echo "Testing import..."
+        ../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); import inference; print('✅ inference module imports successfully')"
 
     - name: Start director in background
       working-directory: examples/python/cluster
@@ -414,6 +422,7 @@ jobs:
     - name: Start Python worker in background
       working-directory: examples/python/cluster
       run: |
+        PYTHON=$(pwd)/../../../.venv/bin/python \
         WORKER_LABEL=test-worker \
         WORKER_ADDR=127.0.0.1:62001 \
         DIRECTOR_ADDR=127.0.0.1:61000 \
