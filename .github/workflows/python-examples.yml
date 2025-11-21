@@ -395,10 +395,15 @@ jobs:
           --input inference.rpc.rs \
           --output . \
           --python
+        ../../../target/release/rpcnet-gen \
+          --input director_registry.rpc.rs \
+          --output . \
+          --python
         echo "Generated files:"
-        ls -la inference/
-        echo "Testing import..."
-        ../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); import inference; from inference.server import InferenceServer; print('✅ inference.server imports successfully')"
+        ls -la inference/ directorregistry/
+        echo "Testing imports..."
+        ../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); import inference; from inference.server import InferenceServer; print('✅ inference.server imports')"
+        ../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); import directorregistry; from directorregistry.client import DirectorRegistryClient; print('✅ directorregistry.client imports')"
 
     - name: Start director in background
       working-directory: examples/python/cluster
