@@ -268,7 +268,7 @@ asyncio.run(main())
 <p>Python dataclasses with type hints:</p>
 <pre><code class="language-python">from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Optional, Union
 
 @dataclass
 class GreetRequest:
@@ -278,8 +278,16 @@ class GreetRequest:
 class GreetResponse:
     message: str
 
-class GreetError(Enum):
+# Simple enums (no associated data) → Python Enum
+class GreetErrorSimple(Enum):
     InvalidName = "InvalidName"
+
+# Complex enums (with associated data) → Union of dataclasses
+@dataclass
+class GreetErrorInvalidName:
+    reason: str
+
+GreetError = Union[GreetErrorInvalidName, ...]
 </code></pre>
 <h3 id="client-module-clientpy"><a class="header" href="#client-module-clientpy">Client Module (<code>client.py</code>)</a></h3>
 <p>Async client with typed methods:</p>
@@ -482,9 +490,10 @@ responses = await asyncio.gather(
 </code></pre>
 <h3 id="-automatic-serialization"><a class="header" href="#-automatic-serialization">✅ Automatic Serialization</a></h3>
 <ul>
-<li>MessagePack encoding/decoding</li>
+<li>MessagePack encoding/decoding (via <code>rmp-serde</code>)</li>
 <li>Handles complex nested types</li>
-<li>Compatible with Rust bincode for primitive types</li>
+<li>Fully compatible with Rust MessagePack serialization</li>
+<li>Cross-language type safety maintained</li>
 </ul>
 <pre><code class="language-python"># Automatic serialization
 request = GreetRequest(name="Alice")
@@ -592,6 +601,120 @@ async for response in client.generate(request_generator()):
 <li><strong>Bidirectional streaming</strong>: Fully supported (both AsyncIterable and AsyncIterator)</li>
 <li><strong>Python server implementation</strong>: Generated but needs runtime testing</li>
 </ul>
+<h3 id="low-level-streaming-api"><a class="header" href="#low-level-streaming-api">Low-Level Streaming API</a></h3>
+<p>In addition to the code-generated high-level API, RpcNet provides a <strong>low-level Python streaming API</strong> for direct use of the <code>_rpcnet</code> module without code generation. This is useful for:</p>
+<ul>
+<li>Quick prototyping without running codegen</li>
+<li>Dynamic handler registration</li>
+<li>Custom streaming patterns</li>
+</ul>
+<p><strong>Examples</strong>: See <code>examples/python/streaming/</code> for complete working examples of all three streaming patterns.</p>
+<h4 id="server-streaming-1n"><a class="header" href="#server-streaming-1n">Server Streaming (1→N)</a></h4>
+<p>Server sends multiple responses for a single request:</p>
+<pre><code class="language-python">import asyncio
+import _rpcnet
+
+async def stream_numbers(request_bytes):
+    """Async generator that yields multiple responses"""
+    for i in range(5):
+        response = {"number": i, "timestamp": time.time()}
+        yield _rpcnet.python_to_msgpack_py(response)
+        await asyncio.sleep(0.1)
+
+# Register handler
+config = _rpcnet.RpcConfig(
+    cert_path="certs/test_cert.pem",
+    key_path="certs/test_key.pem",
+    bind_addr="127.0.0.1:9001",
+    server_name="localhost"
+)
+
+server = _rpcnet.RpcServer(config)
+server.register_server_streaming_handler("stream_numbers", stream_numbers)
+await server.serve()
+</code></pre>
+<p><strong>Client usage</strong>:</p>
+<pre><code class="language-python">client = await _rpcnet.RpcClient.connect("127.0.0.1:9001", config)
+request = _rpcnet.python_to_msgpack_py({"query": "numbers"})
+
+# Receive stream of responses
+responses = await client.call_streaming("stream_numbers", [request])
+for response_bytes in responses:
+    response = _rpcnet.msgpack_to_python_py(response_bytes)
+    print(f"Received: {response}")
+</code></pre>
+<h4 id="client-streaming-n1"><a class="header" href="#client-streaming-n1">Client Streaming (N→1)</a></h4>
+<p>Client sends multiple requests, server returns single response:</p>
+<pre><code class="language-python">async def sum_numbers(request_stream):
+    """Consume stream and return single result"""
+    total = 0
+    async for request_bytes in request_stream:
+        request = _rpcnet.msgpack_to_python_py(request_bytes)
+        total += request["value"]
+
+    response = {"sum": total, "count": len(requests)}
+    return _rpcnet.python_to_msgpack_py(response)
+
+server.register_client_streaming_handler("sum_numbers", sum_numbers)
+</code></pre>
+<p><strong>Client usage</strong>:</p>
+<pre><code class="language-python"># Send multiple requests
+requests = [
+    _rpcnet.python_to_msgpack_py({"value": 1}),
+    _rpcnet.python_to_msgpack_py({"value": 2}),
+    _rpcnet.python_to_msgpack_py({"value": 3}),
+]
+
+response_bytes = await client.call_streaming("sum_numbers", requests)
+response = _rpcnet.msgpack_to_python_py(response_bytes[0])
+print(f"Sum: {response['sum']}")
+</code></pre>
+<h4 id="bidirectional-streaming-nm"><a class="header" href="#bidirectional-streaming-nm">Bidirectional Streaming (N→M)</a></h4>
+<p>Both client and server send streams:</p>
+<pre><code class="language-python">async def echo_transform(request_stream):
+    """Async generator that consumes and yields"""
+    async for request_bytes in request_stream:
+        request = _rpcnet.msgpack_to_python_py(request_bytes)
+
+        # Transform and echo back
+        response = {
+            "echo": request["message"].upper(),
+            "length": len(request["message"])
+        }
+        yield _rpcnet.python_to_msgpack_py(response)
+
+server.register_bidirectional_handler("echo_transform", echo_transform)
+</code></pre>
+<p><strong>Client usage</strong>:</p>
+<pre><code class="language-python"># Send stream of requests
+requests = [
+    _rpcnet.python_to_msgpack_py({"message": "hello"}),
+    _rpcnet.python_to_msgpack_py({"message": "world"}),
+]
+
+# Receive stream of responses
+responses = await client.call_streaming("echo_transform", requests)
+for response_bytes in responses:
+    response = _rpcnet.msgpack_to_python_py(response_bytes)
+    print(f"Echo: {response['echo']}")
+</code></pre>
+<h4 id="running-the-examples"><a class="header" href="#running-the-examples">Running the Examples</a></h4>
+<pre><code class="language-bash"># Terminal 1 - Start server streaming example
+.venv/bin/python examples/python/streaming/server_streaming_example.py
+
+# Terminal 2 - Test server streaming
+.venv/bin/python examples/python/streaming/test_server_streaming.py
+
+# Run all streaming tests
+./examples/python/streaming/test_all_streaming.sh
+</code></pre>
+<p><strong>Key differences from codegen API</strong>:</p>
+<ul>
+<li>Manual serialization with <code>python_to_msgpack_py()</code> / <code>msgpack_to_python_py()</code></li>
+<li>Direct handler registration on <code>RpcServer</code></li>
+<li>No type hints (dynamic typing)</li>
+<li>Lower-level control over streaming behavior</li>
+</ul>
 <h2 id="type-compatibility"><a class="header" href="#type-compatibility">Type Compatibility</a></h2>
 <h3 id="rust-only-types"><a class="header" href="#rust-only-types">Rust-Only Types</a></h3>
 <p>Some Rust types don't have direct Python equivalents:</p>
@@ -601,6 +724,94 @@ async for response in client.generate(request_generator()):
 <li><code>Option&lt;T&gt;</code> → Use <code>Optional[T]</code></li>
 </ul>
 <p><strong>Best practice</strong>: Keep <code>.rpc.rs</code> types simple and cross-language compatible.</p>
+<h3 id="-enums-with-associated-data-fully-supported"><a class="header" href="#-enums-with-associated-data-fully-supported">✅ Enums with Associated Data (Fully Supported)</a></h3>
+<p>The Python codegen <strong>fully supports</strong> Rust enums with associated data (tagged unions) by generating Union types with dataclasses.</p>
+<p><strong>Example Rust Definition:</strong></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub enum InferenceResponse {
+    Connected { worker: String, connection_id: String },
+    Token { text: String, sequence: u64 },
+    Error { message: String },
+    Done,
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>Generated Python Code:</strong></p>
+<pre><code class="language-python">from dataclasses import dataclass
+from typing import Union
+
+@dataclass
+class InferenceResponseConnected:
+    worker: str
+    connection_id: str
+
+@dataclass
+class InferenceResponseToken:
+    text: str
+    sequence: int
+
+@dataclass
+class InferenceResponseError:
+    message: str
+
+@dataclass
+class InferenceResponseDone:
+    pass
+
+# Union type for all variants
+InferenceResponse = Union[
+    InferenceResponseConnected,
+    InferenceResponseToken,
+    InferenceResponseError,
+    InferenceResponseDone
+]
+
+# Auto-generated deserializer handles MessagePack formats
+def deserialize_inferenceresponse(data: Any) -&gt; InferenceResponse:
+    """Deserialize MessagePack data to InferenceResponse variant."""
+    variant_name, variant_data = next(iter(data.items()))
+
+    if variant_name == 'Connected':
+        # Handles both dict and list formats from MessagePack
+        if isinstance(variant_data, dict):
+            return InferenceResponseConnected(**variant_data)
+        elif isinstance(variant_data, list):
+            return InferenceResponseConnected(*variant_data)
+    # ... other variants
+</code></pre>
+<p><strong>Python Usage (Type-Safe!):</strong></p>
+<pre><code class="language-python">from inference import InferenceClient, InferenceRequest
+from inference.types import (
+    InferenceResponseConnected,
+    InferenceResponseToken,
+    InferenceResponseError,
+    InferenceResponseDone
+)
+
+# Send request and get properly typed response
+async for response in client.generate(request_generator()):
+    # Type checking with isinstance()
+    if isinstance(response, InferenceResponseConnected):
+        print(f"Connected to worker: {response.worker}")
+        print(f"Connection ID: {response.connection_id}")
+
+    elif isinstance(response, InferenceResponseToken):
+        print(f"Token #{response.sequence}: {response.text}")
+
+    elif isinstance(response, InferenceResponseError):
+        print(f"Error: {response.message}")
+
+    elif isinstance(response, InferenceResponseDone):
+        print("Done!")
+</code></pre>
+<p><strong>Key Features:</strong></p>
+<p>✅ <strong>Type Safety</strong>: Each variant is a separate dataclass with proper fields
+✅ <strong>IDE Support</strong>: Full auto-completion for variant fields
+✅ <strong>Pattern Matching</strong>: Use <code>isinstance()</code> for clean variant handling
+✅ <strong>MessagePack Compatible</strong>: Handles both dict <code>{'Connected': {...}}</code> and list formats
+✅ <strong>Automatic Deserialization</strong>: Generated client methods call deserializer automatically</p>
+<p><strong>Example</strong>:
+See <code>examples/python/cluster/python_real_streaming_client.py</code> for a complete working example.</p>
 <h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
 <h3 id="module-not-found-_rpcnet"><a class="header" href="#module-not-found-_rpcnet">"Module not found: _rpcnet"</a></h3>
 <p><strong>Problem</strong>: Python can't import the native module.</p>
@@ -770,22 +981,6 @@ for name in names:
 
         </div>
 
-        <!-- Livereload script (if served using the cli tool) -->
-        <script>
-            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
-            const socket = new WebSocket(wsAddress);
-            socket.onmessage = function (event) {
-                if (event.data === "reload") {
-                    socket.close();
-                    location.reload();
-                }
-            };
-
-            window.onbeforeunload = function() {
-                socket.close();
-            }
-        </script>
 
 
 

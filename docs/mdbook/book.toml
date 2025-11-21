@@ -1,6 +1,6 @@
 [book]
 title = "RpcNet Guide"
-author = "RpcNet Team"
+authors = ["RpcNet Team"]
 multilingual = false
 src = "src"
 
