@@ -4,6 +4,8 @@
 //! to Python with async/await support through asyncio.
 
 #[cfg(feature = "python")]
+pub mod blocking_client;
+#[cfg(feature = "python")]
 pub mod client;
 #[cfg(feature = "python")]
 pub mod cluster;
@@ -13,6 +15,10 @@ pub mod config;
 pub mod error;
 #[cfg(feature = "python")]
 pub mod event_loop;
+#[cfg(feature = "python")]
+pub mod worker_config;
+#[cfg(feature = "python")]
+pub mod worker_manager;
 #[cfg(feature = "python")]
 pub mod serde;
 #[cfg(feature = "python")]
@@ -35,6 +41,7 @@ fn _rpcnet(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register classes
     m.add_class::<config::PyRpcConfig>()?;
     m.add_class::<client::PyRpcClient>()?;
+    m.add_class::<blocking_client::PyBlockingClient>()?;
     m.add_class::<server::PyRpcServer>()?;
     m.add_class::<streaming::PyAsyncStream>()?;
 

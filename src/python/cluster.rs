@@ -215,7 +215,7 @@ impl PyQuicClient {
 /// Python wrapper for cluster membership
 #[pyclass(name = "Cluster")]
 pub struct PyCluster {
-    inner: Arc<ClusterMembership>,
+    pub(crate) inner: Arc<ClusterMembership>,
 }
 
 #[pymethods]

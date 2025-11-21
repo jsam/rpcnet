@@ -1,7 +1,0 @@
-# Python dependencies for cluster example
-
-# RpcNet Python bindings (installed via maturin develop)
-# rpcnet (built from source)
-
-# No additional dependencies needed!
-# The generated code only requires _rpcnet which is built with maturin

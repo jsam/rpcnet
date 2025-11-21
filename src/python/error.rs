@@ -1,5 +1,6 @@
 //! Python exception types for RpcNet errors
 
+use crate::cluster::ClusterError;
 use crate::RpcError;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
@@ -32,6 +33,7 @@ pyo3::create_exception!(
     PyRpcError,
     "Handler execution errors"
 );
+pyo3::create_exception!(_rpcnet, PyClusterError, PyRpcError, "Cluster errors");
 
 /// Convert Rust RpcError to Python exception
 pub fn to_py_err(err: RpcError) -> PyErr {
@@ -43,6 +45,11 @@ pub fn to_py_err(err: RpcError) -> PyErr {
         RpcError::StreamError(msg) => PyStreamError::new_err(msg),
         _ => PyRpcError::new_err(err.to_string()),
     }
+}
+
+/// Convert ClusterError to Python exception
+pub fn cluster_err_to_py(err: ClusterError) -> PyErr {
+    PyClusterError::new_err(err.to_string())
 }
 
 #[cfg(all(test, feature = "python"))]

@@ -1,0 +1,19 @@
+# Generated code
+generated/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+.claude/
+
+# Backup files
+*.bak
+*~

@@ -313,11 +313,16 @@ jobs:
     - name: Build examples
       run: make examples
 
+  # Test Python examples
+  python-examples:
+    name: Python Examples
+    uses: ./.github/workflows/python-examples.yml
+
   # Summary job that depends on all checks
   pr-checks-complete:
     name: All PR Checks Passed
     runs-on: ubuntu-latest
-    needs: [format, lint, test, coverage, security, docs, examples]
+    needs: [format, lint, test, coverage, security, docs, examples, python-examples]
     if: always()
     steps:
     - name: Check results
@@ -328,7 +333,8 @@ jobs:
            [[ "${{ needs.coverage.result }}" == "failure" ]] || \
            [[ "${{ needs.security.result }}" == "failure" ]] || \
            [[ "${{ needs.docs.result }}" == "failure" ]] || \
-           [[ "${{ needs.examples.result }}" == "failure" ]]; then
+           [[ "${{ needs.examples.result }}" == "failure" ]] || \
+           [[ "${{ needs.python-examples.result }}" == "failure" ]]; then
           echo "❌ One or more checks failed"
           exit 1
         fi

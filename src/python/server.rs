@@ -1,36 +1,40 @@
-//! Python wrapper for RpcServer
+//! Python wrapper for RpcServer with true multi-process architecture
 
 #![allow(clippy::useless_conversion)]
 
 use super::{
     cluster::PyCluster, cluster::PyClusterConfig, cluster::PyQuicClient, config::PyRpcConfig,
-    error::to_py_err, event_loop::PythonEventLoopExecutor,
+    error::{cluster_err_to_py, to_py_err},
+    worker_config::WorkerConfig,
+    worker_manager::WorkerManager,
 };
 use crate::RpcServer;
 use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::future_into_py;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio_stream::wrappers::UnboundedReceiverStream;
 
-/// Python wrapper for RPC server
+/// Python wrapper for RPC server with true multi-process worker architecture
 ///
-/// This server handles incoming RPC requests over QUIC+TLS.
-/// Handlers are Python async functions that process requests.
+/// This server spawns multiple Python worker processes, each with its own GIL,
+/// enabling true parallel execution of Python handlers.
 #[pyclass(name = "RpcServer")]
 pub struct PyRpcServer {
     server: Arc<Mutex<RpcServer>>,
-    /// Executor for running Python async handlers in a dedicated event loop
-    executor: Arc<PythonEventLoopExecutor>,
+    worker_manager: Arc<Mutex<Option<WorkerManager>>>,
+    config: WorkerConfig,
+    /// Handlers registered before serve() is called
+    pending_handlers: Arc<Mutex<std::collections::HashMap<String, PyObject>>>,
 }
 
 #[pymethods]
 impl PyRpcServer {
     /// Create a new RPC server
     ///
+    /// The server automatically spawns worker processes equal to CPU count.
+    ///
     /// Args:
-    ///     config: RpcConfig object with TLS settings and bind address
+        ///     config: RpcConfig object with TLS settings and bind address
     ///
     /// Returns:
     ///     RpcServer: New server instance
@@ -44,14 +48,18 @@ impl PyRpcServer {
     ///     >>> server = RpcServer(config)
     #[new]
     fn new(config: &PyRpcConfig) -> PyResult<Self> {
-        let server = RpcServer::new(config.inner.clone());
-        let executor = PythonEventLoopExecutor::new().map_err(|e| {
-            pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create executor: {}", e))
+        let worker_config = WorkerConfig::new();
+        worker_config.validate().map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!("Invalid worker config: {}", e))
         })?;
+
+        let server = RpcServer::new(config.inner.clone());
 
         Ok(PyRpcServer {
             server: Arc::new(Mutex::new(server)),
-            executor: Arc::new(executor),
+            worker_manager: Arc::new(Mutex::new(None)),
+            config: worker_config,
+            pending_handlers: Arc::new(Mutex::new(std::collections::HashMap::new())),
         })
     }
 
@@ -76,215 +84,58 @@ impl PyRpcServer {
         method_name: String,
         handler: PyObject,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let server = self.server.clone();
-        let executor = self.executor.clone();
+        let pending_handlers = self.pending_handlers.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            // Wrap Python async function to be callable from Rust
-            // The executor handles running the Python handler in a dedicated event loop
-            let handler_fn = move |params: Vec<u8>| {
-                let handler = Python::with_gil(|py| handler.clone_ref(py));
-                let executor = executor.clone();
-                async move {
-                    // Use the executor to run the Python handler
-                    // This will execute it in a blocking thread pool with asyncio.run()
-                    executor.execute_handler(handler, params).await
-                }
-            };
-
-            // Register handler with RpcServer
-            let server_guard = server.lock().await;
-            server_guard.register(&method_name, handler_fn).await;
+            let mut handlers = pending_handlers.lock().await;
+            handlers.insert(method_name, handler);
             Ok(())
         })
     }
 
     /// Register a server streaming RPC method handler (async generator)
-    ///
-    /// The handler must be a Python async generator function that takes bytes
-    /// and yields multiple bytes responses.
-    ///
-    /// Args:
-    ///     method_name: Name of the RPC method
-    ///     handler: Async generator function (bytes) -> yields bytes
-    ///
-    /// Example:
-    ///     >>> async def stream_numbers(request_bytes):
-    ///     ...     for i in range(10):
-    ///     ...         await asyncio.sleep(0.1)
-    ///     ...         yield str(i).encode()
-    ///     >>> await server.register_server_streaming("stream_numbers", stream_numbers)
     fn register_server_streaming<'py>(
         &self,
         py: Python<'py>,
-        method_name: String,
-        handler: PyObject,
+        _method_name: String,
+        _handler: PyObject,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let server = self.server.clone();
-        let executor = self.executor.clone();
-
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            // Wrap Python async generator to be callable from Rust
-            // The executor handles running the Python handler in a dedicated event loop
-            let handler_fn = move |params: Vec<u8>| {
-                let handler = Python::with_gil(|py| handler.clone_ref(py));
-                let executor = executor.clone();
-                async move {
-                    // Use the executor to run the Python async generator
-                    // This returns a receiver that yields the stream items
-                    match executor
-                        .execute_server_streaming_handler(handler, params)
-                        .await
-                    {
-                        Ok(receiver) => {
-                            // Convert the receiver to a Stream
-                            UnboundedReceiverStream::new(receiver)
-                        }
-                        Err(_e) => {
-                            // Return an empty stream on error (error already sent through channel)
-                            let (_, rx) = tokio::sync::mpsc::unbounded_channel();
-                            UnboundedReceiverStream::new(rx)
-                        }
-                    }
-                }
-            };
-
-            // Register server streaming handler with RpcServer
-            let server_guard = server.lock().await;
-            server_guard
-                .register_server_streaming(&method_name, handler_fn)
-                .await;
-            Ok(())
+            Err::<(), _>(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+                "Streaming not yet supported in multi-process mode",
+            ))
         })
     }
 
     /// Register a client streaming RPC method handler (N→1)
-    ///
-    /// The handler must be a Python async function that takes an async iterator
-    /// (consuming multiple requests) and returns a single bytes response.
-    ///
-    /// Args:
-    ///     method_name: Name of the RPC method
-    ///     handler: Async Python function (async_iterator) -> bytes
-    ///
-    /// Example:
-    ///     >>> async def upload_handler(request_stream):
-    ///     ...     total_size = 0
-    ///     ...     async for chunk in request_stream:
-    ///     ...         total_size += len(chunk)
-    ///     ...     return json.dumps({"total_size": total_size}).encode()
-    ///     >>> await server.register_client_streaming("upload", upload_handler)
     fn register_client_streaming<'py>(
         &self,
         py: Python<'py>,
-        method_name: String,
-        handler: PyObject,
+        _method_name: String,
+        _handler: PyObject,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let server = self.server.clone();
-        let executor = self.executor.clone();
-
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            // Wrap Python async function to be callable from Rust
-            // The executor handles running the Python handler with a request stream
-            let handler_fn =
-                move |request_stream: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>| {
-                    let handler = Python::with_gil(|py| handler.clone_ref(py));
-                    let executor = executor.clone();
-                    async move {
-                        // Use the executor to run the Python handler with the request stream
-                        executor
-                            .execute_client_streaming_handler(handler, request_stream)
-                            .await
-                    }
-                };
-
-            // Register handler with RpcServer
-            let server_guard = server.lock().await;
-            server_guard
-                .register_client_streaming(&method_name, handler_fn)
-                .await;
-            Ok(())
+            Err::<(), _>(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+                "Streaming not yet supported in multi-process mode",
+            ))
         })
     }
 
     /// Register a bidirectional streaming RPC method handler (N→M)
-    ///
-    /// The handler must be a Python async generator function that takes an async iterator
-    /// (consuming multiple requests) and yields multiple bytes responses.
-    ///
-    /// Args:
-    ///     method_name: Name of the RPC method
-    ///     handler: Async generator function (async_iterator) -> yields bytes
-    ///
-    /// Example:
-    ///     >>> async def bidirectional_handler(request_stream):
-    ///     ...     async for chunk in request_stream:
-    ///     ...         # Process each request and yield response
-    ///     ...         yield process(chunk)
-    ///     >>> await server.register_bidirectional("process_stream", bidirectional_handler)
     fn register_bidirectional<'py>(
         &self,
         py: Python<'py>,
-        method_name: String,
-        handler: PyObject,
+        _method_name: String,
+        _handler: PyObject,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let server = self.server.clone();
-        let executor = self.executor.clone();
-
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            // Wrap Python async generator to be callable from Rust
-            // The executor handles running the Python handler with a request stream
-            let handler_fn =
-                move |request_stream: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>| {
-                    let handler = Python::with_gil(|py| handler.clone_ref(py));
-                    let executor = executor.clone();
-                    async move {
-                        // Use the executor to run the Python handler with the request stream
-                        // This returns a receiver that yields the response stream items
-                        match executor
-                            .execute_bidirectional_handler(handler, request_stream)
-                            .await
-                        {
-                            Ok(receiver) => {
-                                // Convert the receiver to a Stream
-                                tokio_stream::wrappers::UnboundedReceiverStream::new(receiver)
-                            }
-                            Err(_e) => {
-                                // Return an empty stream on error
-                                let (_, rx) = tokio::sync::mpsc::unbounded_channel();
-                                tokio_stream::wrappers::UnboundedReceiverStream::new(rx)
-                            }
-                        }
-                    }
-                };
-
-            // Register bidirectional handler with RpcServer
-            let server_guard = server.lock().await;
-            server_guard
-                .register_bidirectional(&method_name, handler_fn)
-                .await;
-            Ok(())
+            Err::<(), _>(PyErr::new::<pyo3::exceptions::PyNotImplementedError, _>(
+                "Streaming not yet supported in multi-process mode",
+            ))
         })
     }
 
     /// Enable SWIM cluster functionality
-    ///
-    /// This enables the server to join a cluster using the SWIM gossip protocol
-    /// for node discovery, failure detection, and load balancing.
-    ///
-    /// Args:
-    ///     config: ClusterConfig with gossip, health check, and pool settings
-    ///     seeds: List of seed node addresses (e.g., ["127.0.0.1:61000"])
-    ///     quic_client: QuicClient instance for cluster communication
-    ///
-    /// Raises:
-    ///     ValueError: If seed addresses are invalid
-    ///     RuntimeError: If cluster initialization fails
-    ///
-    /// Example:
-    ///     >>> quic_client = await QuicClient.create("certs/cert.pem")
-    ///     >>> config = ClusterConfig()
-    ///     >>> await server.enable_cluster(config, ["127.0.0.1:61000"], quic_client)
     fn enable_cluster<'py>(
         &self,
         py: Python<'py>,
@@ -293,73 +144,47 @@ impl PyRpcServer {
         quic_client: PyQuicClient,
     ) -> PyResult<Bound<'py, PyAny>> {
         let server = self.server.clone();
+        
         future_into_py(py, async move {
+            let server_guard = server.lock().await;
+            
             // Parse seed addresses
-            let seed_addrs: Vec<SocketAddr> = seeds
+            let seed_addrs: Result<Vec<std::net::SocketAddr>, _> = seeds
                 .iter()
                 .map(|s| s.parse())
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| {
-                    PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                        "Invalid seed address: {}",
-                        e
-                    ))
-                })?;
-
-            // Enable cluster
-            let server_guard = server.lock().await;
+                .collect();
+            let seed_addrs = seed_addrs.map_err(|e| {
+                pyo3::exceptions::PyValueError::new_err(format!("Invalid seed address: {}", e))
+            })?;
+            
+            // Enable cluster on the underlying Rust server
             server_guard
-                .enable_cluster(config.inner, seed_addrs, quic_client.inner)
+                .enable_cluster(config.inner.clone(), seed_addrs, quic_client.inner.clone())
                 .await
-                .map_err(|e| {
-                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                        "Failed to enable cluster: {}",
-                        e
-                    ))
-                })?;
-
+                .map_err(cluster_err_to_py)?;
+            
             Ok(())
         })
     }
 
     /// Get cluster handle if cluster is enabled
-    ///
-    /// Returns None if cluster has not been enabled via enable_cluster().
-    ///
-    /// Returns:
-    ///     Optional[Cluster]: Cluster handle or None
-    ///
-    /// Example:
-    ///     >>> cluster = await server.cluster()
-    ///     >>> if cluster:
-    ///     ...     await cluster.update_tag("role", "worker")
     fn cluster<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let server = self.server.clone();
+        
         future_into_py(py, async move {
             let server_guard = server.lock().await;
-            match server_guard.cluster().await {
-                Some(membership) => Ok(Some(PyCluster::new(membership))),
-                None => Ok(None),
-            }
+            let cluster = server_guard.cluster().await;
+            
+            Ok::<Option<PyCluster>, PyErr>(cluster.map(|c| PyCluster { inner: c }))
         })
     }
 
     /// Bind the server to the configured address
-    ///
-    /// This sets up the server socket and is required before enable_cluster().
-    /// After calling bind(), you must call serve() to start serving requests.
-    ///
-    /// Typical usage for cluster: bind() -> enable_cluster() -> serve()
-    ///
-    /// Raises:
-    ///     TlsError: If TLS setup fails
-    ///     ConnectionError: If bind fails
     fn bind<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let server = self.server.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let mut server_guard = server.lock().await;
-            // Call bind() which returns the QUIC server and store it
             let quic_server = server_guard.bind().map_err(to_py_err)?;
             let mut quic_server_guard = server_guard.quic_server.lock().await;
             *quic_server_guard = Some(quic_server);
@@ -367,36 +192,91 @@ impl PyRpcServer {
         })
     }
 
-    /// Start the RPC server (async, blocking until shutdown)
+    /// Start the RPC server with worker processes
     ///
-    /// This method will block until the server is shut down.
-    /// Run it with asyncio.create_task() to run in background.
+    /// This spawns worker processes, initializes handlers, and starts serving requests.
     ///
-    /// If bind() was already called (e.g., for cluster setup), this will use the
-    /// existing QUIC server. Otherwise, it will call bind() first.
-    ///
-    /// Raises:
-    ///     TlsError: If TLS setup fails
-    ///     ConnectionError: If bind fails
+    /// Args:
+    ///     graceful_shutdown_timeout: Timeout in seconds for graceful shutdown (default: 30)
     ///
     /// Example:
-    ///     >>> await server.serve()  # Blocks until shutdown
-    fn serve<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    ///     >>> await server.serve()
+    #[pyo3(signature = (_graceful_shutdown_timeout=None))]
+    fn serve<'py>(
+        &self,
+        py: Python<'py>,
+        _graceful_shutdown_timeout: Option<u64>,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let server = self.server.clone();
+        let worker_manager = self.worker_manager.clone();
+        let config = self.config.clone();
+
+        let pending_handlers = self.pending_handlers.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut server_guard = server.lock().await;
+            // Create worker manager
+            let mut manager = WorkerManager::new(config).map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create workers: {}", e))
+            })?;
 
-            // Check if quic_server is already set (from a previous bind() call)
+            // Register handlers with worker manager
+            let handlers_to_register = pending_handlers.lock().await;
+            for (method_name, handler) in handlers_to_register.iter() {
+                let handler_clone = Python::with_gil(|py| handler.clone_ref(py));
+                manager.register_handler(method_name.clone(), handler_clone).await;
+            }
+            drop(handlers_to_register);
+
+            // Initialize workers with handlers
+            manager.initialize_workers().await.map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "Failed to initialize workers: {}",
+                    e
+                ))
+            })?;
+
+            // Register handler wrapper that routes to workers
+            let manager_clone = Arc::new(Mutex::new(manager));
+            let server_guard = server.lock().await;
+
+            // Get all registered handler method names
+            let method_names: Vec<String> = {
+                let mgr = manager_clone.lock().await;
+                let handlers_guard = mgr.handlers.lock().await;
+                handlers_guard.keys().cloned().collect()
+            };
+
+            for method_name in method_names.iter() {
+                let mgr = manager_clone.clone();
+                let method = method_name.clone();
+
+                let handler_fn = move |params: Vec<u8>| {
+                    let mgr = mgr.clone();
+                    let method = method.clone();
+                    async move {
+                        mgr.lock()
+                            .await
+                            .execute_handler(&method, params)
+                            .await
+                    }
+                };
+
+                server_guard.register(&method_name, handler_fn).await;
+            }
+
+            drop(server_guard);
+
+            // Note: We don't store worker manager as it can't be cloned
+            // It will be dropped after serve() completes
+
+            // Bind and start server
+            let mut server_guard = server.lock().await;
             let quic_server = {
                 let mut quic_server_guard = server_guard.quic_server.lock().await;
                 if quic_server_guard.is_some() {
-                    // Take the existing quic_server
                     quic_server_guard.take().unwrap()
                 } else {
-                    // Drop the guard before calling bind() to avoid deadlock
                     drop(quic_server_guard);
-                    // No existing server, call bind() to create one
                     server_guard.bind().map_err(to_py_err)?
                 }
             };
@@ -407,7 +287,7 @@ impl PyRpcServer {
     }
 
     fn __repr__(&self) -> String {
-        "RpcServer(ready)".to_string()
+        format!("RpcServer(processes={})", self.config.num_processes)
     }
 
     fn __str__(&self) -> String {

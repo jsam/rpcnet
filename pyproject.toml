@@ -28,6 +28,9 @@ classifiers = [
 ]
 keywords = ["rpc", "quic", "async", "networking", "distributed-systems"]
 
+[project.scripts]
+rpcnet-gen = "rpcnet:rpcnet_gen_cli"
+
 [project.urls]
 Homepage = "https://github.com/jsam/rpcnet"
 Documentation = "https://docs.rs/rpcnet"
@@ -36,3 +39,6 @@ Repository = "https://github.com/jsam/rpcnet"
 [tool.maturin]
 features = ["extension-module"]
 module-name = "rpcnet._rpcnet"
+bindings = "pyo3"
+python-source = "python"
+# data field is not supported in maturin for dev builds

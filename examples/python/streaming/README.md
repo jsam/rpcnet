@@ -1,268 +1,313 @@
-# Python Streaming RPC Examples
+# RpcNet Streaming Example
 
-This directory contains examples demonstrating all three streaming patterns supported by RpcNet's Python bindings:
+Demonstrates RPC with **Rust server** and **Python client** using type-safe code generation.
 
-1. **Server Streaming (1→N)** - One request, multiple responses
-2. **Client Streaming (N→1)** - Multiple requests, one response
-3. **Bidirectional Streaming (N→M)** - Multiple requests, multiple responses
+**Current Status:** ✅ Unary RPC working | 🚧 Streaming patterns coming soon
 
 ## Quick Start
 
-**Easy way:** Use the provided runner script:
+All commands should be run from `examples/python/streaming/` directory.
+
+### 1. Generate Python Client Code
 
 ```bash
-./examples/python/streaming/run_examples.sh
+cd /Users/samuel.picek/inputlayer/rpcnet
+cargo run --bin rpcnet-gen --features codegen,python -- \
+  --input examples/python/streaming/streaming.rpc.rs \
+  --output examples/python/streaming/streamingservice \
+  --python
 ```
 
-The script will:
-- Check and build Python bindings if needed
-- Generate TLS certificates if missing
-- Present an interactive menu to run examples
-- Option to launch all examples in separate terminals
+### 2. Build Rust Server
 
-**Manual way:** See prerequisites below.
-
-## Prerequisites
-
-1. Build the Python bindings:
-   ```bash
-   cd /path/to/rpcnet
-   maturin develop --features python
-   ```
-
-2. Ensure TLS certificates exist:
-   ```bash
-   mkdir -p certs
-   cd certs
-   openssl req -x509 -newkey rsa:4096 -keyout test_key.pem -out test_cert.pem -days 365 -nodes -subj "/CN=localhost"
-   cd ..
-   ```
-
-## Testing the Examples
-
-Each example has a corresponding test client to demonstrate the streaming functionality:
-
-**Terminal 1: Start the server**
 ```bash
-.venv/bin/python -u examples/python/streaming/server_streaming_example.py
+cargo build --release
 ```
 
-**Terminal 2: Run the test client**
+### 3. Start Server
+
 ```bash
-.venv/bin/python -u examples/python/streaming/test_server_streaming.py
+# Terminal 1: Start server (default: 127.0.0.1:50052)
+target/release/server
+
+# Or with custom address
+BIND_ADDR=127.0.0.1:8080 target/release/server
 ```
 
-Or use the interactive runner script which handles everything:
+### 4. Run Python Clients
+
+Four client examples demonstrate each communication pattern:
+
 ```bash
-./examples/python/streaming/run_examples.sh
+# Terminal 2: Run clients
+
+# 1. Unary RPC (✅ working)
+/Users/samuel.picek/inputlayer/rpcnet/.venv/bin/python unary_client.py
+
+# 2. Server Streaming (🚧 coming soon)
+/Users/samuel.picek/inputlayer/rpcnet/.venv/bin/python server_streaming_client.py
+
+# 3. Client Streaming (🚧 coming soon)
+/Users/samuel.picek/inputlayer/rpcnet/.venv/bin/python client_streaming_client.py
+
+# 4. Bidirectional Streaming (🚧 coming soon)
+/Users/samuel.picek/inputlayer/rpcnet/.venv/bin/python bidi_streaming_client.py
+
+# Or run the combined demo
+/Users/samuel.picek/inputlayer/rpcnet/.venv/bin/python client.py
 ```
 
-## Examples
+## Example Output
 
-### 1. Server Streaming (`server_streaming_example.py`)
-
-**Pattern:** Client sends one request, server yields multiple responses
-
-**Use Cases:**
-- Streaming log entries
-- Sending multiple search results
-- Real-time data feeds
-- Progress updates
-
-**Run the server:**
-```bash
-python3 examples/python/streaming/server_streaming_example.py
 ```
+╔====================================================================╗
+║                    RpcNet Python Client Demo                       ║
+╚====================================================================╝
 
-**Test with a Rust client:**
-```rust
-// Send request: {"count": 5}
-// Receive 5 responses, each with index, value, timestamp
-```
+Server: 127.0.0.1:50052
+Certificate: ../../../certs/test_cert.pem
 
-The server will:
-- Accept a request with `{"count": N}`
-- Yield N responses, each containing an index and computed value
-- Simulate processing delay between yields
+🔌 Connecting to server...
+✅ Connected!
 
-### 2. Client Streaming (`client_streaming_example.py`)
+======================================================================
+📨 Testing Unary RPC (single request/response)
+======================================================================
 
-**Pattern:** Client sends multiple requests, server returns one response
+📤 Sending: Hello from Python client #1!
+📥 Response: Server received: Hello from Python client #1!
+   Timestamp: 1700000000
 
-**Use Cases:**
-- File uploads (receiving chunks)
-- Data ingestion and batch processing
-- Aggregating metrics or statistics
-- Collecting sensor data
+📤 Sending: Hello from Python client #2!
+📥 Response: Server received: Hello from Python client #2!
+   Timestamp: 1700000001
 
-**Run the server:**
-```bash
-python3 examples/python/streaming/client_streaming_example.py
-```
+📤 Sending: Hello from Python client #3!
+📥 Response: Server received: Hello from Python client #3!
+   Timestamp: 1700000002
 
-**Test with a Rust client:**
-```rust
-// Send multiple requests: {"data": [bytes...]}
-// Receive one response with aggregated statistics
-```
-
-The server will:
-- Receive multiple chunks from the client
-- Aggregate all data
-- Return a single response with statistics (chunk count, total bytes, hash)
-
-### 3. Bidirectional Streaming (`bidirectional_streaming_example.py`)
-
-**Pattern:** Client sends multiple requests, server yields multiple responses
-
-**Use Cases:**
-- Real-time chat
-- Live data transformation/filtering
-- Interactive processing pipelines
-- Streaming analytics with immediate feedback
-
-**Run the server:**
-```bash
-python3 examples/python/streaming/bidirectional_streaming_example.py
-```
-
-**Test with a Rust client:**
-```rust
-// Send multiple requests: {"message": "text"}
-// Receive response for each message immediately
-```
-
-The server will:
-- Receive messages from the client stream
-- Transform each message (uppercase + prefix)
-- Yield transformed responses immediately
-- Process messages concurrently as they arrive
-
-## Test Clients
-
-Each server example has a corresponding test client:
-
-### `test_server_streaming.py`
-Tests the server streaming example by requesting 5 numbers and consuming the stream.
-
-**Usage:**
-```bash
-# Start server first (Terminal 1)
-.venv/bin/python -u examples/python/streaming/server_streaming_example.py
-
-# Run test client (Terminal 2)
-.venv/bin/python -u examples/python/streaming/test_server_streaming.py
-```
-
-### `test_client_streaming.py`
-Tests the client streaming example by sending 5 text chunks to the server.
-
-**Usage:**
-```bash
-# Start server first (Terminal 1)
-.venv/bin/python -u examples/python/streaming/client_streaming_example.py
-
-# Run test client (Terminal 2)
-.venv/bin/python -u examples/python/streaming/test_client_streaming.py
-```
-
-### `test_bidirectional_streaming.py`
-Tests the bidirectional streaming example by sending 5 messages and receiving transformed responses.
-
-**Usage:**
-```bash
-# Start server first (Terminal 1)
-.venv/bin/python -u examples/python/streaming/bidirectional_streaming_example.py
-
-# Run test client (Terminal 2)
-.venv/bin/python -u examples/python/streaming/test_bidirectional_streaming.py
-```
-
-## Implementation Details
-
-### Server Streaming Handler
-
-```python
-async def stream_numbers(request_bytes: bytes):
-    """Yields multiple responses for one request"""
-    request = _rpcnet.msgpack_to_python_py(request_bytes)
-    count = request.get("count", 10)
-
-    for i in range(count):
-        await asyncio.sleep(0.1)
-        response = {"index": i, "value": i * i}
-        yield _rpcnet.python_to_msgpack_py(response)
-
-# Register with server
-await server.register_server_streaming("stream_numbers", stream_numbers)
-```
-
-### Client Streaming Handler
-
-```python
-async def upload_file(request_stream):
-    """Consumes multiple requests, returns one response"""
-    total_bytes = 0
-
-    async for chunk_bytes in request_stream:
-        chunk = _rpcnet.msgpack_to_python_py(chunk_bytes)
-        total_bytes += len(chunk["data"])
-
-    response = {"total_bytes": total_bytes}
-    return _rpcnet.python_to_msgpack_py(response)
-
-# Register with server
-await server.register_client_streaming("upload_file", upload_file)
-```
-
-### Bidirectional Streaming Handler
-
-```python
-async def echo_transform(request_stream):
-    """Consumes and yields multiple messages"""
-    async for request_bytes in request_stream:
-        request = _rpcnet.msgpack_to_python_py(request_bytes)
-        message = request.get("message", "")
-
-        # Transform and yield immediately
-        transformed = f"ECHO: {message.upper()}"
-        response = {"transformed": transformed}
-        yield _rpcnet.python_to_msgpack_py(response)
-
-# Register with server (note: method is called register_bidirectional on server)
-await server.register_bidirectional("echo_transform", echo_transform)
+======================================================================
+🎉 Demo completed successfully!
+======================================================================
 ```
 
 ## Architecture
 
-These examples use the **persistent event loop thread architecture** implemented in `src/python/event_loop.rs`:
-
-- A dedicated OS thread maintains a persistent Python `asyncio` event loop
-- Handlers execute in this event loop, with proper GIL management
-- Performance: ~4,600 calls/sec with sub-millisecond latency
-- The GIL is released while waiting for requests, allowing concurrent Python access
-
-## Testing
-
-All three patterns are covered by unit tests in:
-- `tests/test_python_streaming.rs` - Handler structure tests
-- Examples in this directory serve as integration tests
-
-Run unit tests:
-```bash
-cargo test --test test_python_streaming --features python
+```
+┌────────────────────────────────────┐
+│      Rust Server (server.rs)       │
+│                                    │
+│  ✅ Unary RPC (working)            │
+│  🚧 Server streaming (planned)     │
+│  🚧 Client streaming (planned)     │
+│  🚧 Bidirectional (planned)        │
+│                                    │
+│  Uses register_typed_polyglot      │
+│  for type-safe MessagePack RPC     │
+└────────────┬───────────────────────┘
+             │
+             │ QUIC/TLS + MessagePack
+             │
+┌────────────▼───────────────────────┐
+│   Python Client (client.py)        │
+│                                    │
+│  StreamingServiceClient            │
+│  - unary() ✅                      │
+│  - server_stream() 🚧              │
+│  - client_stream() 🚧              │
+│  - bidi_stream() 🚧                │
+│                                    │
+│  Auto-generated from .rpc.rs       │
+└────────────────────────────────────┘
 ```
 
-## Notes
+## Files
 
-- All servers use port 900X (9001, 9002, 9003) to avoid conflicts
-- Servers run indefinitely until Ctrl+C
-- Each example includes detailed logging of incoming/outgoing messages
-- MessagePack serialization is used for all data exchange
-- TLS/QUIC transport provides secure, multiplexed connections
+- `streaming.rpc.rs` - Service definition with all RPC patterns
+- `src/server.rs` - Rust server implementation
+- **Python Clients:**
+  - `unary_client.py` - Unary RPC demo (✅ working)
+  - `server_streaming_client.py` - Server streaming demo (🚧 ready)
+  - `client_streaming_client.py` - Client streaming demo (🚧 ready)
+  - `bidi_streaming_client.py` - Bidirectional streaming demo (🚧 ready)
+  - `client.py` - Combined demo
+- `streamingservice/` - Auto-generated Python bindings (gitignored)
 
-## Documentation
+## Communication Patterns
 
-For more details on the Python streaming implementation, see:
-- `PYTHON_ASYNC_LIMITATION.md` - Historical context and implementation details
-- `docs/PYTHON_STREAMING_DESIGN.md` - Design document and architecture
+### 1. Unary RPC (✅ Working)
+
+**Single request → Single response**
+
+The simplest pattern. Client sends one request, server returns one response.
+
+```python
+# unary_client.py
+request = UnaryRequest(message="Hello!")
+response = await client.unary(request)
+print(response.reply)  # "Server received: Hello!"
+```
+
+**Use cases:** Simple queries, commands, CRUD operations
+
+---
+
+### 2. Server Streaming (🚧 Coming Soon)
+
+**Single request → Stream of responses**
+
+Client sends one request, server responds with a stream of messages.
+
+```python
+# server_streaming_client.py
+request = ServerStreamRequest(count=10, prefix="Item")
+response_stream = await client.server_stream(request)
+
+async for response in response_stream:
+    print(f"Received: {response.item}")
+```
+
+**Use cases:**
+- Progress updates for long operations
+- Real-time data feeds (stock prices, sensor data)
+- Paginated results
+- Event notifications
+
+---
+
+### 3. Client Streaming (🚧 Coming Soon)
+
+**Stream of requests → Single response**
+
+Client sends a stream of messages, server returns one aggregated response.
+
+```python
+# client_streaming_client.py
+async def send_values():
+    for value in [10, 20, 30, 40, 50]:
+        yield ClientStreamRequest(value=value)
+
+response = await client.client_stream(send_values())
+print(f"Sum: {response.sum}, Count: {response.count}")
+```
+
+**Use cases:**
+- File uploads (chunked transfer)
+- Metrics/telemetry collection
+- Batch data ingestion
+- Log aggregation
+
+---
+
+### 4. Bidirectional Streaming (🚧 Coming Soon)
+
+**Stream ↔ Stream**
+
+Both client and server send streams simultaneously. Most flexible pattern.
+
+```python
+# bidi_streaming_client.py
+async def send_messages():
+    for text in ["Hello", "World", "RpcNet"]:
+        yield BidiStreamRequest(text=text)
+
+response_stream = await client.bidi_stream(send_messages())
+
+async for response in response_stream:
+    print(f"Echo: {response.echo}, Reversed: {response.reversed}")
+```
+
+**Use cases:**
+- Chat applications
+- Real-time collaboration
+- Game state synchronization
+- Live data transformation pipelines
+
+---
+
+## Implementation
+
+### Server (Rust)
+
+```rust
+// Register unary handler
+let unary_handler = move |request: UnaryRequest| async move {
+    Ok::<UnaryResponse, RpcError>(UnaryResponse {
+        reply: format!("Server received: {}", request.message),
+        timestamp: SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64,
+    })
+};
+server.register_typed_polyglot("StreamingService.unary", unary_handler).await;
+```
+
+### Client (Python)
+
+```python
+client = await StreamingServiceClient.connect(
+    addr="127.0.0.1:50052",
+    cert_path="../../../certs/test_cert.pem",
+    server_name="localhost",
+)
+
+request = UnaryRequest(message="Hello!")
+response = await client.unary(request)
+print(response.reply)  # "Server received: Hello!"
+```
+
+## Configuration
+
+**Server Environment Variables:**
+- `BIND_ADDR` - Server bind address (default: `127.0.0.1:50052`)
+- `RUST_LOG` - Logging level (e.g., `RUST_LOG=info`)
+
+**Client Environment Variables:**
+- `SERVER_ADDR` - Server address (default: `127.0.0.1:50052`)
+- `CERT_PATH` - TLS certificate path (default: `../../../certs/test_cert.pem`)
+
+## Troubleshooting
+
+**"Cannot find test_cert.pem"**
+```bash
+# From repo root
+./generate_certs.sh
+```
+
+**"Connection refused"**
+- Ensure server is running: `target/release/server`
+- Check address matches between client and server
+
+**"Module not found: streamingservice"**
+```bash
+# Regenerate Python bindings
+cd /Users/samuel.picek/inputlayer/rpcnet
+cargo run --bin rpcnet-gen --features codegen,python -- \
+  --input examples/python/streaming/streaming.rpc.rs \
+  --output examples/python/streaming/streamingservice \
+  --python
+```
+
+**Build fails with "no method named register_typed_polyglot_*_stream"**
+- This is expected - streaming methods are not yet implemented in the core library
+- Only unary RPC works currently
+
+## Future: Streaming Patterns
+
+When streaming support is added to the core library, this example will demonstrate:
+
+- **Server Streaming**: Single request → Stream of responses
+- **Client Streaming**: Stream of requests → Single response  
+- **Bidirectional**: Stream ↔ Stream
+
+The service definitions in `streaming.rpc.rs` are ready for when streaming is implemented.
+
+## Type Safety
+
+All types are defined in `streaming.rpc.rs` and code-generated:
+
+- ✅ Compile-time type checking in Rust
+- ✅ Runtime type validation in Python  
+- ✅ IDE autocomplete
+- ✅ Automatic MessagePack serialization

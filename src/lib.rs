@@ -723,19 +723,22 @@ impl RpcServer {
             debug!("📊 Total request_data size: {} bytes", request_data.len());
 
             // First, try to parse as SWIM gossip message
+            debug!("🔍 [SWIM-RECV] Attempting to parse {} bytes as SWIM message", request_data.len());
             match cluster::gossip::SwimMessage::deserialize(&request_data) {
                 Ok(swim_msg) => {
-                    debug!("✅ Successfully deserialized SWIM message!");
+                    debug!("✅ [SWIM-RECV] Successfully deserialized SWIM message: {:?}", swim_msg);
                     if let Some(cluster_membership) = cluster.read().await.as_ref() {
+                        debug!("🔄 [SWIM-RECV] Processing SWIM message with cluster");
                         Self::handle_swim_message(cluster_membership, swim_msg, &stream).await;
+                        debug!("✅ [SWIM-RECV] Completed SWIM message processing");
                     } else {
-                        debug!("⚠️  Received SWIM message but cluster not enabled");
+                        debug!("⚠️  [SWIM-RECV] Received SWIM message but cluster not enabled");
                     }
                     break;
                 }
                 Err(e) => {
                     debug!(
-                        "⚠️  Not a SWIM message (tried {} bytes): {:?}",
+                        "⚠️  [SWIM-RECV] Not a SWIM message (tried {} bytes): {:?}",
                         request_data.len(),
                         e
                     );
@@ -1591,23 +1594,35 @@ impl RpcServer {
         };
 
         let response = match msg {
-            SwimMessage::Ping { from, seq, .. } => SwimMessage::Ack {
-                from: cluster.node_id().clone(),
-                to: from,
-                updates: my_updates,
-                seq,
-            },
+            SwimMessage::Ping { from, seq, .. } => {
+                debug!("📨 [SWIM-HANDLER] Creating ACK response for Ping from {:?} (seq={})", from, seq);
+                SwimMessage::Ack {
+                    from: cluster.node_id().clone(),
+                    to: from,
+                    updates: my_updates,
+                    seq,
+                }
+            }
             SwimMessage::PingReq { .. } => {
+                debug!("🔄 [SWIM-HANDLER] Received PingReq, not responding");
                 return;
             }
             SwimMessage::Ack { .. } => {
+                debug!("✅ [SWIM-HANDLER] Received ACK, not responding");
                 return;
             }
         };
 
+        debug!("📤 [SWIM-HANDLER] Serializing response: {:?}", response);
         if let Ok(response_bytes) = response.serialize() {
+            debug!("📤 [SWIM-HANDLER] Sending {} bytes ACK response", response_bytes.len());
             let mut stream_guard = stream.lock().await;
-            let _ = stream_guard.send_bytes(Bytes::from(response_bytes)).await;
+            match stream_guard.send_bytes(Bytes::from(response_bytes)).await {
+                Ok(_) => debug!("✅ [SWIM-HANDLER] Successfully sent ACK response"),
+                Err(e) => debug!("❌ [SWIM-HANDLER] Failed to send ACK response: {:?}", e),
+            }
+        } else {
+            debug!("❌ [SWIM-HANDLER] Failed to serialize ACK response");
         }
     }
 

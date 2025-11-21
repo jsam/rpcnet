@@ -17,7 +17,6 @@
 //! - **Client Streaming (N→1)**: Python async handler consumes stream, returns single response
 //! - **Bidirectional (N→M)**: Python async generator consumes and yields messages
 
-use pyo3::ffi::c_str;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use std::ffi::CString;

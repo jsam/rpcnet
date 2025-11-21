@@ -24,6 +24,8 @@ pub enum InferenceError {
 
 #[rpcnet::service]
 pub trait Inference {
+    async fn infer(&self, request: InferenceRequest) -> Result<InferenceResponse, InferenceError>;
+
     async fn generate(
         &self,
         request: Pin<Box<dyn Stream<Item = InferenceRequest> + Send>>

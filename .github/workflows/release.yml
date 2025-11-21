@@ -85,7 +85,7 @@ jobs:
         echo "✅ Version check passed"
 
   # Publish to crates.io
-  publish:
+  publish-crates:
     name: Publish to crates.io
     needs: validate
     runs-on: ubuntu-latest
@@ -212,10 +212,108 @@ jobs:
         retention-days: 90
     
 
+  # Build and publish Python packages
+  publish-python:
+    name: Build and Publish Python Wheels
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    if: |
+      github.event_name == 'push' || 
+      (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64
+            manylinux: manylinux2014
+          - os: ubuntu-latest
+            target: aarch64
+            manylinux: manylinux2014
+          - os: macos-latest
+            target: x86_64
+          - os: macos-latest
+            target: aarch64
+          - os: windows-latest
+            target: x86_64
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}-unknown-linux-gnu
+      if: matrix.os == 'ubuntu-latest'
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}-apple-darwin
+      if: matrix.os == 'macos-latest'
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}-pc-windows-msvc
+      if: matrix.os == 'windows-latest'
+    
+    - name: Build wheels (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      uses: PyO3/maturin-action@v1
+      with:
+        target: ${{ matrix.target }}
+        manylinux: ${{ matrix.manylinux }}
+        args: --release --features extension-module,codegen,python -o dist
+        before-script-linux: |
+          # Build rpcnet-gen binary first
+          cargo build --release --bin rpcnet-gen --features codegen,python --target ${{ matrix.target }}-unknown-linux-gnu
+    
+    - name: Build wheels (macOS)
+      if: matrix.os == 'macos-latest'
+      uses: PyO3/maturin-action@v1
+      with:
+        target: ${{ matrix.target }}
+        args: --release --features extension-module,codegen,python -o dist
+        before-script: |
+          # Build rpcnet-gen binary first
+          cargo build --release --bin rpcnet-gen --features codegen,python --target ${{ matrix.target }}-apple-darwin
+    
+    - name: Build wheels (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: PyO3/maturin-action@v1
+      with:
+        target: ${{ matrix.target }}
+        args: --release --features extension-module,codegen,python -o dist
+        before-script: |
+          # Build rpcnet-gen binary first
+          cargo build --release --bin rpcnet-gen --features codegen,python --target ${{ matrix.target }}-pc-windows-msvc
+    
+    - name: Upload wheels
+      uses: actions/upload-artifact@v4
+      with:
+        name: python-wheels-${{ matrix.os }}-${{ matrix.target }}
+        path: dist
+        retention-days: 30
+    
+    - name: Publish to PyPI
+      if: github.event_name == 'push'
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        pip install twine
+        twine upload dist/* --skip-existing
+
   # Update documentation
   update-docs:
     name: Update Documentation
-    needs: publish
+    needs: [publish-crates, publish-python]
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     steps:
@@ -231,18 +329,23 @@ jobs:
 
   # Post-release checks
   verify-published:
-    name: Verify Published Package
-    needs: publish
+    name: Verify Published Packages
+    needs: [publish-crates, publish-python]
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     steps:
-    - name: Wait for crates.io to sync
+    - name: Wait for packages to sync
       run: sleep 60
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
     
-    - name: Verify package is available
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    
+    - name: Verify crates.io package
       run: |
         VERSION="${GITHUB_REF#refs/tags/}"
         
@@ -255,7 +358,7 @@ jobs:
           echo "⚠️  Package may still be indexing. Please check manually."
         fi
     
-    - name: Test installation
+    - name: Test Rust installation
       run: |
         VERSION="${GITHUB_REF#refs/tags/}"
         
@@ -263,11 +366,28 @@ jobs:
         cargo init --bin test-install
         cd test-install
         cargo add rpcnet@${VERSION} || echo "Package may still be syncing"
+    
+    - name: Test Python installation
+      run: |
+        VERSION="${GITHUB_REF#refs/tags/}"
+        
+        # Create virtual environment and test installation
+        python -m venv test-venv
+        source test-venv/bin/activate || .\test-venv\Scripts\activate
+        
+        # Try to install from PyPI
+        pip install rpcnet==${VERSION} || echo "Package may still be syncing"
+        
+        # Test that rpcnet-gen CLI is available
+        which rpcnet-gen || echo "rpcnet-gen CLI not found in PATH"
+        
+        # Test Python import
+        python -c "import rpcnet; print('✅ Python package imported successfully')" || echo "Import test pending"
 
   # Announce release
   announce:
     name: Announce Release
-    needs: [publish, build-artifacts, verify-published]
+    needs: [publish-crates, publish-python, build-artifacts, verify-published]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && success()
     steps:
@@ -279,18 +399,30 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### ✅ Published Successfully" >> $GITHUB_STEP_SUMMARY
         echo "- 📦 [crates.io/crates/rpcnet](https://crates.io/crates/rpcnet)" >> $GITHUB_STEP_SUMMARY
+        echo "- 🐍 [pypi.org/project/rpcnet](https://pypi.org/project/rpcnet)" >> $GITHUB_STEP_SUMMARY
         echo "- 📚 [docs.rs/rpcnet/${VERSION}](https://docs.rs/rpcnet/${VERSION})" >> $GITHUB_STEP_SUMMARY
-        echo "- 🏗️ Release artifacts built for Linux and macOS" >> $GITHUB_STEP_SUMMARY
+        echo "- 🏗️ Release artifacts built for Linux, macOS, and Windows" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Installation" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "#### Rust" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`toml" >> $GITHUB_STEP_SUMMARY
         echo "[dependencies]" >> $GITHUB_STEP_SUMMARY
         echo "rpcnet = \"${VERSION}\"" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
+        echo "#### Python" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+        echo "pip install rpcnet==${VERSION}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "# CLI tool included:" >> $GITHUB_STEP_SUMMARY
+        echo "rpcnet-gen --help" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
         echo "### What's Next?" >> $GITHUB_STEP_SUMMARY
         echo "- Documentation will be available on docs.rs within a few minutes" >> $GITHUB_STEP_SUMMARY
         echo "- Binary releases are available as workflow artifacts" >> $GITHUB_STEP_SUMMARY
+        echo "- Python wheels available for multiple platforms" >> $GITHUB_STEP_SUMMARY
         echo "- All CI checks passed ✅" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "Thank you for using rpcnet! 🚀" >> $GITHUB_STEP_SUMMARY
