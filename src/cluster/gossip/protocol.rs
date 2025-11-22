@@ -232,48 +232,44 @@ impl SwimProtocol {
         msg: &SwimMessage,
     ) -> Result<Option<SwimMessage>, Box<dyn std::error::Error + Send + Sync>> {
         use tracing::debug;
-        
+
         debug!("📡 [SWIM-SEND] Getting connection to {}", addr);
         let conn = pool.get_or_create(addr).await?;
 
         let bytes = msg.serialize()?;
-        debug!("📡 [SWIM-SEND] Serialized {} bytes for {:?}", bytes.len(), msg);
+        debug!(
+            "📡 [SWIM-SEND] Serialized {} bytes for {:?}",
+            bytes.len(),
+            msg
+        );
 
         let mut conn_guard = conn.connection.lock().await;
         debug!("📡 [SWIM-SEND] Opening bidirectional stream to {}", addr);
-        let mut stream = conn_guard
-            .open_bidirectional_stream()
-            .await
-            .map_err(|e| {
-                debug!("❌ [SWIM-SEND] Failed to open stream: {:?}", e);
-                Box::new(e) as Box<dyn std::error::Error + Send + Sync>
-            })?;
-        
+        let mut stream = conn_guard.open_bidirectional_stream().await.map_err(|e| {
+            debug!("❌ [SWIM-SEND] Failed to open stream: {:?}", e);
+            Box::new(e) as Box<dyn std::error::Error + Send + Sync>
+        })?;
+
         debug!("📡 [SWIM-SEND] Sending {} bytes to {}", bytes.len(), addr);
-        stream
-            .send(bytes.into())
-            .await
-            .map_err(|e| {
-                debug!("❌ [SWIM-SEND] Failed to send: {:?}", e);
-                Box::new(e) as Box<dyn std::error::Error + Send + Sync>
-            })?;
+        stream.send(bytes.into()).await.map_err(|e| {
+            debug!("❌ [SWIM-SEND] Failed to send: {:?}", e);
+            Box::new(e) as Box<dyn std::error::Error + Send + Sync>
+        })?;
 
         debug!("📡 [SWIM-SEND] Waiting for response from {}", addr);
-        let response = if let Some(data) = stream
-            .receive()
-            .await
-            .map_err(|e| {
-                debug!("❌ [SWIM-SEND] Failed to receive: {:?}", e);
+        let response = if let Some(data) = stream.receive().await.map_err(|e| {
+            debug!("❌ [SWIM-SEND] Failed to receive: {:?}", e);
+            Box::new(e) as Box<dyn std::error::Error + Send + Sync>
+        })? {
+            debug!(
+                "📡 [SWIM-SEND] Received {} bytes response from {}",
+                data.len(),
+                addr
+            );
+            SwimMessage::deserialize(&data).map(Some).map_err(|e| {
+                debug!("❌ [SWIM-SEND] Failed to deserialize response: {:?}", e);
                 Box::new(e) as Box<dyn std::error::Error + Send + Sync>
             })?
-        {
-            debug!("📡 [SWIM-SEND] Received {} bytes response from {}", data.len(), addr);
-            SwimMessage::deserialize(&data)
-                .map(Some)
-                .map_err(|e| {
-                    debug!("❌ [SWIM-SEND] Failed to deserialize response: {:?}", e);
-                    Box::new(e) as Box<dyn std::error::Error + Send + Sync>
-                })?
         } else {
             debug!("⚠️  [SWIM-SEND] No response data from {}", addr);
             None
@@ -281,7 +277,11 @@ impl SwimProtocol {
         drop(conn_guard);
 
         pool.release(&addr);
-        debug!("✅ [SWIM-SEND] Completed exchange with {}, got response: {}", addr, response.is_some());
+        debug!(
+            "✅ [SWIM-SEND] Completed exchange with {}, got response: {}",
+            addr,
+            response.is_some()
+        );
         Ok(response)
     }
 }

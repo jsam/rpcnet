@@ -16,15 +16,15 @@ pub mod error;
 #[cfg(feature = "python")]
 pub mod event_loop;
 #[cfg(feature = "python")]
-pub mod worker_config;
-#[cfg(feature = "python")]
-pub mod worker_manager;
-#[cfg(feature = "python")]
 pub mod serde;
 #[cfg(feature = "python")]
 pub mod server;
 #[cfg(feature = "python")]
 pub mod streaming;
+#[cfg(feature = "python")]
+pub mod worker_config;
+#[cfg(feature = "python")]
+pub mod worker_manager;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;

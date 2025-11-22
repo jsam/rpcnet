@@ -2,9 +2,11 @@
 // Tests thread configuration and environment variable parsing
 
 use rpcnet::runtime;
+use serial_test::serial;
 use std::env;
 
 #[test]
+#[serial]
 fn test_server_worker_threads_uses_env_var() {
     // Set environment variable
     env::set_var(runtime::SERVER_THREADS_ENV, "16");
@@ -19,6 +21,7 @@ fn test_server_worker_threads_uses_env_var() {
 }
 
 #[test]
+#[serial]
 fn test_server_worker_threads_fallback_to_default() {
     // Ensure environment variable is not set
     env::remove_var(runtime::SERVER_THREADS_ENV);
@@ -30,6 +33,7 @@ fn test_server_worker_threads_fallback_to_default() {
 }
 
 #[test]
+#[serial]
 fn test_server_worker_threads_with_invalid_env() {
     // Set invalid environment variable
     env::set_var(runtime::SERVER_THREADS_ENV, "invalid");
@@ -44,6 +48,7 @@ fn test_server_worker_threads_with_invalid_env() {
 }
 
 #[test]
+#[serial]
 fn test_server_worker_threads_with_zero() {
     // Set environment variable to 0 (invalid)
     env::set_var(runtime::SERVER_THREADS_ENV, "0");
@@ -58,6 +63,7 @@ fn test_server_worker_threads_with_zero() {
 }
 
 #[test]
+#[serial]
 fn test_server_worker_threads_with_negative() {
     // Set environment variable to negative number (invalid)
     env::set_var(runtime::SERVER_THREADS_ENV, "-1");
@@ -72,6 +78,7 @@ fn test_server_worker_threads_with_negative() {
 }
 
 #[test]
+#[serial]
 fn test_threads_from_env_with_valid_key() {
     let test_key = "RPCNET_TEST_THREADS";
     env::set_var(test_key, "8");
@@ -85,6 +92,7 @@ fn test_threads_from_env_with_valid_key() {
 }
 
 #[test]
+#[serial]
 fn test_threads_from_env_with_missing_key() {
     let test_key = "RPCNET_NONEXISTENT_KEY";
     env::remove_var(test_key);
@@ -95,6 +103,7 @@ fn test_threads_from_env_with_missing_key() {
 }
 
 #[test]
+#[serial]
 fn test_threads_from_env_with_whitespace() {
     let test_key = "RPCNET_TEST_THREADS_WS";
     env::set_var(test_key, "  12  ");
@@ -109,6 +118,7 @@ fn test_threads_from_env_with_whitespace() {
 }
 
 #[test]
+#[serial]
 fn test_threads_from_env_with_empty_string() {
     let test_key = "RPCNET_TEST_THREADS_EMPTY";
     env::set_var(test_key, "");
@@ -122,12 +132,14 @@ fn test_threads_from_env_with_empty_string() {
 }
 
 #[test]
+#[serial]
 fn test_server_threads_env_constant() {
     // Verify the constant has the expected value
     assert_eq!(runtime::SERVER_THREADS_ENV, "RPCNET_SERVER_THREADS");
 }
 
 #[test]
+#[serial]
 fn test_server_worker_threads_with_large_number() {
     // Set environment variable to a large number
     env::set_var(runtime::SERVER_THREADS_ENV, "1024");
@@ -141,6 +153,7 @@ fn test_server_worker_threads_with_large_number() {
 }
 
 #[test]
+#[serial]
 fn test_server_worker_threads_with_one() {
     // Set environment variable to 1 (minimum valid value)
     env::set_var(runtime::SERVER_THREADS_ENV, "1");
@@ -154,6 +167,7 @@ fn test_server_worker_threads_with_one() {
 }
 
 #[test]
+#[serial]
 fn test_server_worker_threads_typical_values() {
     // Test common CPU core counts
     // Clean up first to avoid interference from other tests
@@ -172,6 +186,7 @@ fn test_server_worker_threads_typical_values() {
 }
 
 #[test]
+#[serial]
 fn test_threads_from_env_case_sensitivity() {
     // Environment variable names are case-sensitive
     let correct_key = "RPCNET_CASE_TEST";
@@ -190,6 +205,7 @@ fn test_threads_from_env_case_sensitivity() {
 }
 
 #[test]
+#[serial]
 fn test_threads_from_env_with_decimal() {
     // Decimal numbers should not be parsed
     let test_key = "RPCNET_TEST_DECIMAL";
@@ -204,6 +220,7 @@ fn test_threads_from_env_with_decimal() {
 }
 
 #[test]
+#[serial]
 fn test_threads_from_env_with_hex() {
     // Hexadecimal should not be parsed (unless explicitly supported)
     let test_key = "RPCNET_TEST_HEX";
@@ -219,6 +236,7 @@ fn test_threads_from_env_with_hex() {
 }
 
 #[test]
+#[serial]
 fn test_server_worker_threads_idempotent() {
     // Calling multiple times should return same result
     // Clean up first to avoid interference from other tests
@@ -239,6 +257,7 @@ fn test_server_worker_threads_idempotent() {
 }
 
 #[test]
+#[serial]
 fn test_server_worker_threads_env_changes() {
     // Test that changes to environment variable are reflected
     env::set_var(runtime::SERVER_THREADS_ENV, "4");
@@ -254,6 +273,7 @@ fn test_server_worker_threads_env_changes() {
 }
 
 #[test]
+#[serial]
 fn test_threads_from_env_with_leading_zeros() {
     let test_key = "RPCNET_TEST_LEADING_ZEROS";
     env::set_var(test_key, "0008");
@@ -268,6 +288,7 @@ fn test_threads_from_env_with_leading_zeros() {
 }
 
 #[test]
+#[serial]
 fn test_threads_from_env_with_plus_sign() {
     let test_key = "RPCNET_TEST_PLUS";
     env::set_var(test_key, "+10");

@@ -1,8 +1,8 @@
 use crate::cluster::connection_pool::{ConnectionPool, ConnectionPoolImpl, PoolConfig};
 use crate::cluster::events::{ClusterEvent, ClusterEventBroadcaster, ClusterEventReceiver};
 use crate::cluster::gossip::{
-    GossipConfig, GossipProtocol, GossipQueue, NodeId, NodeState, NodeUpdate, Priority,
-    SwimProtocol, swim::SwimMessage,
+    swim::SwimMessage, GossipConfig, GossipProtocol, GossipQueue, NodeId, NodeState, NodeUpdate,
+    Priority, SwimProtocol,
 };
 use crate::cluster::health_checker::{HealthCheckConfig, HealthChecker};
 use crate::cluster::incarnation::{Incarnation, NodeStatus};
@@ -161,20 +161,32 @@ impl ClusterMembership {
 
     async fn bootstrap(&self, seeds: Vec<SocketAddr>) -> Result<(), ClusterError> {
         use tracing::{debug, info};
-        
-        info!("🌱 [BOOTSTRAP] Starting bootstrap with {} seeds", seeds.len());
+
+        info!(
+            "🌱 [BOOTSTRAP] Starting bootstrap with {} seeds",
+            seeds.len()
+        );
         for seed_addr in seeds {
             if seed_addr == self.node_addr {
                 info!("🌱 [BOOTSTRAP] Skipping self address: {}", seed_addr);
                 continue;
             }
 
-            info!("🌱 [BOOTSTRAP] Attempting to connect to seed: {}", seed_addr);
+            info!(
+                "🌱 [BOOTSTRAP] Attempting to connect to seed: {}",
+                seed_addr
+            );
             match self.pool.get_or_create(seed_addr).await {
                 Ok(conn) => {
-                    info!("✅ [BOOTSTRAP] Successfully connected to seed: {}", seed_addr);
-                    eprintln!("[BOOTSTRAP] Connected to seed {}, sending initial ping...", seed_addr);
-                    
+                    info!(
+                        "✅ [BOOTSTRAP] Successfully connected to seed: {}",
+                        seed_addr
+                    );
+                    eprintln!(
+                        "[BOOTSTRAP] Connected to seed {}, sending initial ping...",
+                        seed_addr
+                    );
+
                     // Send initial ping to announce ourselves
                     debug!("📤 [BOOTSTRAP] Sending initial ping to seed to announce ourselves");
                     let self_status = self.registry.get(&self.node_id);
@@ -189,20 +201,29 @@ impl ClusterMembership {
                     } else {
                         vec![]
                     };
-                    
+
                     let ping = SwimMessage::Ping {
                         from: self.node_id.clone(),
                         from_addr: self.node_addr,
                         updates: my_updates,
                         seq: 0,
                     };
-                    
+
                     // Send ping on bidirectional stream
-                    match conn.connection.lock().await.open_bidirectional_stream().await {
+                    match conn
+                        .connection
+                        .lock()
+                        .await
+                        .open_bidirectional_stream()
+                        .await
+                    {
                         Ok(mut stream) => {
                             if let Ok(bytes) = ping.serialize() {
                                 let bytes_len = bytes.len();
-                                debug!("📤 [BOOTSTRAP] Serialized {} bytes for initial ping", bytes_len);
+                                debug!(
+                                    "📤 [BOOTSTRAP] Serialized {} bytes for initial ping",
+                                    bytes_len
+                                );
                                 match stream.send(bytes.into()).await {
                                     Ok(_) => {
                                         eprintln!("[BOOTSTRAP] ✅ Sent {} bytes ping to seed, waiting for ACK...", bytes_len);
@@ -210,8 +231,10 @@ impl ClusterMembership {
                                         // Wait for ACK (optional, timeout quickly)
                                         match tokio::time::timeout(
                                             std::time::Duration::from_millis(500),
-                                            stream.receive()
-                                        ).await {
+                                            stream.receive(),
+                                        )
+                                        .await
+                                        {
                                             Ok(Ok(Some(_ack_data))) => {
                                                 info!("✅ [BOOTSTRAP] Received ACK from seed");
                                             }
@@ -221,16 +244,22 @@ impl ClusterMembership {
                                         }
                                     }
                                     Err(e) => {
-                                        debug!("❌ [BOOTSTRAP] Failed to send initial ping: {:?}", e);
+                                        debug!(
+                                            "❌ [BOOTSTRAP] Failed to send initial ping: {:?}",
+                                            e
+                                        );
                                     }
                                 }
                             }
                         }
                         Err(e) => {
-                            debug!("❌ [BOOTSTRAP] Failed to open stream for initial ping: {:?}", e);
+                            debug!(
+                                "❌ [BOOTSTRAP] Failed to open stream for initial ping: {:?}",
+                                e
+                            );
                         }
                     }
-                    
+
                     self.pool.release(&seed_addr);
 
                     let seed_node = NodeStatus {
@@ -242,12 +271,18 @@ impl ClusterMembership {
                         tags: HashMap::new(),
                     };
                     self.registry.insert(seed_node.clone());
-                    info!("✅ [BOOTSTRAP] Added seed to registry: {:?}", seed_node.node_id);
+                    info!(
+                        "✅ [BOOTSTRAP] Added seed to registry: {:?}",
+                        seed_node.node_id
+                    );
 
                     return Ok(());
                 }
                 Err(e) => {
-                    debug!("❌ [BOOTSTRAP] Failed to connect to seed {}: {:?}", seed_addr, e);
+                    debug!(
+                        "❌ [BOOTSTRAP] Failed to connect to seed {}: {:?}",
+                        seed_addr, e
+                    );
                     continue;
                 }
             }

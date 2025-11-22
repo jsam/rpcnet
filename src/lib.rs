@@ -723,10 +723,16 @@ impl RpcServer {
             debug!("📊 Total request_data size: {} bytes", request_data.len());
 
             // First, try to parse as SWIM gossip message
-            debug!("🔍 [SWIM-RECV] Attempting to parse {} bytes as SWIM message", request_data.len());
+            debug!(
+                "🔍 [SWIM-RECV] Attempting to parse {} bytes as SWIM message",
+                request_data.len()
+            );
             match cluster::gossip::SwimMessage::deserialize(&request_data) {
                 Ok(swim_msg) => {
-                    debug!("✅ [SWIM-RECV] Successfully deserialized SWIM message: {:?}", swim_msg);
+                    debug!(
+                        "✅ [SWIM-RECV] Successfully deserialized SWIM message: {:?}",
+                        swim_msg
+                    );
                     if let Some(cluster_membership) = cluster.read().await.as_ref() {
                         debug!("🔄 [SWIM-RECV] Processing SWIM message with cluster");
                         Self::handle_swim_message(cluster_membership, swim_msg, &stream).await;
@@ -1595,7 +1601,10 @@ impl RpcServer {
 
         let response = match msg {
             SwimMessage::Ping { from, seq, .. } => {
-                debug!("📨 [SWIM-HANDLER] Creating ACK response for Ping from {:?} (seq={})", from, seq);
+                debug!(
+                    "📨 [SWIM-HANDLER] Creating ACK response for Ping from {:?} (seq={})",
+                    from, seq
+                );
                 SwimMessage::Ack {
                     from: cluster.node_id().clone(),
                     to: from,
@@ -1615,7 +1624,10 @@ impl RpcServer {
 
         debug!("📤 [SWIM-HANDLER] Serializing response: {:?}", response);
         if let Ok(response_bytes) = response.serialize() {
-            debug!("📤 [SWIM-HANDLER] Sending {} bytes ACK response", response_bytes.len());
+            debug!(
+                "📤 [SWIM-HANDLER] Sending {} bytes ACK response",
+                response_bytes.len()
+            );
             let mut stream_guard = stream.lock().await;
             match stream_guard.send_bytes(Bytes::from(response_bytes)).await {
                 Ok(_) => debug!("✅ [SWIM-HANDLER] Successfully sent ACK response"),

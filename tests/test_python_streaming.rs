@@ -74,9 +74,6 @@ async def sum_stream(request_stream):
             // Verify handler is callable
             assert!(handler.is_callable());
         });
-
-        // Test passes if handler structure is valid
-        assert!(true);
     }
 
     #[tokio::test]
@@ -108,9 +105,6 @@ async def echo_transform(request_stream):
             // Verify handler is callable
             assert!(handler.is_callable());
         });
-
-        // Test passes if handler structure is valid
-        assert!(true);
     }
 
     #[tokio::test]

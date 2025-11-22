@@ -1,6 +1,13 @@
 # RPC.NET Makefile
 # Provides convenient commands for testing, coverage, and development
 
+# Project paths
+ROOT_DIR := $(shell pwd)
+VENV_PYTHON := $(ROOT_DIR)/.venv/bin/python
+VENV_PIP := $(ROOT_DIR)/.venv/bin/pip
+VENV_MATURIN := $(ROOT_DIR)/.venv/bin/maturin
+RPCNET_GEN := $(ROOT_DIR)/target/release/rpcnet-gen
+
 .PHONY: help test test-quick test-only test-unit test-integration lint lint-quick pre-commit coverage coverage-html clean doc bench examples publish publish-dry-run
 
 # Default target
@@ -494,20 +501,19 @@ python-example-client-server:
 	@if [ ! -d ".venv" ]; then \
 		echo "Creating virtual environment..."; \
 		python3 -m venv .venv; \
-		.venv/bin/pip install -q maturin cloudpickle; \
+		$(VENV_PIP) install -q maturin cloudpickle; \
 	fi
-	@.venv/bin/maturin develop --release --features extension-module,codegen,python --quiet
-	@cd examples/python/client_server && \
-		echo "Generating Python client code..." && \
-		../../../target/release/rpcnet-gen --input benchmark.rpc.rs --output generated --python && \
-		echo "Starting server..." && \
-		PYTHON=$$(pwd)/../../../.venv/bin/python ../../../.venv/bin/python server.py & SERVER_PID=$$! && \
-		sleep 10 && \
-		echo "Running blocking client test..." && \
-		(timeout 60 ../../../.venv/bin/python client.py || (kill $$SERVER_PID 2>/dev/null; exit 1)) && \
-		echo "Running async client test..." && \
-		(timeout 60 ../../../.venv/bin/python async_client.py || (kill $$SERVER_PID 2>/dev/null; exit 1)) && \
-		kill $$SERVER_PID 2>/dev/null || true
+	@$(VENV_MATURIN) develop --release --features extension-module,codegen,python --quiet
+	@echo "Generating Python client code..."
+	@cd examples/python/client_server && $(RPCNET_GEN) --input benchmark.rpc.rs --output generated --python
+	@echo "Starting server..."
+	@cd examples/python/client_server && PYTHON=$(VENV_PYTHON) $(VENV_PYTHON) $(ROOT_DIR)/examples/python/client_server/server.py & echo $$! > /tmp/rpcnet_test_server.pid && sleep 10
+	@echo "Running blocking client test..."
+	@cd examples/python/client_server && CERT_PATH=$(ROOT_DIR)/certs/test_cert.pem timeout 60 $(VENV_PYTHON) $(ROOT_DIR)/examples/python/client_server/client.py || (kill $$(cat /tmp/rpcnet_test_server.pid) 2>/dev/null; rm -f /tmp/rpcnet_test_server.pid; exit 1)
+	@echo "Running async client test..."
+	@cd examples/python/client_server && CERT_PATH=$(ROOT_DIR)/certs/test_cert.pem timeout 60 $(VENV_PYTHON) $(ROOT_DIR)/examples/python/client_server/async_client.py || (kill $$(cat /tmp/rpcnet_test_server.pid) 2>/dev/null; rm -f /tmp/rpcnet_test_server.pid; exit 1)
+	@kill $$(cat /tmp/rpcnet_test_server.pid) 2>/dev/null || true
+	@rm -f /tmp/rpcnet_test_server.pid
 	@echo "✅ Client/Server example passed"
 
 python-example-streaming:
@@ -518,22 +524,21 @@ python-example-streaming:
 	@if [ ! -d ".venv" ]; then \
 		echo "Creating virtual environment..."; \
 		python3 -m venv .venv; \
-		.venv/bin/pip install -q maturin cloudpickle; \
+		$(VENV_PIP) install -q maturin cloudpickle; \
 	fi
-	@.venv/bin/maturin develop --release --features extension-module,codegen,python --quiet
-	@cd examples/python/streaming && \
-		echo "Building Rust server..." && \
-		cargo build --release && \
-		echo "Generating Python client code..." && \
-		../../../target/release/rpcnet-gen --input streaming.rpc.rs --output . --python && \
-		echo "Testing import..." && \
-		../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); from streamingservice.client import StreamingServiceClient; print('✅ streamingservice.client imports')" && \
-		echo "Starting server..." && \
-		BIND_ADDR=127.0.0.1:50052 ./target/release/server & SERVER_PID=$$! && \
-		sleep 5 && \
-		echo "Running unary client test..." && \
-		(timeout 30 ../../../.venv/bin/python unary_client.py || (kill $$SERVER_PID 2>/dev/null; exit 1)) && \
-		kill $$SERVER_PID 2>/dev/null || true
+	@$(VENV_MATURIN) develop --release --features extension-module,codegen,python --quiet
+	@echo "Building Rust server..."
+	@cd examples/python/streaming && cargo build --release
+	@echo "Generating Python client code..."
+	@cd examples/python/streaming && $(RPCNET_GEN) --input streaming.rpc.rs --output . --python
+	@echo "Testing import..."
+	@cd examples/python/streaming && $(VENV_PYTHON) -c "import sys; sys.path.insert(0, '.'); from streamingservice.client import StreamingServiceClient; print('✅ streamingservice.client imports')"
+	@echo "Starting server..."
+	@cd examples/python/streaming && BIND_ADDR=127.0.0.1:50052 ./target/release/server > /tmp/rpcnet_streaming_server.log 2>&1 & echo $$! > /tmp/rpcnet_streaming_server.pid && sleep 5
+	@echo "Running unary client test..."
+	@CERT_PATH=$(ROOT_DIR)/certs/test_cert.pem timeout 30 $(VENV_PYTHON) $(ROOT_DIR)/examples/python/streaming/unary_client.py || (kill $$(cat /tmp/rpcnet_streaming_server.pid) 2>/dev/null; rm -f /tmp/rpcnet_streaming_server.pid; exit 1)
+	@kill $$(cat /tmp/rpcnet_streaming_server.pid) 2>/dev/null || true
+	@rm -f /tmp/rpcnet_streaming_server.pid
 	@echo "✅ Streaming example passed"
 
 python-example-cluster:
@@ -544,33 +549,27 @@ python-example-cluster:
 	@if [ ! -d ".venv" ]; then \
 		echo "Creating virtual environment..."; \
 		python3 -m venv .venv; \
-		.venv/bin/pip install -q maturin cloudpickle; \
+		$(VENV_PIP) install -q maturin cloudpickle; \
 	fi
-	@.venv/bin/maturin develop --release --features extension-module,codegen,python --quiet
-	@cd examples/python/cluster && \
-		echo "Generating Rust code for cluster..." && \
-		mkdir -p src/generated && \
-		../../../target/release/rpcnet-gen --input inference.rpc.rs --output src/generated && \
-		../../../target/release/rpcnet-gen --input director_registry.rpc.rs --output src/generated && \
-		echo "Building Rust components..." && \
-		cargo build --release && \
-		echo "Generating Python code..." && \
-		../../../target/release/rpcnet-gen --input inference.rpc.rs --output . --python && \
-		../../../target/release/rpcnet-gen --input director_registry.rpc.rs --output . --python && \
-		echo "Testing imports..." && \
-		../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); from inference.server import InferenceServer; print('✅ inference.server imports')" && \
-		../../../.venv/bin/python -c "import sys; sys.path.insert(0, '.'); from directorregistry.client import DirectorRegistryClient; print('✅ directorregistry.client imports')" && \
-		echo "Starting director..." && \
-		DIRECTOR_ADDR=127.0.0.1:61000 ./target/release/director & DIRECTOR_PID=$$! && \
-		sleep 8 && \
-		echo "Starting Python worker..." && \
-		PYTHON=$$(pwd)/../../../.venv/bin/python \
-		WORKER_LABEL=test-worker WORKER_ADDR=127.0.0.1:62001 DIRECTOR_ADDR=127.0.0.1:61000 \
-		CERT_PATH=../../../certs/test_cert.pem KEY_PATH=../../../certs/test_key.pem PROCESSES=2 \
-		../../../.venv/bin/python python_worker.py & WORKER_PID=$$! && \
-		sleep 10 && \
-		echo "Running cluster client test..." && \
-		(DIRECTOR_ADDR=127.0.0.1:61000 CERT_PATH=../../../certs/test_cert.pem \
-		timeout 60 ../../../.venv/bin/python client.py || (kill $$WORKER_PID $$DIRECTOR_PID 2>/dev/null; exit 1)) && \
-		kill $$WORKER_PID $$DIRECTOR_PID 2>/dev/null || true
+	@$(VENV_MATURIN) develop --release --features extension-module,codegen,python --quiet
+	@echo "Generating Rust code for cluster..."
+	@cd examples/python/cluster && mkdir -p src/generated
+	@cd examples/python/cluster && $(RPCNET_GEN) --input inference.rpc.rs --output src/generated
+	@cd examples/python/cluster && $(RPCNET_GEN) --input director_registry.rpc.rs --output src/generated
+	@echo "Building Rust components..."
+	@cd examples/python/cluster && cargo build --release
+	@echo "Generating Python code..."
+	@cd examples/python/cluster && $(RPCNET_GEN) --input inference.rpc.rs --output . --python
+	@cd examples/python/cluster && $(RPCNET_GEN) --input director_registry.rpc.rs --output . --python
+	@echo "Testing imports..."
+	@cd examples/python/cluster && $(VENV_PYTHON) -c "import sys; sys.path.insert(0, '.'); from inference.server import InferenceServer; print('✅ inference.server imports')"
+	@cd examples/python/cluster && $(VENV_PYTHON) -c "import sys; sys.path.insert(0, '.'); from directorregistry.client import DirectorRegistryClient; print('✅ directorregistry.client imports')"
+	@echo "Starting director..."
+	@cd examples/python/cluster && DIRECTOR_ADDR=127.0.0.1:61000 ./target/release/director > /tmp/rpcnet_director.log 2>&1 & echo $$! > /tmp/rpcnet_director.pid && sleep 8
+	@echo "Starting Python worker..."
+	@cd examples/python/cluster && PYTHON=$(VENV_PYTHON) WORKER_LABEL=test-worker WORKER_ADDR=127.0.0.1:62001 DIRECTOR_ADDR=127.0.0.1:61000 CERT_PATH=$(ROOT_DIR)/certs/test_cert.pem KEY_PATH=$(ROOT_DIR)/certs/test_key.pem PROCESSES=2 $(VENV_PYTHON) $(ROOT_DIR)/examples/python/cluster/python_worker.py > /tmp/rpcnet_worker.log 2>&1 & echo $$! > /tmp/rpcnet_worker.pid && sleep 10
+	@echo "Running cluster client test..."
+	@DIRECTOR_ADDR=127.0.0.1:61000 CERT_PATH=$(ROOT_DIR)/certs/test_cert.pem timeout 60 $(VENV_PYTHON) $(ROOT_DIR)/examples/python/cluster/client.py || (kill $$(cat /tmp/rpcnet_worker.pid /tmp/rpcnet_director.pid) 2>/dev/null; rm -f /tmp/rpcnet_worker.pid /tmp/rpcnet_director.pid; exit 1)
+	@kill $$(cat /tmp/rpcnet_worker.pid /tmp/rpcnet_director.pid) 2>/dev/null || true
+	@rm -f /tmp/rpcnet_worker.pid /tmp/rpcnet_director.pid
 	@echo "✅ Cluster example passed"

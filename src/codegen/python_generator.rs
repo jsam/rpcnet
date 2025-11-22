@@ -445,7 +445,9 @@ impl PythonGenerator {
             service_name
         ));
         code.push_str("    This client provides synchronous methods without async/await.\n");
-        code.push_str("    It uses the BlockingClient internally which releases the GIL during I/O.\n");
+        code.push_str(
+            "    It uses the BlockingClient internally which releases the GIL during I/O.\n",
+        );
         code.push_str("    \n");
         code.push_str("    Performance characteristics:\n");
         code.push_str("    - ~30% lower latency than async client\n");
@@ -546,7 +548,7 @@ impl PythonGenerator {
         if is_streaming_method(method) {
             return String::new(); // Skip streaming methods for blocking client
         }
-        
+
         let method_name = &method.sig.ident;
         let service_name = self.definition.service_name();
         let (request_type, response_type) = extract_method_types(method);
@@ -587,20 +589,17 @@ impl PythonGenerator {
         if self.is_enum_with_data(&response_type) {
             // For enums with associated data, use the deserializer function
             let deserializer = format!("deserialize_{}", response_type.to_lowercase());
-            code.push_str(&format!(
-                "        return {}(response_dict)\n",
-                deserializer
-            ));
+            code.push_str(&format!("        return {}(response_dict)\n", deserializer));
         } else if self.is_enum(&response_type) {
             // For simple enums, use the deserializer function
             let deserializer = format!("deserialize_{}", response_type.to_lowercase());
-            code.push_str(&format!(
-                "        return {}(response_dict)\n",
-                deserializer
-            ));
+            code.push_str(&format!("        return {}(response_dict)\n", deserializer));
         } else {
             // For regular structs
-            code.push_str(&format!("        return {}(**response_dict)\n", response_type));
+            code.push_str(&format!(
+                "        return {}(**response_dict)\n",
+                response_type
+            ));
         }
 
         code
@@ -882,9 +881,9 @@ impl PythonGenerator {
 
         let mut code = String::new();
 
-        code.push_str(&format!(
+        code.push_str(
             "        \n        handler = self.handler  # Capture handler instance, not self\n",
-        ));
+        );
         code.push_str(&format!(
             "        async def handle_{}(request_bytes: bytes) -> bytes:\n",
             method_name
@@ -903,7 +902,7 @@ impl PythonGenerator {
         ));
         code.push_str("            \n");
         code.push_str("            # Serialize response to MessagePack\n");
-        
+
         // Check if response type is an enum (any kind)
         if self.is_enum(&response_type) {
             let serializer = format!("serialize_{}", response_type.to_lowercase());
@@ -914,7 +913,7 @@ impl PythonGenerator {
         } else {
             code.push_str("            response_dict = response.__dict__\n");
         }
-        
+
         code.push_str("            return rpcnet.python_to_msgpack_py(response_dict)\n");
         code.push_str("        \n");
         code.push_str(&format!(

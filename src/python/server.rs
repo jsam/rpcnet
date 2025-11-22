@@ -3,7 +3,10 @@
 #![allow(clippy::useless_conversion)]
 
 use super::{
-    cluster::PyCluster, cluster::PyClusterConfig, cluster::PyQuicClient, config::PyRpcConfig,
+    cluster::PyCluster,
+    cluster::PyClusterConfig,
+    cluster::PyQuicClient,
+    config::PyRpcConfig,
     error::{cluster_err_to_py, to_py_err},
     worker_config::WorkerConfig,
     worker_manager::WorkerManager,
@@ -34,7 +37,7 @@ impl PyRpcServer {
     /// The server automatically spawns worker processes equal to CPU count.
     ///
     /// Args:
-        ///     config: RpcConfig object with TLS settings and bind address
+    ///     config: RpcConfig object with TLS settings and bind address
     ///
     /// Returns:
     ///     RpcServer: New server instance
@@ -144,25 +147,23 @@ impl PyRpcServer {
         quic_client: PyQuicClient,
     ) -> PyResult<Bound<'py, PyAny>> {
         let server = self.server.clone();
-        
+
         future_into_py(py, async move {
             let server_guard = server.lock().await;
-            
+
             // Parse seed addresses
-            let seed_addrs: Result<Vec<std::net::SocketAddr>, _> = seeds
-                .iter()
-                .map(|s| s.parse())
-                .collect();
+            let seed_addrs: Result<Vec<std::net::SocketAddr>, _> =
+                seeds.iter().map(|s| s.parse()).collect();
             let seed_addrs = seed_addrs.map_err(|e| {
                 pyo3::exceptions::PyValueError::new_err(format!("Invalid seed address: {}", e))
             })?;
-            
+
             // Enable cluster on the underlying Rust server
             server_guard
                 .enable_cluster(config.inner.clone(), seed_addrs, quic_client.inner.clone())
                 .await
                 .map_err(cluster_err_to_py)?;
-            
+
             Ok(())
         })
     }
@@ -170,11 +171,11 @@ impl PyRpcServer {
     /// Get cluster handle if cluster is enabled
     fn cluster<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let server = self.server.clone();
-        
+
         future_into_py(py, async move {
             let server_guard = server.lock().await;
             let cluster = server_guard.cluster().await;
-            
+
             Ok::<Option<PyCluster>, PyErr>(cluster.map(|c| PyCluster { inner: c }))
         })
     }
@@ -208,7 +209,7 @@ impl PyRpcServer {
         _graceful_shutdown_timeout: Option<u64>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let server = self.server.clone();
-        let worker_manager = self.worker_manager.clone();
+        let _worker_manager = self.worker_manager.clone();
         let config = self.config.clone();
 
         let pending_handlers = self.pending_handlers.clone();
@@ -216,14 +217,19 @@ impl PyRpcServer {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             // Create worker manager
             let mut manager = WorkerManager::new(config).map_err(|e| {
-                pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to create workers: {}", e))
+                pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "Failed to create workers: {}",
+                    e
+                ))
             })?;
 
             // Register handlers with worker manager
             let handlers_to_register = pending_handlers.lock().await;
             for (method_name, handler) in handlers_to_register.iter() {
                 let handler_clone = Python::with_gil(|py| handler.clone_ref(py));
-                manager.register_handler(method_name.clone(), handler_clone).await;
+                manager
+                    .register_handler(method_name.clone(), handler_clone)
+                    .await;
             }
             drop(handlers_to_register);
 
@@ -253,15 +259,10 @@ impl PyRpcServer {
                 let handler_fn = move |params: Vec<u8>| {
                     let mgr = mgr.clone();
                     let method = method.clone();
-                    async move {
-                        mgr.lock()
-                            .await
-                            .execute_handler(&method, params)
-                            .await
-                    }
+                    async move { mgr.lock().await.execute_handler(&method, params).await }
                 };
 
-                server_guard.register(&method_name, handler_fn).await;
+                server_guard.register(method_name, handler_fn).await;
             }
 
             drop(server_guard);

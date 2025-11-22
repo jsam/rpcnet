@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import time
+import os
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / "generated"))
@@ -13,9 +14,12 @@ def main():
     print("🚀 RpcNet Client")
     print("=" * 70)
 
+    # Use environment variable or default relative path
+    cert_path = os.getenv("CERT_PATH", str(Path(__file__).parent.parent.parent.parent / "certs" / "test_cert.pem"))
+    
     client = BenchmarkServiceBlockingClient.connect(
         addr="127.0.0.1:50051",
-        cert_path="../../../certs/test_cert.pem",
+        cert_path=cert_path,
         server_name="localhost",
         timeout_secs=10
     )

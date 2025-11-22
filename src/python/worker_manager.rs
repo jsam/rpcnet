@@ -5,6 +5,7 @@
 
 use crate::python::worker_config::WorkerConfig;
 use crate::RpcError;
+use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
@@ -15,7 +16,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tracing::{error, info};
-use pyo3::prelude::*;
 
 /// Handle to a worker subprocess
 struct WorkerHandle {
@@ -30,6 +30,7 @@ struct WorkerHandle {
     /// Unix socket connection (protected by mutex for concurrent access)
     socket: Arc<Mutex<UnixStream>>,
     /// Last heartbeat time
+    #[allow(dead_code)]
     last_heartbeat: Instant,
 }
 
@@ -40,6 +41,7 @@ pub struct WorkerManager {
     /// Next worker index for round-robin
     next_worker: AtomicUsize,
     /// Worker configuration
+    #[allow(dead_code)]
     config: WorkerConfig,
     /// Registered handlers (method_name -> Python callable)
     pub handlers: Arc<Mutex<HashMap<String, PyObject>>>,
@@ -108,7 +110,7 @@ impl WorkerManager {
         let start = Instant::now();
         while !PathBuf::from(&socket_path).exists() {
             if start.elapsed() > Duration::from_secs(5) {
-                return Err(format!("Worker socket not created within 5 seconds"));
+                return Err("Worker socket not created within 5 seconds".to_string());
             }
             std::thread::sleep(Duration::from_millis(50));
         }
@@ -138,7 +140,10 @@ impl WorkerManager {
     /// Register a handler to be sent to workers
     pub async fn register_handler(&self, method_name: String, handler: PyObject) {
         let mut handlers = self.handlers.lock().await;
-        info!("WorkerManager: Registering handler for method '{}'", method_name);
+        info!(
+            "WorkerManager: Registering handler for method '{}'",
+            method_name
+        );
         handlers.insert(method_name, handler);
     }
 
@@ -151,66 +156,106 @@ impl WorkerManager {
         // Serialize handlers using source code extraction
         let serialized_handlers = Python::with_gil(|py| -> Result<Vec<u8>, String> {
             use pyo3::types::PyDict;
-            
+
             info!("Starting handler serialization...");
-            
+
             // Import required modules
-            let inspect = py.import("inspect")
+            let inspect = py
+                .import("inspect")
                 .map_err(|e| format!("Failed to import inspect: {}", e))?;
-            let textwrap = py.import("textwrap")
+            let textwrap = py
+                .import("textwrap")
                 .map_err(|e| format!("Failed to import textwrap: {}", e))?;
-            let json = py.import("json")
+            let json = py
+                .import("json")
                 .map_err(|e| format!("Failed to import json: {}", e))?;
-            
+
             // Try to import cloudpickle (optional for handler instance pickling)
             let cloudpickle = py.import("cloudpickle").ok();
             let base64 = py.import("base64").ok();
-            
-            info!("cloudpickle available: {}, base64 available: {}", cloudpickle.is_some(), base64.is_some());
-            
+
+            info!(
+                "cloudpickle available: {}, base64 available: {}",
+                cloudpickle.is_some(),
+                base64.is_some()
+            );
+
             // DEBUG: Print to Python stderr
             let sys = py.import("sys").unwrap();
             let stderr = sys.getattr("stderr").unwrap();
-            let _ = stderr.call_method1("write", (format!("RUST DEBUG: cloudpickle={}, base64={}\n", cloudpickle.is_some(), base64.is_some()),));
+            let _ = stderr.call_method1(
+                "write",
+                (format!(
+                    "RUST DEBUG: cloudpickle={}, base64={}\n",
+                    cloudpickle.is_some(),
+                    base64.is_some()
+                ),),
+            );
 
             // Create a dict with method name -> (source, pickled_handler)
             let handlers_dict = PyDict::new(py);
-            
+
             // Try to extract and pickle the handler instance from the first closure
             let mut pickled_handler_b64: Option<String> = None;
-            
+
             for (method, handler) in handlers.iter() {
-                let _ = stderr.call_method1("write", (format!("RUST DEBUG: Processing method {}\n", method),));
-                
+                let _ = stderr.call_method1(
+                    "write",
+                    (format!("RUST DEBUG: Processing method {}\n", method),),
+                );
+
                 // Get the closure's `self.handler` object if it exists (only need to do this once)
                 if pickled_handler_b64.is_none() && cloudpickle.is_some() && base64.is_some() {
-                    let _ = stderr.call_method1("write", (format!("RUST DEBUG: Attempting closure extraction for {}\n", method),));
-                    info!("Attempting to extract handler from closure for method: {}", method);
+                    let _ = stderr.call_method1(
+                        "write",
+                        (format!(
+                            "RUST DEBUG: Attempting closure extraction for {}\n",
+                            method
+                        ),),
+                    );
+                    info!(
+                        "Attempting to extract handler from closure for method: {}",
+                        method
+                    );
                     match handler.getattr(py, "__closure__") {
                         Ok(closure) if !closure.is_none(py) => {
-                            let _ = stderr.call_method1("write", (format!("RUST DEBUG: Found closure!\n"),));
+                            let _ = stderr.call_method1(
+                                "write",
+                                ("RUST DEBUG: Found closure!\n".to_string(),),
+                            );
                             info!("Found closure for method: {}", method);
                             // Downcast to tuple
                             match closure.downcast_bound::<pyo3::types::PyTuple>(py) {
                                 Ok(closure_tuple) if closure_tuple.len() > 0 => {
-                                    let _ = stderr.call_method1("write", (format!("RUST DEBUG: Closure has {} cells\n", closure_tuple.len()),));
+                                    let _ = stderr.call_method1(
+                                        "write",
+                                        (format!(
+                                            "RUST DEBUG: Closure has {} cells\n",
+                                            closure_tuple.len()
+                                        ),),
+                                    );
                                     info!("Closure has {} cells", closure_tuple.len());
                                     match closure_tuple.get_item(0) {
                                         Ok(cell) => {
-                                            let _ = stderr.call_method1("write", (format!("RUST DEBUG: Got cell\n"),));
+                                            let _ = stderr.call_method1(
+                                                "write",
+                                                ("RUST DEBUG: Got cell\n".to_string(),),
+                                            );
                                             match cell.getattr("cell_contents") {
                                                 Ok(handler_obj) => {
-                                                    let _ = stderr.call_method1("write", (format!("RUST DEBUG: Got handler object, pickling...\n"),));
+                                                    let _ = stderr.call_method1("write", ("RUST DEBUG: Got handler object, pickling...\n".to_string(),));
                                                     info!("Extracted handler object, attempting to pickle...");
                                                     // Pickle the handler instance
                                                     if let Some(ref cp) = cloudpickle {
                                                         if let Some(ref b64) = base64 {
                                                             match cp.getattr("dumps") {
                                                                 Ok(dumps) => {
-                                                                    let _ = stderr.call_method1("write", (format!("RUST DEBUG: Calling dumps...\n"),));
-                                                                    match dumps.call1((handler_obj,)) {
+                                                                    let _ = stderr.call_method1("write", ("RUST DEBUG: Calling dumps...\n".to_string(),));
+                                                                    match dumps
+                                                                        .call1((handler_obj,))
+                                                                    {
                                                                         Ok(pickled) => {
-                                                                            let _ = stderr.call_method1("write", (format!("RUST DEBUG: Pickled!\n"),));
+                                                                            let _ = stderr.call_method1("write", ("RUST DEBUG: Pickled!\n".to_string(),));
                                                                             match b64.getattr("b64encode") {
                                                                                 Ok(b64encode) => {
                                                                                     match b64encode.call1((pickled,)) {
@@ -244,12 +289,17 @@ impl WorkerManager {
                                                                         }
                                                                     }
                                                                 }
-                                                                Err(e) => error!("Failed to get dumps: {}", e),
+                                                                Err(e) => error!(
+                                                                    "Failed to get dumps: {}",
+                                                                    e
+                                                                ),
                                                             }
                                                         }
                                                     }
                                                 }
-                                                Err(e) => error!("Failed to get cell_contents: {}", e),
+                                                Err(e) => {
+                                                    error!("Failed to get cell_contents: {}", e)
+                                                }
                                             }
                                         }
                                         Err(e) => error!("Failed to get cell: {}", e),
@@ -263,45 +313,56 @@ impl WorkerManager {
                         Err(e) => error!("Failed to get __closure__: {}", e),
                     }
                 }
-                
+
                 // Get the source code of the handler function
-                let getsource = inspect.getattr("getsource")
+                let getsource = inspect
+                    .getattr("getsource")
                     .map_err(|e| format!("Failed to get getsource: {}", e))?;
-                
-                let source = getsource.call1((handler,))
+
+                let source = getsource
+                    .call1((handler,))
                     .map_err(|e| format!("Failed to get source for {}: {}", method, e))?;
-                
+
                 // Dedent the source code to remove class indentation
-                let dedent = textwrap.getattr("dedent")
+                let dedent = textwrap
+                    .getattr("dedent")
                     .map_err(|e| format!("Failed to get textwrap.dedent: {}", e))?;
-                
-                let dedented_source = dedent.call1((source,))
+
+                let dedented_source = dedent
+                    .call1((source,))
                     .map_err(|e| format!("Failed to dedent source for {}: {}", method, e))?;
-                
-                let source_str: String = dedented_source.extract()
+
+                let source_str: String = dedented_source
+                    .extract()
                     .map_err(|e| format!("Failed to extract source string: {}", e))?;
-                
+
                 // Store both source and handler pickle
                 let method_data = PyDict::new(py);
-                method_data.set_item("source", source_str)
+                method_data
+                    .set_item("source", source_str)
                     .map_err(|e| format!("Failed to set source: {}", e))?;
                 if let Some(ref handler_b64) = pickled_handler_b64 {
-                    method_data.set_item("handler", handler_b64.clone())
+                    method_data
+                        .set_item("handler", handler_b64.clone())
                         .map_err(|e| format!("Failed to set handler: {}", e))?;
                 }
-                
-                handlers_dict.set_item(method, method_data)
+
+                handlers_dict
+                    .set_item(method, method_data)
                     .map_err(|e| format!("Failed to set item: {}", e))?;
             }
 
             // Convert to JSON bytes
-            let dumps = json.getattr("dumps")
+            let dumps = json
+                .getattr("dumps")
                 .map_err(|e| format!("Failed to get json.dumps: {}", e))?;
-            let json_str = dumps.call1((handlers_dict,))
+            let json_str = dumps
+                .call1((handlers_dict,))
                 .map_err(|e| format!("Failed to serialize to JSON: {}", e))?;
-            let json_bytes: String = json_str.extract()
+            let json_bytes: String = json_str
+                .extract()
                 .map_err(|e| format!("Failed to extract JSON string: {}", e))?;
-            
+
             Ok(json_bytes.into_bytes())
         })?;
 
@@ -309,9 +370,12 @@ impl WorkerManager {
 
         // Send to each worker
         for worker in &mut self.workers {
-            info!("Sending handlers to worker #{} (PID {})", worker.id, worker.pid);
+            info!(
+                "Sending handlers to worker #{} (PID {})",
+                worker.id, worker.pid
+            );
             let mut socket = worker.socket.lock().await;
-            Self::send_init_message(&mut *socket, &serialized_handlers)
+            Self::send_init_message(&mut socket, &serialized_handlers)
                 .map_err(|e| format!("Failed to initialize worker #{}: {}", worker.id, e))?;
         }
 
@@ -365,12 +429,17 @@ impl WorkerManager {
 
         // Lock the socket and send request
         let socket = worker.socket.clone();
-        Self::send_request(socket, method_name, &params).await
+        Self::send_request(socket, method_name, &params)
+            .await
             .map_err(|e| RpcError::InternalError(format!("Worker communication failed: {}", e)))
     }
 
     /// Send request to worker and receive response
-    async fn send_request(socket: Arc<Mutex<UnixStream>>, method_name: &str, params: &[u8]) -> Result<Vec<u8>, String> {
+    async fn send_request(
+        socket: Arc<Mutex<UnixStream>>,
+        method_name: &str,
+        params: &[u8],
+    ) -> Result<Vec<u8>, String> {
         let method_bytes = method_name.as_bytes();
 
         // Message format: [method_name_len: u16] [method_name] [params_len: u32] [params]

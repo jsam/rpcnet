@@ -702,6 +702,7 @@ impl Default for PythonEventLoopExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pyo3::ffi::c_str;
 
     #[tokio::test]
     async fn test_executor_creation() {
