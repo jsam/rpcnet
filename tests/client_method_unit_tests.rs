@@ -229,13 +229,13 @@ async fn test_stream_timeout_simulation() {
 
     let slow_stream = async_stream::stream! {
         yield vec![1, 2, 3];
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
         yield vec![4, 5, 6];
     };
 
     // Test with timeout
     let timeout_result = tokio::time::timeout(
-        Duration::from_millis(5),
+        Duration::from_millis(10),
         slow_stream.collect::<Vec<Vec<u8>>>(),
     )
     .await;
