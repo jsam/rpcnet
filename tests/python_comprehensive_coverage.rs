@@ -126,7 +126,7 @@ fn test_py_serde_python_to_bincode() {
         dict.set_item("key", "value").unwrap();
         dict.set_item("number", 42).unwrap();
 
-        let result = python_to_bincode(&dict.as_any());
+        let result = python_to_bincode(dict.as_any());
         assert!(result.is_ok());
         assert!(!result.unwrap().is_empty());
     });
@@ -142,7 +142,7 @@ fn test_py_serde_bincode_roundtrip() {
         dict.set_item("name", "Alice").unwrap();
         dict.set_item("age", 30).unwrap();
 
-        let bytes = python_to_bincode(&dict.as_any()).unwrap();
+        let bytes = python_to_bincode(dict.as_any()).unwrap();
         let result = bincode_to_python(py, &bytes).unwrap();
 
         let result_dict = result.downcast::<PyDict>().unwrap();
@@ -176,7 +176,7 @@ fn test_py_serde_python_to_bincode_py() {
         let dict = PyDict::new(py);
         dict.set_item("test", 123).unwrap();
 
-        let result = python_to_bincode_py(&dict.as_any());
+        let result = python_to_bincode_py(dict.as_any());
         assert!(result.is_ok());
         let bytes = result.unwrap();
         assert!(!bytes.as_bytes().is_empty());
@@ -192,7 +192,7 @@ fn test_py_serde_bincode_to_python_py() {
         let dict = PyDict::new(py);
         dict.set_item("key", "value").unwrap();
 
-        let bytes = python_to_bincode(&dict.as_any()).unwrap();
+        let bytes = python_to_bincode(dict.as_any()).unwrap();
         let result = bincode_to_python_py(py, &bytes);
         assert!(result.is_ok());
     });
@@ -207,7 +207,7 @@ fn test_py_serde_msgpack_to_python_py() {
         let dict = PyDict::new(py);
         dict.set_item("field", "data").unwrap();
 
-        let result = python_to_msgpack_py(&dict.as_any());
+        let result = python_to_msgpack_py(dict.as_any());
         assert!(result.is_ok());
         assert!(!result.unwrap().as_bytes().is_empty());
     });
@@ -223,7 +223,7 @@ fn test_py_serde_msgpack_roundtrip() {
         dict.set_item("x", 100).unwrap();
         dict.set_item("y", 200).unwrap();
 
-        let bytes = python_to_msgpack_py(&dict.as_any()).unwrap();
+        let bytes = python_to_msgpack_py(dict.as_any()).unwrap();
         let result = msgpack_to_python_py(py, bytes.as_bytes()).unwrap();
 
         let result_dict = result.downcast::<PyDict>().unwrap();
@@ -256,7 +256,7 @@ fn test_py_serde_empty_dict() {
     Python::with_gil(|py| {
         let dict = PyDict::new(py);
 
-        let bytes = python_to_bincode(&dict.as_any()).unwrap();
+        let bytes = python_to_bincode(dict.as_any()).unwrap();
         let result = bincode_to_python(py, &bytes).unwrap();
 
         let result_dict = result.downcast::<PyDict>().unwrap();
@@ -274,7 +274,7 @@ fn test_py_serde_nested_structures() {
         let inner_list = PyList::new(py, &[1, 2, 3]).unwrap();
         dict.set_item("numbers", inner_list).unwrap();
 
-        let bytes = python_to_bincode(&dict.as_any()).unwrap();
+        let bytes = python_to_bincode(dict.as_any()).unwrap();
         let result = bincode_to_python(py, &bytes).unwrap();
 
         let result_dict = result.downcast::<PyDict>().unwrap();
@@ -294,7 +294,7 @@ fn test_py_serde_various_types() {
         dict.set_item("float_val", 42.5).unwrap();
         dict.set_item("str_val", "hello").unwrap();
 
-        let bytes = python_to_bincode(&dict.as_any()).unwrap();
+        let bytes = python_to_bincode(dict.as_any()).unwrap();
         let result = bincode_to_python(py, &bytes).unwrap();
 
         let result_dict = result.downcast::<PyDict>().unwrap();
