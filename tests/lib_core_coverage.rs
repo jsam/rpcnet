@@ -69,7 +69,7 @@ fn test_rpc_config_different_bind_addresses() {
     }
 }
 
-// Error tests  
+// Error tests
 #[test]
 fn test_rpc_error_display() {
     let errors = vec![

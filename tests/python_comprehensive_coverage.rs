@@ -5,7 +5,7 @@
 #![cfg(feature = "python")]
 
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyList};
+use pyo3::types::{PyDict, PyList};
 use rpcnet::RpcError;
 
 // ==============================================================================
@@ -146,8 +146,24 @@ fn test_py_serde_bincode_roundtrip() {
         let result = bincode_to_python(py, &bytes).unwrap();
 
         let result_dict = result.downcast::<PyDict>().unwrap();
-        assert_eq!(result_dict.get_item("name").unwrap().unwrap().extract::<String>().unwrap(), "Alice");
-        assert_eq!(result_dict.get_item("age").unwrap().unwrap().extract::<i64>().unwrap(), 30);
+        assert_eq!(
+            result_dict
+                .get_item("name")
+                .unwrap()
+                .unwrap()
+                .extract::<String>()
+                .unwrap(),
+            "Alice"
+        );
+        assert_eq!(
+            result_dict
+                .get_item("age")
+                .unwrap()
+                .unwrap()
+                .extract::<i64>()
+                .unwrap(),
+            30
+        );
     });
 }
 
@@ -211,8 +227,24 @@ fn test_py_serde_msgpack_roundtrip() {
         let result = msgpack_to_python_py(py, bytes.as_bytes()).unwrap();
 
         let result_dict = result.downcast::<PyDict>().unwrap();
-        assert_eq!(result_dict.get_item("x").unwrap().unwrap().extract::<i64>().unwrap(), 100);
-        assert_eq!(result_dict.get_item("y").unwrap().unwrap().extract::<i64>().unwrap(), 200);
+        assert_eq!(
+            result_dict
+                .get_item("x")
+                .unwrap()
+                .unwrap()
+                .extract::<i64>()
+                .unwrap(),
+            100
+        );
+        assert_eq!(
+            result_dict
+                .get_item("y")
+                .unwrap()
+                .unwrap()
+                .extract::<i64>()
+                .unwrap(),
+            200
+        );
     });
 }
 
@@ -259,7 +291,7 @@ fn test_py_serde_various_types() {
         let dict = PyDict::new(py);
         dict.set_item("bool_val", true).unwrap();
         dict.set_item("int_val", 42).unwrap();
-        dict.set_item("float_val", 3.14).unwrap();
+        dict.set_item("float_val", 42.5).unwrap();
         dict.set_item("str_val", "hello").unwrap();
 
         let bytes = python_to_bincode(&dict.as_any()).unwrap();
