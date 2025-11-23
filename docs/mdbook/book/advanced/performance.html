@@ -319,24 +319,25 @@ let config = ServerConfig::builder()
 <h4 id="use-efficient-formats"><a class="header" href="#use-efficient-formats">Use Efficient Formats</a></h4>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>// Fastest: bincode (binary)
+</span>// Fastest: bincode (binary) - for Rust-to-Rust communication
 use bincode;
 let bytes = bincode::serialize(&amp;data)?;
 
-// Fast: rmp-serde (MessagePack)
+// Fast: rmp-serde (MessagePack) - for Python-to-Rust or cross-language
 use rmp_serde;
 let bytes = rmp_serde::to_vec(&amp;data)?;
 
-// Slower: serde_json (human-readable, but slower)
+// Slower: serde_json (human-readable, but slower) - for debugging
 let bytes = serde_json::to_vec(&amp;data)?;
 <span class="boring">}</span></code></pre></pre>
 <p><strong>Benchmark</strong> (10KB struct):</p>
-<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Serialize</th><th>Deserialize</th><th>Size</th></tr></thead><tbody>
-<tr><td><strong>bincode</strong></td><td>12 μs</td><td>18 μs</td><td>10240 bytes</td></tr>
-<tr><td><strong>MessagePack</strong></td><td>28 μs</td><td>35 μs</td><td>9800 bytes</td></tr>
-<tr><td><strong>JSON</strong></td><td>85 μs</td><td>120 μs</td><td>15300 bytes</td></tr>
+<div class="table-wrapper"><table><thead><tr><th>Format</th><th>Serialize</th><th>Deserialize</th><th>Size</th><th>Use Case</th></tr></thead><tbody>
+<tr><td><strong>bincode</strong></td><td>12 μs</td><td>18 μs</td><td>10240 bytes</td><td>Rust ↔ Rust (fastest)</td></tr>
+<tr><td><strong>MessagePack</strong></td><td>28 μs</td><td>35 μs</td><td>9800 bytes</td><td>Python ↔ Rust (polyglot)</td></tr>
+<tr><td><strong>JSON</strong></td><td>85 μs</td><td>120 μs</td><td>15300 bytes</td><td>Debugging (human-readable)</td></tr>
 </tbody></table>
 </div>
+<p><strong>Recommendation</strong>: Use <code>bincode</code> for pure Rust services, MessagePack when integrating with Python bindings.</p>
 <h4 id="minimize-allocations"><a class="header" href="#minimize-allocations">Minimize Allocations</a></h4>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -681,22 +682,6 @@ sudo perf report
 
         </div>
 
-        <!-- Livereload script (if served using the cli tool) -->
-        <script>
-            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
-            const socket = new WebSocket(wsAddress);
-            socket.onmessage = function (event) {
-                if (event.data === "reload") {
-                    socket.close();
-                    location.reload();
-                }
-            };
-
-            window.onbeforeunload = function() {
-                socket.close();
-            }
-        </script>
 
 
 

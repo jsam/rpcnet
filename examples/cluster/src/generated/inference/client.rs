@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use super::types::*;
 use rpcnet::{RpcClient, RpcConfig, RpcError};
 use std::net::SocketAddr;
@@ -15,6 +13,14 @@ impl InferenceClient {
         let inner = RpcClient::connect(addr, config).await?;
         Ok(Self { inner })
     }
+    pub async fn infer(
+        &self,
+        request: InferenceRequest,
+    ) -> Result<InferenceResponse, RpcError> {
+        let params = rmp_serde::to_vec(&request)?;
+        let response_data = self.inner.call("Inference.infer", params).await?;
+        rmp_serde::from_slice::<InferenceResponse>(&response_data).map_err(Into::into)
+    }
     pub async fn generate(
         &self,
         request: Pin<Box<dyn Stream<Item = InferenceRequest> + Send>>,
@@ -24,7 +30,7 @@ impl InferenceClient {
     > {
         use futures::StreamExt;
         let byte_request_stream = request
-            .map(|item| { bincode::serialize(&item).unwrap() });
+            .map(|item| { rmp_serde::to_vec(&item).unwrap() });
         let byte_response_stream = self
             .inner
             .call_streaming("Inference.generate", Box::pin(byte_request_stream))
@@ -33,20 +39,16 @@ impl InferenceClient {
             .map(|result| {
                 match result {
                     Ok(bytes) => {
-                        bincode::deserialize::<
+                        rmp_serde::from_slice::<
                             Result<InferenceResponse, InferenceError>,
                         >(&bytes)
-                            .map_err(|_| InferenceError::InvalidRequest("Deserialization failed".to_string()))
-                            .and_then(|inner_result| inner_result)
+                            .expect("Failed to deserialize stream item")
                     }
-                    Err(rpcnet::streaming::StreamError::Timeout) => {
-                        Err(InferenceError::WorkerFailed("Timeout waiting for response".to_string()))
-                    }
-                    Err(rpcnet::streaming::StreamError::Transport(e)) => {
-                        Err(InferenceError::WorkerFailed(format!("Network error: {}", e)))
-                    }
-                    Err(rpcnet::streaming::StreamError::Item(_)) => {
-                        Err(InferenceError::InvalidRequest("Unexpected item error".to_string()))
+                    Err(e) => {
+                        panic!(
+                            "Stream transport error: {:?}. Consider handling this at the caller level.",
+                            e
+                        )
                     }
                 }
             });

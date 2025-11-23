@@ -197,13 +197,13 @@ impl CodeGenerator {
                                     use futures::StreamExt;
 
                                     let typed_request_stream = request_stream.map(|bytes| {
-                                        bincode::deserialize::<#request_item_type>(&bytes).unwrap()
+                                        rmp_serde::from_slice::<#request_item_type>(&bytes).unwrap()
                                     });
 
                                     match handler.#method_name(Box::pin(typed_request_stream)).await {
                                         Ok(response_stream) => {
                                             let byte_response_stream = response_stream.map(|item| {
-                                                Ok(bincode::serialize(&item).unwrap())
+                                                Ok(rmp_serde::to_vec(&item).unwrap())
                                             });
                                             Box::pin(byte_response_stream) as Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>
                                         },
@@ -223,13 +223,11 @@ impl CodeGenerator {
                             self.rpc_server.register(#full_method_name, move |params| {
                                 let handler = handler.clone();
                                 async move {
-                                    let request: #request_type = bincode::deserialize(&params)
-                                        .map_err(RpcError::SerializationError)?;
+                                    let request: #request_type = rmp_serde::from_slice(&params)?;
 
                                     match handler.#method_name(request).await {
                                         Ok(response) => {
-                                            bincode::serialize(&response)
-                                                .map_err(RpcError::SerializationError)
+                                            rmp_serde::to_vec(&response).map_err(Into::into)
                                         }
                                         Err(e) => {
                                             Err(RpcError::StreamError(format!("{:?}", e)))
@@ -278,22 +276,61 @@ impl CodeGenerator {
                         panic!("Streaming method must have a request parameter");
                     };
 
+                    // Check if response_item_type is Result<T, E>
+                    let is_result_item = self.is_result_type(&response_item_type);
+
+                    // Extract the error type from Result<T, E> if it's a Result item
+                    let (_inner_ok_type, _inner_err_type) = if is_result_item {
+                        // Parse the Result<T, E> to extract T and E
+                        self.extract_result_inner_types(&response_item_type)
+                    } else {
+                        (response_item_type.clone(), quote! { () })
+                    };
+
+                    let deserialization_code = if is_result_item {
+                        // For Stream<Item = Result<T, E>>, we need to:
+                        // 1. Deserialize to Result<T, E>
+                        // 2. Handle StreamError<RpcError> by panicking since we can't convert RpcError to E
+                        // Note: byte_response_stream is Stream<Result<Vec<u8>, StreamError<RpcError>>>
+                        // We want to return Stream<Result<T, E>>
+                        quote! {
+                            let typed_response_stream = byte_response_stream.map(|result| {
+                                match result {
+                                    Ok(bytes) => {
+                                        // Deserialize the Result<T, E>
+                                        rmp_serde::from_slice::<#response_item_type>(&bytes)
+                                            .expect("Failed to deserialize stream item")
+                                    }
+                                    Err(e) => {
+                                        // We can't convert RpcError/Timeout to the application error type E
+                                        // so we panic. Users should handle transport errors at a higher level.
+                                        panic!("Stream transport error: {:?}. Consider handling this at the caller level.", e)
+                                    }
+                                }
+                            });
+                        }
+                    } else {
+                        // For simple Stream<Item = T>, just deserialize normally
+                        quote! {
+                            let typed_response_stream = byte_response_stream.map(|result| {
+                                result.and_then(|bytes| {
+                                    rmp_serde::from_slice::<#response_item_type>(&bytes).map_err(Into::into)
+                                })
+                            });
+                        }
+                    };
+
                     quote! {
                         pub #client_sig {
                             use futures::StreamExt;
 
                             let byte_request_stream = #param_name.map(|item| {
-                                bincode::serialize(&item).unwrap()
+                                rmp_serde::to_vec(&item).unwrap()
                             });
 
                             let byte_response_stream = self.inner.call_streaming(#full_method_name, Box::pin(byte_request_stream)).await?;
 
-                            let typed_response_stream = byte_response_stream.map(|result| {
-                                result.and_then(|bytes| {
-                                    bincode::deserialize::<#response_item_type>(&bytes)
-                                        .map_err(RpcError::SerializationError)
-                                })
-                            });
+                            #deserialization_code
 
                             Ok(Box::pin(typed_response_stream))
                         }
@@ -313,14 +350,12 @@ impl CodeGenerator {
 
                     quote! {
                         pub #client_sig {
-                            let params = bincode::serialize(&request)
-                                .map_err(RpcError::SerializationError)?;
+                            let params = rmp_serde::to_vec(&request)?;
 
                             let response_data = self.inner.call(#full_method_name, params).await?;
 
                             // Deserialize the response
-                            bincode::deserialize::<#response_type>(&response_data)
-                                .map_err(RpcError::SerializationError)
+                            rmp_serde::from_slice::<#response_type>(&response_data).map_err(Into::into)
                         }
                     }
                 }
@@ -454,6 +489,40 @@ impl CodeGenerator {
             }
             _ => quote! { () },
         }
+    }
+
+    /// Check if a TokenStream represents a Result<T, E> type
+    fn is_result_type(&self, type_stream: &TokenStream) -> bool {
+        let type_str = type_stream.to_string();
+        // Simple check: does it start with "Result <"
+        type_str.trim_start().starts_with("Result <")
+            || type_str.trim_start().starts_with("Result<")
+    }
+
+    /// Extract T and E from Result<T, E> TokenStream
+    fn extract_result_inner_types(&self, type_stream: &TokenStream) -> (TokenStream, TokenStream) {
+        // Parse the TokenStream as a Type
+        let type_str = type_stream.to_string();
+
+        // Try to parse as a Type
+        if let Ok(Type::Path(type_path)) = syn::parse_str::<Type>(&type_str) {
+            if let Some(segment) = type_path.path.segments.last() {
+                if segment.ident == "Result" {
+                    if let PathArguments::AngleBracketed(args) = &segment.arguments {
+                        // Extract the two generic arguments (T and E)
+                        let mut iter = args.args.iter();
+                        if let Some(GenericArgument::Type(ok_type)) = iter.next() {
+                            if let Some(GenericArgument::Type(err_type)) = iter.next() {
+                                return (quote! { #ok_type }, quote! { #err_type });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback: return the whole thing as ok_type and () as err_type
+        (type_stream.clone(), quote! { () })
     }
 
     #[allow(clippy::only_used_in_recursion)]

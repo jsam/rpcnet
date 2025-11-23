@@ -174,9 +174,7 @@ async fn test_multiple_handlers() {
 fn test_error_types() {
     // Test RpcError variants to improve coverage
     let stream_error = RpcError::StreamError("connection failed".to_string());
-    let ser_error = RpcError::SerializationError(bincode::Error::new(
-        bincode::ErrorKind::InvalidBoolEncoding(101),
-    ));
+    let ser_error = RpcError::SerializationError("Invalid bool encoding: 101".to_string());
 
     // Test Debug and Display formatting
     let _stream_debug = format!("{:?}", stream_error);
@@ -243,9 +241,9 @@ fn test_response_with_different_data() {
 
     let ser_err_resp = RpcResponse::from_result(
         5,
-        Err(RpcError::SerializationError(bincode::Error::new(
-            bincode::ErrorKind::InvalidBoolEncoding(101),
-        ))),
+        Err(RpcError::SerializationError(
+            "Invalid bool encoding: 101".to_string(),
+        )),
     );
     assert!(ser_err_resp.error().is_some());
 }

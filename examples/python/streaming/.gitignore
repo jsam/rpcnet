@@ -1,0 +1,17 @@
+# Generated code
+streamingservice/
+
+# Rust build artifacts  
+target/
+Cargo.lock
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE
+.vscode/
+.idea/
+.claude/

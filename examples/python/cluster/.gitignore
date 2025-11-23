@@ -1,0 +1,17 @@
+# Generated code and build artifacts
+*.log
+target/
+directorregistry/
+inference/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.claude/
+.vscode/
+.idea/

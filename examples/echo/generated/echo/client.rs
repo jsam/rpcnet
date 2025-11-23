@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use super::types::*;
 use rpcnet::{RpcClient, RpcConfig, RpcError};
 use std::net::SocketAddr;
@@ -14,17 +12,16 @@ impl EchoClient {
         Ok(Self { inner })
     }
     pub async fn echo(&self, request: EchoRequest) -> Result<EchoResponse, RpcError> {
-        let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
+        let params = rmp_serde::to_vec(&request)?;
         let response_data = self.inner.call("Echo.echo", params).await?;
-        bincode::deserialize::<EchoResponse>(&response_data).map_err(RpcError::SerializationError)
+        rmp_serde::from_slice::<EchoResponse>(&response_data).map_err(Into::into)
     }
     pub async fn binary_echo(
         &self,
         request: BinaryEchoRequest,
     ) -> Result<BinaryEchoResponse, RpcError> {
-        let params = bincode::serialize(&request).map_err(RpcError::SerializationError)?;
+        let params = rmp_serde::to_vec(&request)?;
         let response_data = self.inner.call("Echo.binary_echo", params).await?;
-        bincode::deserialize::<BinaryEchoResponse>(&response_data)
-            .map_err(RpcError::SerializationError)
+        rmp_serde::from_slice::<BinaryEchoResponse>(&response_data).map_err(Into::into)
     }
 }

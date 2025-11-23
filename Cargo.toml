@@ -12,6 +12,10 @@ readme = "README.md"
 keywords = ["rpc", "quic", "async", "networking", "codegen"]
 categories = ["network-programming", "asynchronous", "web-programming"]
 
+[lib]
+name = "rpcnet"
+crate-type = ["rlib", "cdylib"]  # cdylib for Python extension module
+
 [[bin]]
 name = "rpcnet-gen"
 path = "src/bin/rpcnet-gen.rs"
@@ -20,7 +24,8 @@ path = "src/bin/rpcnet-gen.rs"
 [dependencies]
 async-stream = "0.3"
 async-trait = "0.1"
-bincode = "1.3.3"
+rmp-serde = "1.3"  # MessagePack for all serialization
+rmpv = { version = "1.0", features = ["with-serde"] }  # MessagePack Value types for direct conversion
 bytes = "1.9.0"
 dashmap = "6"
 futures = "0.3"
@@ -56,9 +61,23 @@ proc-macro2 = { version = "1.0" }
 prettyplease = { version = "0.2" }
 clap = { version = "4.0", features = ["derive"] }
 
+# Python bindings (optional)
+# Note: extension-module is required for building the Python module, but breaks cargo test.
+# We use auto-initialize for testing, which allows tests to run without linking issues.
+# PyO3 0.24.2 adds Python 3.13 support
+pyo3 = { version = "0.24.2", features = ["auto-initialize"], optional = true }
+pyo3-async-runtimes = { version = "0.24", features = ["tokio-runtime"], optional = true }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("gil-refs"))'] }
+
 [features]
 default = ["codegen", "perf"]
 codegen = []
+# Python bindings - use this for testing (without extension-module)
+python = ["pyo3", "pyo3-async-runtimes"]
+# Python extension module - automatically enabled by maturin, breaks cargo test
+extension-module = ["python", "pyo3/extension-module"]
 
 # High-performance features for benchmarking
 perf = ["jemallocator"]
@@ -72,6 +91,7 @@ futures = "0.3"
 num_cpus = "1.0"
 assert_cmd = "2.0"
 predicates = "3.1"
+serial_test = "3.2"
 
 [[bench]]
 name = "simple"
@@ -91,6 +111,18 @@ harness = false
 name = "streaming"
 path = "benches/streaming.rs"
 harness = false
+
+[[bench]]
+name = "python_interop"
+path = "benches/python_interop.rs"
+harness = false
+required-features = ["python"]
+
+[[bench]]
+name = "python_persistent"
+path = "benches/python_persistent.rs"
+harness = false
+required-features = ["python"]
 
 # Basic Examples (no codegen required)
 [[example]]

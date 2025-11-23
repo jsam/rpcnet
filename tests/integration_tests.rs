@@ -69,24 +69,24 @@ mod integration_tests {
 
         server
             .register("add", |params| async move {
-                let nums: Vec<i32> = bincode::deserialize(&params).unwrap();
+                let nums: Vec<i32> = rmp_serde::from_slice(&params).unwrap();
                 let result = nums.iter().sum::<i32>();
-                Ok(bincode::serialize(&result).unwrap())
+                Ok(rmp_serde::to_vec(&result).unwrap())
             })
             .await;
 
         server
             .register("multiply", |params| async move {
-                let nums: Vec<i32> = bincode::deserialize(&params).unwrap();
+                let nums: Vec<i32> = rmp_serde::from_slice(&params).unwrap();
                 let result = nums.iter().product::<i32>();
-                Ok(bincode::serialize(&result).unwrap())
+                Ok(rmp_serde::to_vec(&result).unwrap())
             })
             .await;
 
         server
             .register("count", |params| async move {
                 let count = params.len() as u32;
-                Ok(bincode::serialize(&count).unwrap())
+                Ok(rmp_serde::to_vec(&count).unwrap())
             })
             .await;
 
@@ -95,22 +95,22 @@ mod integration_tests {
 
         // Test add
         let nums = vec![1, 2, 3, 4, 5];
-        let params = bincode::serialize(&nums).unwrap();
+        let params = rmp_serde::to_vec(&nums).unwrap();
         let response = client.call("add", params).await.unwrap();
-        let result: i32 = bincode::deserialize(&response).unwrap();
+        let result: i32 = rmp_serde::from_slice(&response).unwrap();
         assert_eq!(result, 15);
 
         // Test multiply
         let nums = vec![2, 3, 4];
-        let params = bincode::serialize(&nums).unwrap();
+        let params = rmp_serde::to_vec(&nums).unwrap();
         let response = client.call("multiply", params).await.unwrap();
-        let result: i32 = bincode::deserialize(&response).unwrap();
+        let result: i32 = rmp_serde::from_slice(&response).unwrap();
         assert_eq!(result, 24);
 
         // Test count
         let data = vec![1u8; 100];
         let response = client.call("count", data).await.unwrap();
-        let result: u32 = bincode::deserialize(&response).unwrap();
+        let result: u32 = rmp_serde::from_slice(&response).unwrap();
         assert_eq!(result, 100);
     }
 
@@ -193,7 +193,7 @@ mod integration_tests {
         server
             .register("deserialize_test", |params| async move {
                 // Try to deserialize as a specific type that will fail
-                let _: Result<String, _> = bincode::deserialize(&params);
+                let _: Result<String, _> = rmp_serde::from_slice(&params);
                 Ok(b"success".to_vec())
             })
             .await;
@@ -261,7 +261,7 @@ mod integration_tests {
                 let counter = counter_clone.clone();
                 async move {
                     let value = counter.fetch_add(1, Ordering::SeqCst);
-                    Ok(bincode::serialize(&value).unwrap())
+                    Ok(rmp_serde::to_vec(&value).unwrap())
                 }
             })
             .await;
@@ -275,7 +275,7 @@ mod integration_tests {
             let client_clone = client.clone();
             let task = tokio::spawn(async move {
                 let response = client_clone.call("increment", vec![]).await.unwrap();
-                bincode::deserialize::<u64>(&response).unwrap()
+                rmp_serde::from_slice::<u64>(&response).unwrap()
             });
             tasks.push(task);
         }
@@ -312,7 +312,7 @@ mod integration_tests {
                     let value = counter.fetch_add(1, Ordering::SeqCst);
                     // Add small delay to increase chance of race conditions if they exist
                     sleep(Duration::from_millis(1)).await;
-                    Ok(bincode::serialize(&value).unwrap())
+                    Ok(rmp_serde::to_vec(&value).unwrap())
                 }
             })
             .await;
@@ -333,7 +333,7 @@ mod integration_tests {
                     let client_clone = client.clone();
                     let request = tokio::spawn(async move {
                         let response = client_clone.call("global_increment", vec![]).await.unwrap();
-                        bincode::deserialize::<u64>(&response).unwrap()
+                        rmp_serde::from_slice::<u64>(&response).unwrap()
                     });
                     requests.push(request);
                 }
@@ -376,7 +376,7 @@ mod integration_tests {
         server
             .register("size_check", |params| async move {
                 let size = params.len() as u32;
-                Ok(bincode::serialize(&size).unwrap())
+                Ok(rmp_serde::to_vec(&size).unwrap())
             })
             .await;
 
@@ -394,7 +394,7 @@ mod integration_tests {
         for size in sizes {
             let large_payload = vec![0xAA; size];
             let response = client.call("size_check", large_payload).await.unwrap();
-            let returned_size: u32 = bincode::deserialize(&response).unwrap();
+            let returned_size: u32 = rmp_serde::from_slice(&response).unwrap();
             assert_eq!(returned_size, size as u32);
         }
     }
@@ -405,7 +405,7 @@ mod integration_tests {
 
         server
             .register("generate_data", |params| async move {
-                let size: u32 = bincode::deserialize(&params).unwrap();
+                let size: u32 = rmp_serde::from_slice(&params).unwrap();
                 let data = vec![0xFF; size as usize];
                 Ok(data)
             })
@@ -418,7 +418,7 @@ mod integration_tests {
         let sizes = vec![1024u32, 10_240, 102_400, 512_000]; // Up to 512KB
 
         for size in sizes {
-            let params = bincode::serialize(&size).unwrap();
+            let params = rmp_serde::to_vec(&size).unwrap();
             let response = client.call("generate_data", params).await.unwrap();
             assert_eq!(response.len(), size as usize);
             assert!(response.iter().all(|&b| b == 0xFF));
@@ -434,8 +434,8 @@ mod integration_tests {
 
         server
             .register("counter", |params| async move {
-                let input: u32 = bincode::deserialize(&params).unwrap();
-                Ok(bincode::serialize(&(input + 1)).unwrap())
+                let input: u32 = rmp_serde::from_slice(&params).unwrap();
+                Ok(rmp_serde::to_vec(&(input + 1)).unwrap())
             })
             .await;
 
@@ -446,9 +446,9 @@ mod integration_tests {
         let num_requests = 100;
 
         for i in 0..num_requests {
-            let params = bincode::serialize(&i).unwrap();
+            let params = rmp_serde::to_vec(&i).unwrap();
             let response = client.call("counter", params).await.unwrap();
-            let result: u32 = bincode::deserialize(&response).unwrap();
+            let result: u32 = rmp_serde::from_slice(&response).unwrap();
             assert_eq!(result, i + 1);
         }
 
@@ -494,10 +494,10 @@ mod integration_tests {
             .register("add_item", move |params| {
                 let state = state_clone.clone();
                 async move {
-                    let item: String = bincode::deserialize(&params).unwrap();
+                    let item: String = rmp_serde::from_slice(&params).unwrap();
                     state.lock().unwrap().push(item);
                     let count = state.lock().unwrap().len();
-                    Ok(bincode::serialize(&count).unwrap())
+                    Ok(rmp_serde::to_vec(&count).unwrap())
                 }
             })
             .await;
@@ -507,7 +507,7 @@ mod integration_tests {
                 let state = state.clone();
                 async move {
                     let items = state.lock().unwrap().clone();
-                    Ok(bincode::serialize(&items).unwrap())
+                    Ok(rmp_serde::to_vec(&items).unwrap())
                 }
             })
             .await;
@@ -518,15 +518,15 @@ mod integration_tests {
         // Add some items
         let items = ["item1", "item2", "item3"];
         for (i, item) in items.iter().enumerate() {
-            let params = bincode::serialize(&item.to_string()).unwrap();
+            let params = rmp_serde::to_vec(&item.to_string()).unwrap();
             let response = client.call("add_item", params).await.unwrap();
-            let count: usize = bincode::deserialize(&response).unwrap();
+            let count: usize = rmp_serde::from_slice(&response).unwrap();
             assert_eq!(count, i + 1);
         }
 
         // Get all items
         let response = client.call("get_items", vec![]).await.unwrap();
-        let retrieved_items: Vec<String> = bincode::deserialize(&response).unwrap();
+        let retrieved_items: Vec<String> = rmp_serde::from_slice(&response).unwrap();
         assert_eq!(retrieved_items.len(), 3);
         assert_eq!(retrieved_items, vec!["item1", "item2", "item3"]);
     }

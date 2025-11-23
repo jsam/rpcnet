@@ -207,8 +207,24 @@ of parsing strings:</p>
 }
 <span class="boring">}</span></code></pre></pre>
 <h3 id="serialization-strategy"><a class="header" href="#serialization-strategy">Serialization Strategy</a></h3>
-<p>Requests and responses travel as <code>Vec&lt;u8&gt;</code>. Examples use <code>bincode</code> for compact
-frames, but any serialization format can be layered on top.</p>
+<p>Requests and responses travel as <code>Vec&lt;u8&gt;</code>. RpcNet uses <strong>MessagePack</strong> (<code>rmp-serde</code>) as the standard serialization format:</p>
+<ul>
+<li><strong>MessagePack</strong> (<code>rmp-serde</code>): Default for all communication (Rust-to-Rust and Python-to-Rust)
+<ul>
+<li>Efficient binary format (comparable to bincode)</li>
+<li>Excellent cross-language support</li>
+<li>Works seamlessly with Python bindings via PyO3</li>
+</ul>
+</li>
+<li><strong>Custom formats</strong>: Any serialization format can be layered on top if needed</li>
+</ul>
+<p><strong>Why MessagePack?</strong></p>
+<ul>
+<li>Consistent serialization across all clients (Rust, Python, etc.)</li>
+<li>Compact binary format with good performance</li>
+<li>Native Python support via <code>msgpack</code> library</li>
+<li>Self-describing format makes debugging easier than raw bincode</li>
+</ul>
 <h3 id="concurrency-model"><a class="header" href="#concurrency-model">Concurrency Model</a></h3>
 <p>Each accepted QUIC connection runs inside its own Tokio task. Within that
 connection, every RPC request is processed on another task so long-running
@@ -235,10 +251,11 @@ closure executes inside a Tokio task, so async IO is allowed.</p>
 </span>use rpcnet::{RpcError, RpcServer};
 
 server.register("add", |params| async move {
-    let (a, b): (i32, i32) = bincode::deserialize(&amp;params)
-        .map_err(RpcError::SerializationError)?;
+    let (a, b): (i32, i32) = rmp_serde::from_slice(&amp;params)
+        .map_err(|e| RpcError::SerializationError(e.to_string()))?;
     let sum = a + b;
-    Ok(bincode::serialize(&amp;sum)? )
+    rmp_serde::to_vec(&amp;sum)
+        .map_err(|e| RpcError::SerializationError(e.to_string()))
 }).await;
 <span class="boring">}</span></code></pre></pre>
 <p>Registering a method again overwrites the previous handler.</p>
@@ -291,9 +308,9 @@ keep-alive.</p>
 <h3 id="unary-calls"><a class="header" href="#unary-calls">Unary Calls</a></h3>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>let payload = bincode::serialize(&amp;(21, 21))?;
+</span>let payload = rmp_serde::to_vec(&amp;(21, 21))?;
 let response = client.call("add", payload).await?;
-let result: i32 = bincode::deserialize(&amp;response)?;
+let result: i32 = rmp_serde::from_slice(&amp;response)?;
 assert_eq!(result, 42);
 <span class="boring">}</span></code></pre></pre>
 <p>Errors surface as <code>RpcError</code> values. Timeouts honour the <code>DEFAULT_TIMEOUT</code>
@@ -481,22 +498,6 @@ let result = client.call_worker("compute", data, Some("role=worker")).await?;
 
         </div>
 
-        <!-- Livereload script (if served using the cli tool) -->
-        <script>
-            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
-            const socket = new WebSocket(wsAddress);
-            socket.onmessage = function (event) {
-                if (event.data === "reload") {
-                    socket.close();
-                    location.reload();
-                }
-            };
-
-            window.onbeforeunload = function() {
-                socket.close();
-            }
-        </script>
 
 
 

@@ -3,7 +3,7 @@
 //! This example demonstrates how to create a simple RPC server without code generation.
 //! It shows manual method registration and binary serialization handling.
 
-use rpcnet::{RpcConfig, RpcError, RpcServer};
+use rpcnet::{RpcConfig, RpcServer};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -31,8 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     server
         .register("greet", |params| async move {
             // Deserialize request
-            let request: GreetRequest =
-                bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+            let request: GreetRequest = rmp_serde::from_slice(&params)?;
 
             // Process request
             let response = if request.name.trim().is_empty() {
@@ -46,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
 
             // Serialize response
-            bincode::serialize(&response).map_err(RpcError::SerializationError)
+            rmp_serde::to_vec(&response).map_err(Into::into)
         })
         .await;
 

@@ -263,4 +263,65 @@ mod tests {
 
         assert!(Arc::ptr_eq(&broadcaster1.drops, &broadcaster2.drops));
     }
+
+    #[tokio::test]
+    async fn test_all_event_types() {
+        let broadcaster = ClusterEventBroadcaster::with_default_capacity();
+        let mut receiver = broadcaster.subscribe();
+
+        // NodeJoined
+        let mut tags = HashMap::new();
+        tags.insert("role".to_string(), "worker".to_string());
+        broadcaster.send(ClusterEvent::NodeJoined(ClusterNode {
+            id: NodeId::new("node-1"),
+            addr: "127.0.0.1:8000".parse().unwrap(),
+            tags: tags.clone(),
+        }));
+
+        let event = receiver.recv().await.unwrap();
+        assert!(matches!(event, ClusterEvent::NodeJoined(_)));
+
+        // NodeLeft
+        broadcaster.send(ClusterEvent::NodeLeft(NodeId::new("node-2")));
+        let event = receiver.recv().await.unwrap();
+        assert!(matches!(event, ClusterEvent::NodeLeft(_)));
+
+        // NodeRecovered
+        broadcaster.send(ClusterEvent::NodeRecovered(NodeId::new("node-3")));
+        let event = receiver.recv().await.unwrap();
+        assert!(matches!(event, ClusterEvent::NodeRecovered(_)));
+
+        // NodeTagsUpdated
+        broadcaster.send(ClusterEvent::NodeTagsUpdated {
+            node_id: NodeId::new("node-4"),
+            tags: tags.clone(),
+        });
+        let event = receiver.recv().await.unwrap();
+        assert!(matches!(event, ClusterEvent::NodeTagsUpdated { .. }));
+
+        // PartitionDetected
+        broadcaster.send(ClusterEvent::PartitionDetected {
+            status: PartitionStatus::Unknown,
+        });
+        let event = receiver.recv().await.unwrap();
+        assert!(matches!(event, ClusterEvent::PartitionDetected { .. }));
+
+        // EventsDropped
+        broadcaster.send(ClusterEvent::EventsDropped { count: 42 });
+        let event = receiver.recv().await.unwrap();
+        match event {
+            ClusterEvent::EventsDropped { count } => assert_eq!(count, 42),
+            _ => panic!("Expected EventsDropped"),
+        }
+    }
+
+    #[test]
+    fn test_recv_error_display() {
+        let err1 = RecvError::Lagged(42);
+        assert!(format!("{}", err1).contains("lagged"));
+        assert!(format!("{}", err1).contains("42"));
+
+        let err2 = RecvError::Closed;
+        assert!(format!("{}", err2).contains("closed"));
+    }
 }

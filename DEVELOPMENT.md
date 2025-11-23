@@ -121,9 +121,17 @@ make doc-book-serve
 ## Benchmarks
 
 ```bash
-# Run all benchmarks
+# Run all benchmarks (Rust + Python)
 make bench
+
+# Run only Rust benchmarks
+make bench-rust
+
+# Run only Python benchmarks (requires Python venv)
+make bench-python
 ```
+
+**Note:** `make bench` will automatically run Python benchmarks if `.venv/bin/python` is available. The Python benchmark (`python_realistic_bench.py`) automatically starts and stops its own server, so no manual setup is required.
 
 ## Examples
 

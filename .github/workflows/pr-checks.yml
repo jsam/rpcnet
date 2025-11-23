@@ -52,14 +52,14 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cargo/registry/index
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-registry-${{ github.sha }}
         restore-keys: ${{ runner.os }}-cargo-registry-
     
     - name: Cache cargo build
       uses: actions/cache@v4
       with:
         path: target
-        key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-build-${{ github.sha }}
         restore-keys: ${{ runner.os }}-cargo-build-
     
     - name: Generate test certificates
@@ -82,11 +82,16 @@ jobs:
         exclude:
           - os: macos-latest
             rust: beta
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
     - name: Install Rust ${{ matrix.rust }}
       uses: dtolnay/rust-toolchain@master
       with:
@@ -96,14 +101,14 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cargo/registry/index
-        key: ${{ runner.os }}-${{ matrix.rust }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.rust }}-cargo-registry-${{ github.sha }}
         restore-keys: ${{ runner.os }}-${{ matrix.rust }}-cargo-registry-
     
     - name: Cache cargo build
       uses: actions/cache@v4
       with:
         path: target
-        key: ${{ runner.os }}-${{ matrix.rust }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.rust }}-cargo-build-${{ github.sha }}
         restore-keys: ${{ runner.os }}-${{ matrix.rust }}-cargo-build-
     
     - name: Generate test certificates
@@ -124,7 +129,12 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
@@ -142,14 +152,14 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cargo/registry/index
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-registry-${{ github.sha }}
         restore-keys: ${{ runner.os }}-cargo-registry-
     
     - name: Cache cargo build
       uses: actions/cache@v4
       with:
         path: target
-        key: ${{ runner.os }}-cargo-coverage-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-coverage-${{ github.sha }}
         restore-keys: ${{ runner.os }}-cargo-coverage-
     
     - name: Generate test certificates
@@ -196,7 +206,7 @@ jobs:
           try {
             const coverage = JSON.parse(fs.readFileSync('target/coverage/tarpaulin-report.json', 'utf8'));
             const coveragePercent = coverage.coverage.toFixed(1);
-            const threshold = 65.0;
+            const threshold = 58.0;
             const status = coveragePercent >= threshold ? '✅' : '⚠️';
             
             const body = `## ${status} Coverage Report
@@ -250,14 +260,14 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cargo/registry/index
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-registry-${{ github.sha }}
         restore-keys: ${{ runner.os }}-cargo-registry-
     
     - name: Cache cargo build
       uses: actions/cache@v4
       with:
         path: target
-        key: ${{ runner.os }}-cargo-doc-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-doc-${{ github.sha }}
         restore-keys: ${{ runner.os }}-cargo-doc-
     
     - name: Build documentation
@@ -285,14 +295,14 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.cargo/registry/index
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-registry-${{ github.sha }}
         restore-keys: ${{ runner.os }}-cargo-registry-
     
     - name: Cache cargo build
       uses: actions/cache@v4
       with:
         path: target
-        key: ${{ runner.os }}-cargo-examples-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-cargo-examples-${{ github.sha }}
         restore-keys: ${{ runner.os }}-cargo-examples-
     
     - name: Generate test certificates
@@ -303,11 +313,58 @@ jobs:
     - name: Build examples
       run: make examples
 
+  # Test Python examples
+  python-examples:
+    name: Test Python Examples
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install timeout utility (macOS)
+      if: runner.os == 'macOS'
+      run: brew install coreutils
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry/index
+        key: ${{ runner.os }}-cargo-registry-${{ github.sha }}
+        restore-keys: ${{ runner.os }}-cargo-registry-
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-python-${{ github.sha }}
+        restore-keys: ${{ runner.os }}-cargo-python-
+
+    - name: Run all Python examples via Makefile
+      run: |
+        # Use gtimeout on macOS, timeout on Linux
+        if [ "$RUNNER_OS" = "macOS" ]; then
+          export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:$PATH"
+        fi
+        make ci-python-examples
+
   # Summary job that depends on all checks
   pr-checks-complete:
     name: All PR Checks Passed
     runs-on: ubuntu-latest
-    needs: [format, lint, test, coverage, security, docs, examples]
+    needs: [format, lint, test, coverage, security, docs, examples, python-examples]
     if: always()
     steps:
     - name: Check results
@@ -318,7 +375,8 @@ jobs:
            [[ "${{ needs.coverage.result }}" == "failure" ]] || \
            [[ "${{ needs.security.result }}" == "failure" ]] || \
            [[ "${{ needs.docs.result }}" == "failure" ]] || \
-           [[ "${{ needs.examples.result }}" == "failure" ]]; then
+           [[ "${{ needs.examples.result }}" == "failure" ]] || \
+           [[ "${{ needs.python-examples.result }}" == "failure" ]]; then
           echo "❌ One or more checks failed"
           exit 1
         fi

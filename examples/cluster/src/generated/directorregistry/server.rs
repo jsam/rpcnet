@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use super::types::*;
 use rpcnet::{RpcServer, RpcConfig, RpcError};
 use async_trait::async_trait;
@@ -35,12 +33,12 @@ impl<H: DirectorRegistryHandler> DirectorRegistryServer<H> {
                     move |params| {
                         let handler = handler.clone();
                         async move {
-                            let request: GetWorkerRequest = bincode::deserialize(&params)
-                                .map_err(RpcError::SerializationError)?;
+                            let request: GetWorkerRequest = rmp_serde::from_slice(
+                                &params,
+                            )?;
                             match handler.get_worker(request).await {
                                 Ok(response) => {
-                                    bincode::serialize(&response)
-                                        .map_err(RpcError::SerializationError)
+                                    rmp_serde::to_vec(&response).map_err(Into::into)
                                 }
                                 Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                             }

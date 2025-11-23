@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use super::types::*;
 use async_trait::async_trait;
 use rpcnet::{RpcConfig, RpcError, RpcServer};
@@ -12,7 +10,7 @@ pub trait GreetingHandler: Send + Sync + 'static {
 /// Generated server that manages RPC registration and routing.
 pub struct GreetingServer<H: GreetingHandler> {
     handler: Arc<H>,
-    rpc_server: RpcServer,
+    pub rpc_server: RpcServer,
 }
 impl<H: GreetingHandler> GreetingServer<H> {
     /// Creates a new server with the given handler and configuration.
@@ -30,12 +28,9 @@ impl<H: GreetingHandler> GreetingServer<H> {
                 .register("Greeting.greet", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: GreetRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: GreetRequest = rmp_serde::from_slice(&params)?;
                         match handler.greet(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use super::types::*;
 use rpcnet::{RpcServer, RpcConfig, RpcError};
 use async_trait::async_trait;
@@ -9,6 +7,10 @@ use std::pin::Pin;
 /// Handler trait that users implement for the service.
 #[async_trait]
 pub trait InferenceHandler: Send + Sync + 'static {
+    async fn infer(
+        &self,
+        request: InferenceRequest,
+    ) -> Result<InferenceResponse, InferenceError>;
     async fn generate(
         &self,
         request: Pin<Box<dyn Stream<Item = InferenceRequest> + Send>>,
@@ -35,6 +37,28 @@ impl<H: InferenceHandler> InferenceServer<H> {
         {
             let handler = self.handler.clone();
             self.rpc_server
+                .register(
+                    "Inference.infer",
+                    move |params| {
+                        let handler = handler.clone();
+                        async move {
+                            let request: InferenceRequest = rmp_serde::from_slice(
+                                &params,
+                            )?;
+                            match handler.infer(request).await {
+                                Ok(response) => {
+                                    rmp_serde::to_vec(&response).map_err(Into::into)
+                                }
+                                Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
+                            }
+                        }
+                    },
+                )
+                .await;
+        }
+        {
+            let handler = self.handler.clone();
+            self.rpc_server
                 .register_streaming(
                     "Inference.generate",
                     move |request_stream| {
@@ -43,13 +67,13 @@ impl<H: InferenceHandler> InferenceServer<H> {
                             use futures::StreamExt;
                             let typed_request_stream = request_stream
                                 .map(|bytes| {
-                                    bincode::deserialize::<InferenceRequest>(&bytes).unwrap()
+                                    rmp_serde::from_slice::<InferenceRequest>(&bytes).unwrap()
                                 });
                             match handler.generate(Box::pin(typed_request_stream)).await
                             {
                                 Ok(response_stream) => {
                                     let byte_response_stream = response_stream
-                                        .map(|item| { Ok(bincode::serialize(&item).unwrap()) });
+                                        .map(|item| { Ok(rmp_serde::to_vec(&item).unwrap()) });
                                     Box::pin(byte_response_stream)
                                         as Pin<
                                             Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>,

@@ -327,4 +327,32 @@ mod tests {
         let result = registry.get(&node_id).unwrap();
         assert_eq!(result.state, NodeState::Failed);
     }
+
+    #[test]
+    fn test_default_trait() {
+        let registry = SharedNodeRegistry::default();
+        assert!(registry.is_empty());
+        assert_eq!(registry.len(), 0);
+
+        // Verify it works the same as new()
+        registry.insert(create_node_status("node-1", 100, NodeState::Alive));
+        assert_eq!(registry.len(), 1);
+    }
+
+    #[test]
+    fn test_with_capacity() {
+        let registry = SharedNodeRegistry::with_capacity(100);
+        assert!(registry.is_empty());
+
+        // Insert many items
+        for i in 0..50 {
+            registry.insert(create_node_status(
+                &format!("node-{}", i),
+                i,
+                NodeState::Alive,
+            ));
+        }
+
+        assert_eq!(registry.len(), 50);
+    }
 }

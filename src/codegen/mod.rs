@@ -166,7 +166,7 @@
 //!
 //! ### Performance Considerations
 //!
-//! - Generated code uses efficient binary serialization (bincode)
+//! - Generated code uses efficient binary serialization (MessagePack)
 //! - Connection reuse is handled automatically
 //! - Method calls are properly typed at compile time
 //! - No runtime reflection or dynamic dispatch
@@ -176,10 +176,16 @@ mod generator;
 #[cfg(feature = "codegen")]
 mod parser;
 
+#[cfg(all(feature = "codegen", feature = "python"))]
+mod python_generator;
+
 #[cfg(feature = "codegen")]
 pub use generator::CodeGenerator;
 #[cfg(feature = "codegen")]
 pub use parser::{ServiceDefinition, ServiceType};
+
+#[cfg(all(feature = "codegen", feature = "python"))]
+pub use python_generator::PythonGenerator;
 
 use std::path::{Path, PathBuf};
 

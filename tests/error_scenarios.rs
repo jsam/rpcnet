@@ -138,9 +138,9 @@ mod error_scenarios {
                     field3: std::collections::HashMap<String, bool>,
                 }
 
-                match bincode::deserialize::<ComplexStruct>(&params) {
+                match rmp_serde::from_slice::<ComplexStruct>(&params) {
                     Ok(_) => Ok(b"success".to_vec()),
-                    Err(e) => Err(RpcError::SerializationError(e)),
+                    Err(e) => Err(RpcError::SerializationError(e.to_string())),
                 }
             })
             .await;
@@ -161,7 +161,7 @@ mod error_scenarios {
 
         server
             .register("validation_error", |params| async move {
-                let value: i32 = bincode::deserialize(&params).unwrap();
+                let value: i32 = rmp_serde::from_slice(&params).unwrap();
                 if value < 0 {
                     Err(RpcError::StreamError(
                         "Value must be non-negative".to_string(),
@@ -169,7 +169,7 @@ mod error_scenarios {
                 } else if value > 100 {
                     Err(RpcError::StreamError("Value must be <= 100".to_string()))
                 } else {
-                    Ok(bincode::serialize(&(value * 2)).unwrap())
+                    Ok(rmp_serde::to_vec(&(value * 2)).unwrap())
                 }
             })
             .await;
@@ -178,7 +178,7 @@ mod error_scenarios {
         let client = RpcClient::connect(addr, test_config()).await.unwrap();
 
         // Test negative value
-        let params = bincode::serialize(&(-5)).unwrap();
+        let params = rmp_serde::to_vec(&(-5)).unwrap();
         let result = client.call("validation_error", params).await;
         match result {
             Err(RpcError::StreamError(msg)) => assert!(msg.contains("non-negative")),
@@ -186,7 +186,7 @@ mod error_scenarios {
         }
 
         // Test too large value
-        let params = bincode::serialize(&150).unwrap();
+        let params = rmp_serde::to_vec(&150).unwrap();
         let result = client.call("validation_error", params).await;
         match result {
             Err(RpcError::StreamError(msg)) => assert!(msg.contains("<= 100")),
@@ -194,9 +194,9 @@ mod error_scenarios {
         }
 
         // Test valid value
-        let params = bincode::serialize(&50).unwrap();
+        let params = rmp_serde::to_vec(&50).unwrap();
         let result = client.call("validation_error", params).await.unwrap();
-        let response: i32 = bincode::deserialize(&result).unwrap();
+        let response: i32 = rmp_serde::from_slice(&result).unwrap();
         assert_eq!(response, 100);
     }
 
@@ -263,7 +263,7 @@ mod error_scenarios {
 
         server
             .register("sometimes_fail", |params| async move {
-                let value: u32 = bincode::deserialize(&params).unwrap();
+                let value: u32 = rmp_serde::from_slice(&params).unwrap();
 
                 // Fail for even numbers
                 if value % 2 == 0 {
@@ -273,7 +273,7 @@ mod error_scenarios {
                     )))
                 } else {
                     sleep(Duration::from_millis(10)).await;
-                    Ok(bincode::serialize(&(value * 2)).unwrap())
+                    Ok(rmp_serde::to_vec(&(value * 2)).unwrap())
                 }
             })
             .await;
@@ -286,7 +286,7 @@ mod error_scenarios {
         for i in 0..20 {
             let client_clone = client.clone();
             let task = tokio::spawn(async move {
-                let params = bincode::serialize(&i).unwrap();
+                let params = rmp_serde::to_vec(&i).unwrap();
                 let result = client_clone.call("sometimes_fail", params).await;
                 (i, result)
             });
@@ -300,7 +300,7 @@ mod error_scenarios {
             let (value, result) = task.await.unwrap();
             match result {
                 Ok(response) => {
-                    let doubled: u32 = bincode::deserialize(&response).unwrap();
+                    let doubled: u32 = rmp_serde::from_slice(&response).unwrap();
                     assert_eq!(doubled, value * 2);
                     assert_eq!(value % 2, 1); // Should be odd
                     successes += 1;
@@ -338,7 +338,7 @@ mod error_scenarios {
 
                 // Simulate processing
                 let _processed = vec![0u8; size];
-                Ok(bincode::serialize(&size).unwrap())
+                Ok(rmp_serde::to_vec(&size).unwrap())
             })
             .await;
 
@@ -348,7 +348,7 @@ mod error_scenarios {
         // Test acceptable size
         let medium_payload = vec![0xFF; 1_000_000]; // 1MB
         let result = client.call("memory_test", medium_payload).await.unwrap();
-        let size: usize = bincode::deserialize(&result).unwrap();
+        let size: usize = rmp_serde::from_slice(&result).unwrap();
         assert_eq!(size, 1_000_000);
 
         // Test too large payload (this might fail at network level or handler level)

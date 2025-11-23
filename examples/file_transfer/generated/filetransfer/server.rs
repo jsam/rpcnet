@@ -1,6 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 use super::types::*;
 use async_trait::async_trait;
 use rpcnet::{RpcConfig, RpcError, RpcServer};
@@ -24,7 +21,7 @@ pub trait FileTransferHandler: Send + Sync + 'static {
 /// Generated server that manages RPC registration and routing.
 pub struct FileTransferServer<H: FileTransferHandler> {
     handler: Arc<H>,
-    rpc_server: RpcServer,
+    pub rpc_server: RpcServer,
 }
 impl<H: FileTransferHandler> FileTransferServer<H> {
     /// Creates a new server with the given handler and configuration.
@@ -42,12 +39,9 @@ impl<H: FileTransferHandler> FileTransferServer<H> {
                 .register("FileTransfer.upload_chunk", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: UploadChunkRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: UploadChunkRequest = rmp_serde::from_slice(&params)?;
                         match handler.upload_chunk(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }
@@ -60,12 +54,9 @@ impl<H: FileTransferHandler> FileTransferServer<H> {
                 .register("FileTransfer.download_chunk", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: DownloadChunkRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: DownloadChunkRequest = rmp_serde::from_slice(&params)?;
                         match handler.download_chunk(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }
@@ -78,12 +69,9 @@ impl<H: FileTransferHandler> FileTransferServer<H> {
                 .register("FileTransfer.get_file_info", move |params| {
                     let handler = handler.clone();
                     async move {
-                        let request: FileInfoRequest =
-                            bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                        let request: FileInfoRequest = rmp_serde::from_slice(&params)?;
                         match handler.get_file_info(request).await {
-                            Ok(response) => {
-                                bincode::serialize(&response).map_err(RpcError::SerializationError)
-                            }
+                            Ok(response) => rmp_serde::to_vec(&response).map_err(Into::into),
                             Err(e) => Err(RpcError::StreamError(format!("{:?}", e))),
                         }
                     }

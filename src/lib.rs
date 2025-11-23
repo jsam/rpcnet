@@ -19,7 +19,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::{
-    sync::{oneshot, RwLock},
+    sync::{mpsc, oneshot, RwLock},
     task::JoinHandle,
 };
 use tracing::debug;
@@ -80,6 +80,9 @@ pub mod cluster;
 #[cfg(feature = "codegen")]
 pub mod codegen;
 
+#[cfg(feature = "python")]
+pub mod python;
+
 #[cfg(not(test))]
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -98,7 +101,7 @@ pub enum RpcError {
     TlsError(String),
 
     #[error("Serialization error: {0}")]
-    SerializationError(#[from] bincode::Error),
+    SerializationError(String),
 
     #[error("Request timeout")]
     Timeout,
@@ -122,11 +125,23 @@ pub enum RpcError {
     MigrationRejected,
 }
 
+impl From<rmp_serde::encode::Error> for RpcError {
+    fn from(err: rmp_serde::encode::Error) -> Self {
+        RpcError::SerializationError(err.to_string())
+    }
+}
+
+impl From<rmp_serde::decode::Error> for RpcError {
+    fn from(err: rmp_serde::decode::Error) -> Self {
+        RpcError::SerializationError(err.to_string())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RpcRequest {
-    id: u64,
-    method: String,
-    params: Vec<u8>,
+    pub id: u64,
+    pub method: String,
+    pub params: Vec<u8>,
 }
 
 impl RpcRequest {
@@ -245,17 +260,58 @@ type AsyncStreamingHandlerFn = Box<
         + Sync,
 >;
 
+type AsyncServerStreamingHandlerFn = Box<
+    dyn Fn(
+            Vec<u8>,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>>
+                    + Send,
+            >,
+        > + Send
+        + Sync,
+>;
+
+type AsyncClientStreamingHandlerFn = Box<
+    dyn Fn(
+            mpsc::UnboundedReceiver<Vec<u8>>,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RpcError>> + Send>>
+        + Send
+        + Sync,
+>;
+
+type AsyncBidirectionalHandlerFn = Box<
+    dyn Fn(
+            mpsc::UnboundedReceiver<Vec<u8>>,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>>
+                    + Send,
+            >,
+        > + Send
+        + Sync,
+>;
+
 #[derive(Clone)]
 pub struct RpcServer {
     pub handlers: Arc<RwLock<HashMap<String, AsyncHandlerFn>>>,
 
     pub streaming_handlers: Arc<RwLock<HashMap<String, AsyncStreamingHandlerFn>>>,
 
+    pub server_streaming_handlers: Arc<RwLock<HashMap<String, AsyncServerStreamingHandlerFn>>>,
+
+    pub client_streaming_handlers: Arc<RwLock<HashMap<String, AsyncClientStreamingHandlerFn>>>,
+
+    pub bidirectional_handlers: Arc<RwLock<HashMap<String, AsyncBidirectionalHandlerFn>>>,
+
     pub socket_addr: Option<SocketAddr>,
 
     pub config: RpcConfig,
 
     cluster: Arc<RwLock<Option<Arc<cluster::ClusterMembership>>>>,
+
+    #[allow(dead_code)]
+    quic_server: Arc<tokio::sync::Mutex<Option<s2n_quic::Server>>>,
 }
 
 #[derive(Debug)]
@@ -392,9 +448,13 @@ impl RpcServer {
         Self {
             handlers: Arc::new(RwLock::new(HashMap::new())),
             streaming_handlers: Arc::new(RwLock::new(HashMap::new())),
+            server_streaming_handlers: Arc::new(RwLock::new(HashMap::new())),
+            client_streaming_handlers: Arc::new(RwLock::new(HashMap::new())),
+            bidirectional_handlers: Arc::new(RwLock::new(HashMap::new())),
             socket_addr: None,
             config,
             cluster: Arc::new(RwLock::new(None)),
+            quic_server: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
 
@@ -423,12 +483,66 @@ impl RpcServer {
         self.register(method, move |params: Vec<u8>| {
             let handler = handler.clone();
             async move {
-                let request: Req =
-                    bincode::deserialize(&params).map_err(RpcError::SerializationError)?;
+                let request: Req = rmp_serde::from_slice(&params)?;
 
                 let response = handler(request).await?;
 
-                bincode::serialize(&response).map_err(RpcError::SerializationError)
+                rmp_serde::to_vec_named(&response).map_err(Into::into)
+            }
+        })
+        .await;
+    }
+
+    /// Register a typed RPC method handler using MessagePack serialization.
+    ///
+    /// This is specifically for Python clients that use MessagePack serialization.
+    /// Use this instead of `register_typed` when the client is using Python bindings.
+    pub async fn register_typed_msgpack<Req, Resp, F, Fut>(&self, method: &str, handler: F)
+    where
+        Req: serde::de::DeserializeOwned + Send + 'static,
+        Resp: serde::Serialize + Send + 'static,
+        F: Fn(Req) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Resp, RpcError>> + Send + 'static,
+    {
+        let handler = Arc::new(handler);
+        self.register(method, move |params: Vec<u8>| {
+            let handler = handler.clone();
+            async move {
+                let request: Req = rmp_serde::from_slice(&params).map_err(|e| {
+                    RpcError::InternalError(format!("MessagePack deserialization failed: {}", e))
+                })?;
+
+                let response = handler(request).await?;
+
+                rmp_serde::to_vec_named(&response).map_err(|e| {
+                    RpcError::InternalError(format!("MessagePack serialization failed: {}", e))
+                })
+            }
+        })
+        .await;
+    }
+
+    /// Register a typed RPC method handler using MessagePack serialization.
+    ///
+    /// This is the standard method for Python<->Rust interop, using MessagePack
+    /// for both request deserialization and response serialization.
+    pub async fn register_typed_polyglot<Req, Resp, F, Fut>(&self, method: &str, handler: F)
+    where
+        Req: serde::de::DeserializeOwned + Send + 'static,
+        Resp: serde::Serialize + Send + 'static,
+        F: Fn(Req) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Resp, RpcError>> + Send + 'static,
+    {
+        let handler = Arc::new(handler);
+        self.register(method, move |params: Vec<u8>| {
+            let handler = handler.clone();
+            async move {
+                // Use MessagePack for Python<->Rust interop
+                let request: Req = rmp_serde::from_slice(&params)?;
+
+                let response = handler(request).await?;
+
+                rmp_serde::to_vec_named(&response).map_err(Into::into)
             }
         })
         .await;
@@ -454,6 +568,81 @@ impl RpcServer {
         );
     }
 
+    /// Register a server streaming RPC handler (1 request → N responses)
+    ///
+    /// The handler receives a single request and returns a stream of responses.
+    /// This is useful for operations like:
+    /// - Listing large datasets in chunks
+    /// - Real-time updates or notifications
+    /// - Long-running operations with progress updates
+    pub async fn register_server_streaming<F, Fut, S>(&self, method: &str, handler: F)
+    where
+        F: Fn(Vec<u8>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = S> + Send + 'static,
+        S: Stream<Item = Result<Vec<u8>, RpcError>> + Send + 'static,
+    {
+        let mut handlers = self.server_streaming_handlers.write().await;
+        let handler = Arc::new(handler);
+        handlers.insert(
+            method.to_string(),
+            Box::new(move |params| {
+                let handler = handler.clone();
+                Box::pin(async move {
+                    let response_stream = handler(params).await;
+                    Box::pin(response_stream)
+                        as Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>
+                })
+            }),
+        );
+    }
+
+    /// Register a client streaming RPC handler (N→1)
+    ///
+    /// Client streaming handlers receive multiple requests from the client and return a single response.
+    /// The handler function receives an `UnboundedReceiver<Vec<u8>>` stream of incoming requests
+    /// and returns a single `Result<Vec<u8>, RpcError>` response.
+    pub async fn register_client_streaming<F, Fut>(&self, method: &str, handler: F)
+    where
+        F: Fn(mpsc::UnboundedReceiver<Vec<u8>>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Vec<u8>, RpcError>> + Send + 'static,
+    {
+        let mut handlers = self.client_streaming_handlers.write().await;
+        let handler = Arc::new(handler);
+        handlers.insert(
+            method.to_string(),
+            Box::new(move |request_rx| {
+                let handler = handler.clone();
+                Box::pin(async move { handler(request_rx).await })
+            }),
+        );
+    }
+
+    /// Register a bidirectional streaming RPC handler (N→M)
+    ///
+    /// Bidirectional streaming handlers receive multiple requests from the client and return multiple responses.
+    /// The handler function receives an `UnboundedReceiver<Vec<u8>>` stream of incoming requests
+    /// and returns a `Stream` of `Result<Vec<u8>, RpcError>` responses.
+    pub async fn register_bidirectional<F, Fut, S>(&self, method: &str, handler: F)
+    where
+        F: Fn(mpsc::UnboundedReceiver<Vec<u8>>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = S> + Send + 'static,
+        S: Stream<Item = Result<Vec<u8>, RpcError>> + Send + 'static,
+    {
+        let mut handlers = self.bidirectional_handlers.write().await;
+        let handler = Arc::new(handler);
+        handlers.insert(
+            method.to_string(),
+            Box::new(move |request_rx| {
+                let handler = handler.clone();
+                Box::pin(async move {
+                    let response_stream = handler(request_rx).await;
+                    Box::pin(response_stream)
+                        as Pin<Box<dyn Stream<Item = Result<Vec<u8>, RpcError>> + Send>>
+                })
+            }),
+        );
+    }
+
     pub async fn start(&mut self, server: s2n_quic::Server) -> Result<(), RpcError> {
         let mut adapter = RealServerAdapter::new(server);
         self.start_with_adapter(&mut adapter).await
@@ -466,6 +655,9 @@ impl RpcServer {
         while let Some(mut connection) = server.accept().await {
             let handlers = self.handlers.clone();
             let streaming_handlers = self.streaming_handlers.clone();
+            let server_streaming_handlers = self.server_streaming_handlers.clone();
+            let client_streaming_handlers = self.client_streaming_handlers.clone();
+            let bidirectional_handlers = self.bidirectional_handlers.clone();
             let cluster = self.cluster.clone();
 
             tokio::spawn(async move {
@@ -473,11 +665,17 @@ impl RpcServer {
                 while let Ok(Some(stream)) = connection.accept_bidirectional_stream().await {
                     let handlers = handlers.clone();
                     let streaming_handlers = streaming_handlers.clone();
+                    let server_streaming_handlers = server_streaming_handlers.clone();
+                    let client_streaming_handlers = client_streaming_handlers.clone();
+                    let bidirectional_handlers = bidirectional_handlers.clone();
                     let cluster = cluster.clone();
 
                     tokio::spawn(Self::handle_stream(
                         handlers,
                         streaming_handlers,
+                        server_streaming_handlers,
+                        client_streaming_handlers,
+                        bidirectional_handlers,
                         cluster,
                         stream,
                     ));
@@ -491,6 +689,9 @@ impl RpcServer {
     async fn handle_stream(
         handlers: Arc<RwLock<HashMap<String, AsyncHandlerFn>>>,
         streaming_handlers: Arc<RwLock<HashMap<String, AsyncStreamingHandlerFn>>>,
+        server_streaming_handlers: Arc<RwLock<HashMap<String, AsyncServerStreamingHandlerFn>>>,
+        client_streaming_handlers: Arc<RwLock<HashMap<String, AsyncClientStreamingHandlerFn>>>,
+        bidirectional_handlers: Arc<RwLock<HashMap<String, AsyncBidirectionalHandlerFn>>>,
         cluster: Arc<RwLock<Option<Arc<cluster::ClusterMembership>>>>,
         stream: Box<dyn QuicStreamAdapter + Send>,
     ) {
@@ -522,19 +723,28 @@ impl RpcServer {
             debug!("📊 Total request_data size: {} bytes", request_data.len());
 
             // First, try to parse as SWIM gossip message
+            debug!(
+                "🔍 [SWIM-RECV] Attempting to parse {} bytes as SWIM message",
+                request_data.len()
+            );
             match cluster::gossip::SwimMessage::deserialize(&request_data) {
                 Ok(swim_msg) => {
-                    debug!("✅ Successfully deserialized SWIM message!");
+                    debug!(
+                        "✅ [SWIM-RECV] Successfully deserialized SWIM message: {:?}",
+                        swim_msg
+                    );
                     if let Some(cluster_membership) = cluster.read().await.as_ref() {
+                        debug!("🔄 [SWIM-RECV] Processing SWIM message with cluster");
                         Self::handle_swim_message(cluster_membership, swim_msg, &stream).await;
+                        debug!("✅ [SWIM-RECV] Completed SWIM message processing");
                     } else {
-                        debug!("⚠️  Received SWIM message but cluster not enabled");
+                        debug!("⚠️  [SWIM-RECV] Received SWIM message but cluster not enabled");
                     }
                     break;
                 }
                 Err(e) => {
                     debug!(
-                        "⚠️  Not a SWIM message (tried {} bytes): {:?}",
+                        "⚠️  [SWIM-RECV] Not a SWIM message (tried {} bytes): {:?}",
                         request_data.len(),
                         e
                     );
@@ -542,25 +752,253 @@ impl RpcServer {
             }
 
             // Then try to parse as regular RPC request (original behavior)
-            if let Ok(request) = bincode::deserialize::<RpcRequest>(&request_data) {
-                debug!("📨 Received RPC request: {}", request.method);
-                let handlers = handlers.read().await;
-                let response = match handlers.get(request.method()) {
-                    Some(handler) => {
-                        let result = handler(request.params().to_vec()).await;
-                        RpcResponse::from_result(request.id(), result)
+            debug!("Attempting to parse {} bytes as RpcRequest with named fields. First 20 bytes: {:?}",
+                   request_data.len(),
+                   &request_data[..request_data.len().min(20)]);
+            match rmp_serde::from_slice::<RpcRequest>(&request_data) {
+                Ok(request) => {
+                    debug!("📨 Received RPC request: {}", request.method);
+
+                    // Check if it's a server streaming handler first
+                    let server_streaming_handlers_guard = server_streaming_handlers.read().await;
+                    if let Some(handler) = server_streaming_handlers_guard.get(request.method()) {
+                        debug!("🌊 Found server streaming handler for: {}", request.method);
+                        let mut response_stream = handler(request.params().to_vec()).await;
+                        drop(server_streaming_handlers_guard); // Release lock
+
+                        // Stream responses back to the client
+                        use futures::StreamExt;
+                        while let Some(result) = response_stream.next().await {
+                            let response_data = match result {
+                                Ok(data) => {
+                                    // Wrap in RpcResponse
+                                    let response = RpcResponse::from_result(request.id(), Ok(data));
+                                    rmp_serde::to_vec_named(&response).unwrap_or_default()
+                                }
+                                Err(e) => {
+                                    // Send error response
+                                    let response = RpcResponse::from_result(request.id(), Err(e));
+                                    rmp_serde::to_vec_named(&response).unwrap_or_default()
+                                }
+                            };
+
+                            if !response_data.is_empty() {
+                                let mut stream_guard = stream.lock().await;
+                                if stream_guard
+                                    .send_bytes(Bytes::from(response_data))
+                                    .await
+                                    .is_err()
+                                {
+                                    debug!(
+                                        "❌ Failed to send streaming response, client disconnected"
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+                        break; // Streaming complete
                     }
-                    None => RpcResponse::new(
-                        request.id(),
-                        None,
-                        Some(format!("Unknown method: {}", request.method())),
-                    ),
-                };
-                if let Ok(response_data) = bincode::serialize(&response) {
-                    let mut stream_guard = stream.lock().await;
-                    let _ = stream_guard.send_bytes(Bytes::from(response_data)).await;
+                    drop(server_streaming_handlers_guard);
+
+                    // Check if it's a client streaming handler (N→1)
+                    let client_streaming_handlers_guard = client_streaming_handlers.read().await;
+                    if client_streaming_handlers_guard.contains_key(request.method()) {
+                        debug!(
+                            "🌊 Found client streaming handler for: {}",
+                            request.method()
+                        );
+
+                        // Create a channel to collect all incoming requests
+                        let (request_tx, request_rx) = mpsc::unbounded_channel();
+
+                        // Send the first request (already parsed)
+                        if request_tx.send(request.params().to_vec()).is_err() {
+                            debug!("❌ Failed to send first request to channel");
+                            drop(client_streaming_handlers_guard);
+                            break;
+                        }
+
+                        drop(client_streaming_handlers_guard); // Release lock
+
+                        // Collect remaining requests from the stream
+                        loop {
+                            let mut stream_guard = stream.lock().await;
+                            let data_result = stream_guard.receive_bytes().await;
+                            drop(stream_guard);
+
+                            match data_result {
+                                Ok(Some(data)) => {
+                                    // Try to parse as another request
+                                    match rmp_serde::from_slice::<RpcRequest>(&data) {
+                                        Ok(req) => {
+                                            if request_tx.send(req.params().to_vec()).is_err() {
+                                                debug!("❌ Failed to send request to channel (receiver dropped)");
+                                                break;
+                                            }
+                                        }
+                                        Err(_) => {
+                                            debug!("⚠️  Non-request data in client stream, ending stream");
+                                            break;
+                                        }
+                                    }
+                                }
+                                Ok(None) | Err(_) => {
+                                    debug!("🏁 Client streaming ended (stream closed)");
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Drop sender to signal end of stream
+                        drop(request_tx);
+
+                        // Call the handler with the request stream
+                        let client_streaming_handlers_guard =
+                            client_streaming_handlers.read().await;
+                        if let Some(handler) = client_streaming_handlers_guard.get(request.method())
+                        {
+                            let result = handler(request_rx).await;
+                            drop(client_streaming_handlers_guard);
+
+                            let response = RpcResponse::from_result(request.id(), result);
+                            if let Ok(response_data) = rmp_serde::to_vec_named(&response) {
+                                let mut stream_guard = stream.lock().await;
+                                let _ = stream_guard.send_bytes(Bytes::from(response_data)).await;
+                            }
+                        }
+
+                        break; // Client streaming complete
+                    }
+                    drop(client_streaming_handlers_guard);
+
+                    // Check if it's a bidirectional streaming handler (N→M)
+                    let bidirectional_handlers_guard = bidirectional_handlers.read().await;
+                    if bidirectional_handlers_guard.contains_key(request.method()) {
+                        debug!(
+                            "🔄 Found bidirectional streaming handler for: {}",
+                            request.method()
+                        );
+
+                        // Create channels for request collection and response streaming
+                        let (request_tx, request_rx) = mpsc::unbounded_channel();
+
+                        // Send the first request (already parsed)
+                        if request_tx.send(request.params().to_vec()).is_err() {
+                            debug!("❌ Failed to send first request to channel");
+                            drop(bidirectional_handlers_guard);
+                            break;
+                        }
+
+                        // Clone stream for concurrent request collection
+                        let stream_clone = stream.clone();
+
+                        // Spawn task to collect remaining requests from client
+                        tokio::spawn(async move {
+                            loop {
+                                let mut stream_guard = stream_clone.lock().await;
+                                let data_result = stream_guard.receive_bytes().await;
+                                drop(stream_guard);
+
+                                match data_result {
+                                    Ok(Some(data)) => {
+                                        // Try to parse as another request
+                                        match rmp_serde::from_slice::<RpcRequest>(&data) {
+                                            Ok(req) => {
+                                                if request_tx.send(req.params().to_vec()).is_err() {
+                                                    debug!("❌ Failed to send request to channel (receiver dropped)");
+                                                    break;
+                                                }
+                                            }
+                                            Err(_) => {
+                                                debug!("⚠️  Non-request data in bidirectional stream, ending request collection");
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    Ok(None) | Err(_) => {
+                                        debug!("🏁 Bidirectional request streaming ended");
+                                        break;
+                                    }
+                                }
+                            }
+                            // Drop sender to signal end of request stream
+                            drop(request_tx);
+                        });
+
+                        // Call the handler with the request stream
+                        if let Some(handler) = bidirectional_handlers_guard.get(request.method()) {
+                            let mut response_stream = handler(request_rx).await;
+                            drop(bidirectional_handlers_guard);
+
+                            // Stream responses back to the client
+                            use futures::StreamExt;
+                            while let Some(result) = response_stream.next().await {
+                                match result {
+                                    Ok(response_data) => {
+                                        let response = RpcResponse::from_result(
+                                            request.id(),
+                                            Ok(response_data),
+                                        );
+                                        if let Ok(serialized) = rmp_serde::to_vec_named(&response) {
+                                            let mut stream_guard = stream.lock().await;
+                                            if stream_guard
+                                                .send_bytes(Bytes::from(serialized))
+                                                .await
+                                                .is_err()
+                                            {
+                                                debug!("❌ Failed to send response in bidirectional stream");
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        debug!("❌ Error in bidirectional handler: {:?}", e);
+                                        let error_response =
+                                            RpcResponse::from_result(request.id(), Err(e));
+                                        if let Ok(serialized) =
+                                            rmp_serde::to_vec_named(&error_response)
+                                        {
+                                            let mut stream_guard = stream.lock().await;
+                                            let _ = stream_guard
+                                                .send_bytes(Bytes::from(serialized))
+                                                .await;
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        break; // Bidirectional streaming complete
+                    }
+                    drop(bidirectional_handlers_guard);
+
+                    // Not a server streaming handler, check regular handlers
+                    let handlers = handlers.read().await;
+                    let response = match handlers.get(request.method()) {
+                        Some(handler) => {
+                            let result = handler(request.params().to_vec()).await;
+                            RpcResponse::from_result(request.id(), result)
+                        }
+                        None => RpcResponse::new(
+                            request.id(),
+                            None,
+                            Some(format!("Unknown method: {}", request.method())),
+                        ),
+                    };
+                    if let Ok(response_data) = rmp_serde::to_vec_named(&response) {
+                        let mut stream_guard = stream.lock().await;
+                        let _ = stream_guard.send_bytes(Bytes::from(response_data)).await;
+                    }
+                    break; // Handle one request per stream
                 }
-                break; // Handle one request per stream
+                Err(e) => {
+                    debug!(
+                        "⚠️  Not a regular RPC request (tried {} bytes): {:?}",
+                        request_data.len(),
+                        e
+                    );
+                }
             }
 
             // If regular RPC parsing fails and we have enough data, check for streaming protocol
@@ -572,16 +1010,523 @@ impl RpcServer {
                     request_data[3],
                 ]) as usize;
 
+                eprintln!(
+                    "🔍 Length-prefix protocol: method_len={}, request_data.len()={}",
+                    method_len,
+                    request_data.len()
+                );
+
                 // Validate method length is reasonable (prevent huge allocations)
                 if method_len > 0 && method_len < 1024 && request_data.len() >= 4 + method_len {
-                    if let Ok(method_name) = std::str::from_utf8(&request_data[4..4 + method_len]) {
-                        // Check if this is a known streaming method
-                        let streaming_handlers_ref = streaming_handlers.read().await;
-                        if streaming_handlers_ref.contains_key(method_name) {
-                            drop(streaming_handlers_ref); // Release the read lock
+                    if let Ok(method_name_str) =
+                        std::str::from_utf8(&request_data[4..4 + method_len])
+                    {
+                        // Clone method name to avoid borrow issues when extending request_data
+                        let method_name = method_name_str.to_string();
 
-                            // Create stream with remaining data after method name
-                            let remaining_data = request_data[4 + method_len..].to_owned();
+                        // We've parsed the method name, but we need to read more data for the request payload
+                        // Continue reading until we have at least the start of a data chunk
+                        let method_and_len = 4 + method_len;
+
+                        // If we don't have at least 4 more bytes for the data length, read more
+                        while request_data.len() < method_and_len + 4 {
+                            let chunk = {
+                                let mut stream_guard = stream.lock().await;
+                                stream_guard.receive_bytes().await
+                            };
+
+                            match chunk {
+                                Ok(Some(bytes)) => {
+                                    eprintln!("🔍 Reading more data: got {} bytes", bytes.len());
+                                    request_data.extend_from_slice(&bytes);
+                                }
+                                Ok(None) | Err(_) => {
+                                    eprintln!(
+                                        "⚠️  Stream ended/errored while waiting for request data"
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+
+                        let remaining_data = request_data[method_and_len..].to_owned();
+                        eprintln!(
+                            "🔍 Parsed method name: '{}', remaining_data.len()={}",
+                            method_name,
+                            remaining_data.len()
+                        );
+
+                        // Check for server streaming handler (1→N): one request, multiple responses
+                        let server_streaming_ref = server_streaming_handlers.read().await;
+                        eprintln!(
+                            "🔍 Checking server_streaming_handlers for '{}', map has {} entries",
+                            method_name,
+                            server_streaming_ref.len()
+                        );
+                        if let Some(handler) = server_streaming_ref.get(method_name.as_str()) {
+                            eprintln!("🌊 Found server streaming handler (via length-prefix protocol): {}", method_name);
+
+                            // For server streaming, remaining_data contains length-prefixed request:
+                            // [4 bytes length][request data][4 bytes end marker (0,0,0,0)]
+                            // Extract the actual request data
+                            eprintln!(
+                                "🔍 remaining_data len={}, first 20 bytes: {:?}",
+                                remaining_data.len(),
+                                &remaining_data[..std::cmp::min(20, remaining_data.len())]
+                            );
+
+                            let request_data = if remaining_data.len() >= 4 {
+                                let data_len = u32::from_le_bytes([
+                                    remaining_data[0],
+                                    remaining_data[1],
+                                    remaining_data[2],
+                                    remaining_data[3],
+                                ]) as usize;
+
+                                eprintln!("🔍 Parsed data_len from remaining_data: {}", data_len);
+
+                                if data_len > 0 && remaining_data.len() >= 4 + data_len {
+                                    let extracted = remaining_data[4..4 + data_len].to_vec();
+                                    eprintln!(
+                                        "🔍 Extracted request_data len={}, first 20 bytes: {:?}",
+                                        extracted.len(),
+                                        &extracted[..std::cmp::min(20, extracted.len())]
+                                    );
+                                    extracted
+                                } else {
+                                    // No request data or invalid format, use empty vec
+                                    eprintln!(
+                                        "⚠️  Invalid: data_len={}, remaining_data.len()={}",
+                                        data_len,
+                                        remaining_data.len()
+                                    );
+                                    vec![]
+                                }
+                            } else {
+                                // Not enough data for length prefix, use what we have
+                                eprintln!("⚠️  Not enough data for length prefix, using remaining_data as-is");
+                                remaining_data
+                            };
+
+                            // Call the handler to get the stream, then release the lock
+                            let mut response_stream = handler(request_data).await;
+                            drop(server_streaming_ref); // Release lock after getting stream
+
+                            let stream_arc = stream.clone();
+
+                            // Stream responses back to client
+                            use futures::StreamExt;
+                            while let Some(result) = response_stream.next().await {
+                                let response_data = match result {
+                                    Ok(data) => {
+                                        // Length-prefix the response
+                                        let len = (data.len() as u32).to_le_bytes();
+                                        [&len[..], &data].concat()
+                                    }
+                                    Err(_e) => {
+                                        // Send error marker (0-length) and stop
+                                        vec![0, 0, 0, 0]
+                                    }
+                                };
+
+                                let mut stream_guard = stream_arc.lock().await;
+                                if stream_guard
+                                    .send_bytes(Bytes::from(response_data))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            // Send end marker
+                            let mut stream_guard = stream_arc.lock().await;
+                            let _ = stream_guard.send_bytes(Bytes::from(vec![0, 0, 0, 0])).await;
+                            break;
+                        }
+
+                        // Check for client streaming handler (N→1): multiple requests, one response
+                        let client_streaming_ref = client_streaming_handlers.read().await;
+                        eprintln!(
+                            "🔍 Checking client_streaming_handlers for '{}', map has {} entries",
+                            method_name,
+                            client_streaming_ref.len()
+                        );
+                        if let Some(handler) = client_streaming_ref.get(method_name.as_str()) {
+                            eprintln!("🌊 Found client streaming handler (via length-prefix protocol): {}", method_name);
+
+                            // For client streaming, we need to:
+                            // 1. Read all length-prefixed requests from the stream
+                            // 2. Feed them into an UnboundedReceiver
+                            // 3. Call the handler with the receiver
+                            // 4. Send back the single response
+
+                            let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+                            // Send the first request from remaining_data
+                            eprintln!(
+                                "📦 remaining_data.len()={}, parsing initial chunks...",
+                                remaining_data.len()
+                            );
+                            let mut end_marker_found = false;
+                            if !remaining_data.is_empty() && remaining_data.len() >= 4 {
+                                let data_len = u32::from_le_bytes([
+                                    remaining_data[0],
+                                    remaining_data[1],
+                                    remaining_data[2],
+                                    remaining_data[3],
+                                ]) as usize;
+
+                                eprintln!("📦 First chunk length: {}", data_len);
+
+                                if data_len > 0 && remaining_data.len() >= 4 + data_len {
+                                    let request_data = remaining_data[4..4 + data_len].to_vec();
+                                    let len = request_data.len();
+                                    let _ = tx.send(request_data);
+                                    eprintln!("📦 Sent first chunk ({} bytes) to channel", len);
+
+                                    // Track where we are in remaining_data
+                                    let mut offset = 4 + data_len;
+
+                                    // Process any additional requests in remaining_data
+                                    while offset + 4 <= remaining_data.len() {
+                                        let len = u32::from_le_bytes([
+                                            remaining_data[offset],
+                                            remaining_data[offset + 1],
+                                            remaining_data[offset + 2],
+                                            remaining_data[offset + 3],
+                                        ])
+                                            as usize;
+
+                                        eprintln!("📦 Chunk at offset {}: length={}", offset, len);
+
+                                        if len == 0 {
+                                            eprintln!("📦 Found end marker in remaining_data! Will NOT spawn task.");
+                                            end_marker_found = true;
+                                            break;
+                                        }
+
+                                        if offset + 4 + len <= remaining_data.len() {
+                                            let request_data = remaining_data
+                                                [offset + 4..offset + 4 + len]
+                                                .to_vec();
+                                            let len_value = request_data.len();
+                                            let _ = tx.send(request_data);
+                                            eprintln!(
+                                                "📦 Sent chunk ({} bytes) to channel",
+                                                len_value
+                                            );
+                                            offset += 4 + len;
+                                        } else {
+                                            eprintln!("📦 Incomplete chunk at offset {}, need {} more bytes", offset, 4 + len - remaining_data.len());
+                                            break;
+                                        }
+                                    }
+                                    eprintln!("📦 Finished parsing remaining_data, processed up to offset {}/{}", offset, remaining_data.len());
+                                }
+                            }
+
+                            // Spawn task to continue reading requests from stream
+                            // ONLY if we haven't found the end marker yet
+                            if !end_marker_found {
+                                eprintln!(
+                                    "📦 End marker not found, spawning task to read more data..."
+                                );
+                                let stream_arc = stream.clone();
+                                tokio::spawn(async move {
+                                    eprintln!("📖 Spawned task started to read client stream");
+                                    let mut buffer = BytesMut::new();
+                                    loop {
+                                        eprintln!("📖 Spawned task: waiting for next chunk...");
+                                        let chunk_result = {
+                                            let mut stream_guard = stream_arc.lock().await;
+                                            eprintln!("📖 Spawned task: acquired lock, calling receive_bytes");
+                                            let result = stream_guard.receive_bytes().await;
+                                            eprintln!("📖 Spawned task: receive_bytes returned");
+                                            result
+                                        };
+
+                                        match chunk_result {
+                                            Ok(Some(chunk)) => {
+                                                eprintln!(
+                                                    "📖 Spawned task: received chunk of {} bytes",
+                                                    chunk.len()
+                                                );
+                                                buffer.extend_from_slice(&chunk);
+
+                                                // Parse complete messages
+                                                while buffer.len() >= 4 {
+                                                    let len = u32::from_le_bytes([
+                                                        buffer[0], buffer[1], buffer[2], buffer[3],
+                                                    ])
+                                                        as usize;
+                                                    eprintln!(
+                                                        "📖 Spawned task: parsed length: {}",
+                                                        len
+                                                    );
+
+                                                    if len == 0 {
+                                                        eprintln!("📖 Spawned task: received end marker, exiting");
+                                                        // End marker - close channel
+                                                        drop(tx);
+                                                        return;
+                                                    }
+
+                                                    if buffer.len() >= 4 + len {
+                                                        let message_data = buffer.split_to(4 + len);
+                                                        let request_data =
+                                                            message_data[4..].to_vec();
+                                                        eprintln!("📖 Spawned task: sending {} bytes to handler via channel", request_data.len());
+                                                        if tx.send(request_data).is_err() {
+                                                            eprintln!("📖 Spawned task: channel closed, exiting");
+                                                            return;
+                                                        }
+                                                    } else {
+                                                        eprintln!("📖 Spawned task: not enough data, need {} more bytes", 4 + len - buffer.len());
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            Ok(None) => {
+                                                eprintln!("📖 Spawned task: stream closed (Ok(None)), exiting");
+                                                drop(tx);
+                                                return;
+                                            }
+                                            Err(e) => {
+                                                eprintln!("📖 Spawned task: error receiving: {:?}, exiting", e);
+                                                drop(tx);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                });
+                            } else {
+                                eprintln!("📦 End marker found in initial data, closing channel");
+                                drop(tx); // Close the channel since we have all the data
+                            }
+
+                            // Call the handler with the receiver
+                            eprintln!("🔧 Calling client streaming handler...");
+                            match handler(rx).await {
+                                Ok(response_data) => {
+                                    eprintln!("✅ Handler returned {} bytes", response_data.len());
+                                    // Send the single response back, length-prefixed
+                                    let len = (response_data.len() as u32).to_le_bytes();
+                                    let response_bytes = [&len[..], &response_data].concat();
+                                    let mut stream_guard = stream.lock().await;
+                                    eprintln!("📤 Sending response...");
+                                    let _ =
+                                        stream_guard.send_bytes(Bytes::from(response_bytes)).await;
+                                    // Send end marker to signal stream completion
+                                    eprintln!("📤 Sending end marker...");
+                                    let _ = stream_guard
+                                        .send_bytes(Bytes::from(vec![0, 0, 0, 0]))
+                                        .await;
+                                    eprintln!("✅ Response sent successfully");
+                                }
+                                Err(e) => {
+                                    eprintln!("❌ Handler error: {:?}", e);
+                                    // Send error marker (also serves as end marker)
+                                    let mut stream_guard = stream.lock().await;
+                                    let _ = stream_guard
+                                        .send_bytes(Bytes::from(vec![0, 0, 0, 0]))
+                                        .await;
+                                }
+                            }
+                            drop(client_streaming_ref);
+                            break;
+                        }
+                        drop(client_streaming_ref);
+
+                        // Check for bidirectional handler (N→M): multiple requests, multiple responses
+                        let bidirectional_ref = bidirectional_handlers.read().await;
+                        eprintln!(
+                            "🔍 Checking bidirectional_handlers for '{}', map has {} entries",
+                            method_name,
+                            bidirectional_ref.len()
+                        );
+                        if let Some(handler) = bidirectional_ref.get(method_name.as_str()) {
+                            eprintln!(
+                                "🔄 Found bidirectional handler (via length-prefix protocol): {}",
+                                method_name
+                            );
+
+                            // Create channel for streaming requests to the handler
+                            let (tx, rx) = mpsc::unbounded_channel::<Vec<u8>>();
+
+                            // Parse and send initial requests from remaining_data (same as client streaming)
+                            eprintln!(
+                                "📦 remaining_data.len()={}, parsing initial chunks...",
+                                remaining_data.len()
+                            );
+                            let mut end_marker_found = false;
+                            if !remaining_data.is_empty() && remaining_data.len() >= 4 {
+                                let data_len = u32::from_le_bytes([
+                                    remaining_data[0],
+                                    remaining_data[1],
+                                    remaining_data[2],
+                                    remaining_data[3],
+                                ]) as usize;
+
+                                eprintln!("📦 First chunk length: {}", data_len);
+
+                                if data_len > 0 && remaining_data.len() >= 4 + data_len {
+                                    let request_data = remaining_data[4..4 + data_len].to_vec();
+                                    let len = request_data.len();
+                                    let _ = tx.send(request_data);
+                                    eprintln!("📦 Sent first chunk ({} bytes) to channel", len);
+
+                                    let mut offset = 4 + data_len;
+
+                                    // Process any additional requests in remaining_data
+                                    while offset + 4 <= remaining_data.len() {
+                                        let len = u32::from_le_bytes([
+                                            remaining_data[offset],
+                                            remaining_data[offset + 1],
+                                            remaining_data[offset + 2],
+                                            remaining_data[offset + 3],
+                                        ])
+                                            as usize;
+
+                                        eprintln!("📦 Chunk at offset {}: length={}", offset, len);
+
+                                        if len == 0 {
+                                            eprintln!("📦 Found end marker in remaining_data! Will NOT spawn task.");
+                                            end_marker_found = true;
+                                            break;
+                                        }
+
+                                        if offset + 4 + len <= remaining_data.len() {
+                                            let request_data = remaining_data
+                                                [offset + 4..offset + 4 + len]
+                                                .to_vec();
+                                            let len_value = request_data.len();
+                                            let _ = tx.send(request_data);
+                                            eprintln!(
+                                                "📦 Sent chunk ({} bytes) to channel",
+                                                len_value
+                                            );
+                                            offset += 4 + len;
+                                        } else {
+                                            eprintln!("📦 Incomplete chunk at offset {}, need {} more bytes", offset, 4 + len - remaining_data.len());
+                                            break;
+                                        }
+                                    }
+                                    eprintln!("📦 Finished parsing remaining_data, processed up to offset {}/{}", offset, remaining_data.len());
+                                }
+                            }
+
+                            // Spawn task to continue reading requests from stream
+                            // ONLY if we haven't found the end marker yet
+                            if !end_marker_found {
+                                eprintln!(
+                                    "📦 End marker not found, spawning task to read more data..."
+                                );
+                                let stream_arc = stream.clone();
+                                tokio::spawn(async move {
+                                    let mut buffer = Vec::new();
+
+                                    loop {
+                                        let chunk = {
+                                            let mut stream_guard = stream_arc.lock().await;
+                                            stream_guard.receive_bytes().await
+                                        };
+
+                                        match chunk {
+                                            Ok(Some(data)) => {
+                                                buffer.extend_from_slice(&data);
+
+                                                // Parse all complete requests
+                                                while buffer.len() >= 4 {
+                                                    let len = u32::from_le_bytes([
+                                                        buffer[0], buffer[1], buffer[2], buffer[3],
+                                                    ])
+                                                        as usize;
+
+                                                    if len == 0 {
+                                                        // End marker
+                                                        drop(tx);
+                                                        return;
+                                                    }
+
+                                                    if buffer.len() >= 4 + len {
+                                                        let request_data = buffer
+                                                            .drain(..4 + len)
+                                                            .skip(4)
+                                                            .collect();
+                                                        if tx.send(request_data).is_err() {
+                                                            return;
+                                                        }
+                                                    } else {
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            Ok(None) | Err(_) => {
+                                                drop(tx);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                });
+                            } else {
+                                eprintln!("📦 End marker found in initial data, closing channel");
+                                drop(tx);
+                            }
+
+                            // Call the bidirectional handler
+                            eprintln!("🔧 Calling bidirectional handler...");
+                            let response_stream = handler(rx).await;
+                            drop(bidirectional_ref);
+
+                            // Stream responses back to client, length-prefixed
+                            eprintln!("📤 Streaming responses back to client...");
+                            tokio::pin!(response_stream);
+                            let mut response_count = 0;
+
+                            while let Some(result) = response_stream.next().await {
+                                match result {
+                                    Ok(response_data) => {
+                                        response_count += 1;
+                                        eprintln!(
+                                            "📤 Sending response {}: {} bytes",
+                                            response_count,
+                                            response_data.len()
+                                        );
+                                        let len = (response_data.len() as u32).to_le_bytes();
+                                        let response_bytes = [&len[..], &response_data].concat();
+                                        let mut stream_guard = stream.lock().await;
+                                        if let Err(e) = stream_guard
+                                            .send_bytes(Bytes::from(response_bytes))
+                                            .await
+                                        {
+                                            eprintln!("❌ Error sending response: {:?}", e);
+                                            break;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("❌ Handler error: {:?}", e);
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // Send end marker to signal stream completion
+                            eprintln!("📤 Sending end marker...");
+                            let mut stream_guard = stream.lock().await;
+                            let _ = stream_guard.send_bytes(Bytes::from(vec![0, 0, 0, 0])).await;
+                            eprintln!(
+                                "✅ Bidirectional streaming complete! Sent {} responses",
+                                response_count
+                            );
+                            break;
+                        }
+                        drop(bidirectional_ref);
+
+                        // Check legacy streaming handlers for backward compatibility
+                        let streaming_handlers_ref = streaming_handlers.read().await;
+                        if streaming_handlers_ref.contains_key(method_name.as_str()) {
+                            drop(streaming_handlers_ref);
+
                             let stream_arc = stream.clone();
                             let request_stream = Self::create_request_stream_with_initial_data(
                                 stream_arc.clone(),
@@ -589,7 +1534,8 @@ impl RpcServer {
                             );
 
                             let streaming_handlers_ref = streaming_handlers.read().await;
-                            if let Some(handler) = streaming_handlers_ref.get(method_name) {
+                            if let Some(handler) = streaming_handlers_ref.get(method_name.as_str())
+                            {
                                 let response_stream = handler(request_stream).await;
                                 Self::send_response_stream(stream_arc, response_stream).await;
                             }
@@ -654,23 +1600,41 @@ impl RpcServer {
         };
 
         let response = match msg {
-            SwimMessage::Ping { from, seq, .. } => SwimMessage::Ack {
-                from: cluster.node_id().clone(),
-                to: from,
-                updates: my_updates,
-                seq,
-            },
+            SwimMessage::Ping { from, seq, .. } => {
+                debug!(
+                    "📨 [SWIM-HANDLER] Creating ACK response for Ping from {:?} (seq={})",
+                    from, seq
+                );
+                SwimMessage::Ack {
+                    from: cluster.node_id().clone(),
+                    to: from,
+                    updates: my_updates,
+                    seq,
+                }
+            }
             SwimMessage::PingReq { .. } => {
+                debug!("🔄 [SWIM-HANDLER] Received PingReq, not responding");
                 return;
             }
             SwimMessage::Ack { .. } => {
+                debug!("✅ [SWIM-HANDLER] Received ACK, not responding");
                 return;
             }
         };
 
+        debug!("📤 [SWIM-HANDLER] Serializing response: {:?}", response);
         if let Ok(response_bytes) = response.serialize() {
+            debug!(
+                "📤 [SWIM-HANDLER] Sending {} bytes ACK response",
+                response_bytes.len()
+            );
             let mut stream_guard = stream.lock().await;
-            let _ = stream_guard.send_bytes(Bytes::from(response_bytes)).await;
+            match stream_guard.send_bytes(Bytes::from(response_bytes)).await {
+                Ok(_) => debug!("✅ [SWIM-HANDLER] Successfully sent ACK response"),
+                Err(e) => debug!("❌ [SWIM-HANDLER] Failed to send ACK response: {:?}", e),
+            }
+        } else {
+            debug!("❌ [SWIM-HANDLER] Failed to serialize ACK response");
         }
     }
 
@@ -683,6 +1647,9 @@ impl RpcServer {
     ) -> Result<ConnectionDriveOutcome, RpcError> {
         let handlers = self.handlers.clone();
         let streaming_handlers = self.streaming_handlers.clone();
+        let server_streaming_handlers = self.server_streaming_handlers.clone();
+        let client_streaming_handlers = self.client_streaming_handlers.clone();
+        let bidirectional_handlers = self.bidirectional_handlers.clone();
         let cluster = self.cluster.clone();
         let mut stream_tasks: Vec<JoinHandle<()>> = Vec::new();
 
@@ -699,10 +1666,16 @@ impl RpcServer {
                         Ok(Some(stream)) => {
                             let handlers = handlers.clone();
                             let streaming_handlers = streaming_handlers.clone();
+                            let server_streaming_handlers = server_streaming_handlers.clone();
+                            let client_streaming_handlers = client_streaming_handlers.clone();
+                            let bidirectional_handlers = bidirectional_handlers.clone();
                             let cluster = cluster.clone();
                             let task = tokio::spawn(Self::handle_stream(
                                 handlers,
                                 streaming_handlers,
+                                server_streaming_handlers,
+                                client_streaming_handlers,
+                                bidirectional_handlers,
                                 cluster,
                                 Box::new(stream) as Box<dyn QuicStreamAdapter + Send>,
                             ));
@@ -1042,7 +2015,8 @@ impl RpcClient {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         let req = RpcRequest::new(id, method.to_string(), params);
         // Pre-allocate serialization buffer to avoid reallocations
-        let req_data = bincode::serialize(&req)?;
+        // Use MessagePack Serializer with struct_map for compatibility with Python
+        let req_data = rmp_serde::to_vec(&req)?;
 
         // Open a new bidirectional stream with minimal lock time
         let mut stream = {
@@ -1060,20 +2034,17 @@ impl RpcClient {
             while let Ok(Some(chunk)) = stream.receive_bytes().await {
                 response_data.extend_from_slice(&chunk);
 
-                // Only attempt deserialization if we have a reasonable amount of data
-                if response_data.len() >= 16 {
-                    // Minimum for a valid response
-                    if let Ok(response) = bincode::deserialize::<RpcResponse>(&response_data[..]) {
-                        if response.id() == id {
-                            // Extract data without cloning when possible
-                            return match (response.result(), response.error()) {
-                                (Some(data), None) => Ok(data.to_vec()), // More explicit about the copy
-                                (None, Some(err_msg)) => {
-                                    Err(RpcError::StreamError(err_msg.to_string()))
-                                } // Already owned
-                                _ => Err(RpcError::StreamError("Invalid response".into())), // Avoid string allocation
-                            };
-                        }
+                // Attempt deserialization on any data we have
+                if let Ok(response) = rmp_serde::from_slice::<RpcResponse>(&response_data[..]) {
+                    if response.id() == id {
+                        // Extract data without cloning when possible
+                        return match (response.result(), response.error()) {
+                            (Some(data), None) => Ok(data.to_vec()), // More explicit about the copy
+                            (None, Some(err_msg)) => {
+                                Err(RpcError::StreamError(err_msg.to_string()))
+                            } // Already owned
+                            _ => Err(RpcError::StreamError("Invalid response".into())), // Avoid string allocation
+                        };
                     }
                 }
             }
@@ -1157,13 +2128,17 @@ impl RpcClient {
                     chunk_result = stream.receive_bytes(), if !recv_done => {
                         match chunk_result {
                             Ok(Some(chunk)) => {
+                                eprintln!("🔽 CLIENT: Received chunk: {} bytes", chunk.len());
                                 buffer.extend_from_slice(&chunk);
+                                eprintln!("🔽 CLIENT: Buffer now has: {} bytes", buffer.len());
 
                                 // Parse complete messages
                                 while buffer.len() >= 4 {
                                     let len = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]) as usize;
+                                    eprintln!("🔽 CLIENT: Parsed length: {}", len);
 
                                     if len == 0 {
+                                        eprintln!("🔽 CLIENT: Got end marker, recv_done=true");
                                         recv_done = true;
                                         if send_done {
                                             return;
@@ -1172,12 +2147,17 @@ impl RpcClient {
                                     }
 
                                     if buffer.len() >= 4 + len {
+                                        eprintln!("🔽 CLIENT: Extracting message of {} bytes", len);
                                         let message_data = buffer.split_to(4 + len);
                                         let response_data = message_data[4..].to_vec();
+                                        eprintln!("🔽 CLIENT: Sending response to channel: {} bytes", response_data.len());
                                         if response_tx.send(Ok(response_data)).is_err() {
+                                            eprintln!("🔽 CLIENT: Failed to send to channel (receiver dropped)");
                                             return;
                                         }
+                                        eprintln!("🔽 CLIENT: Successfully sent to channel");
                                     } else {
+                                        eprintln!("🔽 CLIENT: Not enough data yet, need {} more bytes", 4 + len - buffer.len());
                                         break;
                                     }
                                 }
@@ -1938,7 +2918,7 @@ mod client_call_helper_tests {
     }
 
     pub(super) fn encode_response(response: &RpcResponse) -> Vec<u8> {
-        bincode::serialize(response).expect("serialize response")
+        rmp_serde::to_vec(response).expect("serialize response")
     }
 
     pub(super) async fn wait_for_sent(state: &Arc<Mutex<MockStreamState>>, expected: usize) {
@@ -1970,7 +2950,7 @@ mod client_call_helper_tests {
         wait_for_sent(&state, 1).await;
         let sent = state.lock().await.sent.clone();
         assert_eq!(sent.len(), 1);
-        let request: RpcRequest = bincode::deserialize(&sent[0]).unwrap();
+        let request: RpcRequest = rmp_serde::from_slice(&sent[0]).unwrap();
         assert_eq!(request.method(), "ping");
     }
 
@@ -2275,14 +3255,14 @@ mod doc_examples_tests {
 
         let client = make_client(state.clone());
         let response = client
-            .call("echo", bincode::serialize(&"Hello, Server!").unwrap())
+            .call("echo", rmp_serde::to_vec(&"Hello, Server!").unwrap())
             .await
             .unwrap();
         assert_eq!(response, b"Hello, Server!".to_vec());
 
         wait_for_sent_frames(&state, 1).await;
         let sent_requests = state.lock().await.sent.clone();
-        let req: RpcRequest = bincode::deserialize(&sent_requests[0]).unwrap();
+        let req: RpcRequest = rmp_serde::from_slice(&sent_requests[0]).unwrap();
         assert_eq!(req.method(), "echo");
     }
 
@@ -2328,11 +3308,11 @@ mod doc_examples_tests {
         wait_for_sent_frames(&state_two, 1).await;
 
         let sent_one = state_one.lock().await.sent.clone();
-        let req_one: RpcRequest = bincode::deserialize(&sent_one[0]).unwrap();
+        let req_one: RpcRequest = rmp_serde::from_slice(&sent_one[0]).unwrap();
         assert_eq!(req_one.method(), "method1");
 
         let sent_two = state_two.lock().await.sent.clone();
-        let req_two: RpcRequest = bincode::deserialize(&sent_two[0]).unwrap();
+        let req_two: RpcRequest = rmp_serde::from_slice(&sent_two[0]).unwrap();
         assert_eq!(req_two.method(), "method2");
     }
 
@@ -2525,7 +3505,7 @@ mod tests {
                             while let Ok(Some(data)) = stream.receive().await {
                                 request_data.extend_from_slice(&data);
                                 if let Ok(request) =
-                                    bincode::deserialize::<RpcRequest>(&request_data)
+                                    rmp_serde::from_slice::<RpcRequest>(&request_data)
                                 {
                                     let handlers = handlers.read().await;
                                     let response = match handlers.get(request.method()) {
@@ -2539,7 +3519,7 @@ mod tests {
                                             Some(format!("Unknown method: {}", request.method())),
                                         ),
                                     };
-                                    if let Ok(resp_data) = bincode::serialize(&response) {
+                                    if let Ok(resp_data) = rmp_serde::to_vec(&response) {
                                         let _ = stream.send(resp_data.into()).await;
                                     }
                                     break;
@@ -2595,7 +3575,7 @@ mod tests {
             server: &RpcServer,
             req_data: Vec<u8>,
         ) -> Result<Vec<u8>, RpcError> {
-            let req: RpcRequest = bincode::deserialize(&req_data)?;
+            let req: RpcRequest = rmp_serde::from_slice(&req_data)?;
             let handlers = server.handlers.read().await;
             let h = handlers
                 .get(req.method())
@@ -2603,11 +3583,11 @@ mod tests {
 
             let result = h(req.params().to_vec()).await;
             let resp = RpcResponse::from_result(req.id(), result);
-            Ok(bincode::serialize(&resp)?)
+            Ok(rmp_serde::to_vec(&resp)?)
         }
 
         let req = RpcRequest::new(1, "unknown".into(), vec![]);
-        let data = bincode::serialize(&req).unwrap();
+        let data = rmp_serde::to_vec(&req).unwrap();
 
         let res = handle_request_direct(&server, data).await;
         match res {
@@ -2629,7 +3609,7 @@ mod tests {
             server: &RpcServer,
             req_data: Vec<u8>,
         ) -> Result<Vec<u8>, RpcError> {
-            let req: RpcRequest = bincode::deserialize(&req_data)?;
+            let req: RpcRequest = rmp_serde::from_slice(&req_data)?;
             let handlers = server.handlers.read().await;
             let h = handlers
                 .get(req.method())
@@ -2637,13 +3617,13 @@ mod tests {
 
             let result = h(req.params().to_vec()).await;
             let resp = RpcResponse::from_result(req.id(), result);
-            Ok(bincode::serialize(&resp)?)
+            Ok(rmp_serde::to_vec(&resp)?)
         }
 
         let req = RpcRequest::new(42, "echo".into(), b"hello".to_vec());
-        let data = bincode::serialize(&req).unwrap();
+        let data = rmp_serde::to_vec(&req).unwrap();
         let res_data = handle_request_direct(&server, data).await.unwrap();
-        let resp: RpcResponse = bincode::deserialize(&res_data).unwrap();
+        let resp: RpcResponse = rmp_serde::from_slice(&res_data).unwrap();
 
         assert_eq!(resp.id(), 42);
         assert_eq!(resp.result().unwrap(), b"hello");
@@ -2838,8 +3818,8 @@ mod tests {
         let request = RpcRequest::new(999, "large_test".to_string(), large_data.clone());
 
         // Should serialize and deserialize successfully
-        let serialized = bincode::serialize(&request).unwrap();
-        let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
+        let serialized = rmp_serde::to_vec(&request).unwrap();
+        let deserialized: RpcRequest = rmp_serde::from_slice(&serialized).unwrap();
 
         assert_eq!(deserialized.id(), 999);
         assert_eq!(deserialized.method(), "large_test");
@@ -2853,8 +3833,8 @@ mod tests {
         assert!(request.params().is_empty());
 
         // Should be serializable
-        let serialized = bincode::serialize(&request).unwrap();
-        let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
+        let serialized = rmp_serde::to_vec(&request).unwrap();
+        let deserialized: RpcRequest = rmp_serde::from_slice(&serialized).unwrap();
         assert_eq!(deserialized.method(), "");
         assert!(deserialized.params().is_empty());
     }
@@ -3011,8 +3991,8 @@ mod tests {
     #[test]
     fn test_serialization_doctest() {
         let request = RpcRequest::new(1, "test".to_string(), vec![1, 2, 3]);
-        let serialized = bincode::serialize(&request).unwrap();
-        let deserialized: RpcRequest = bincode::deserialize(&serialized).unwrap();
+        let serialized = rmp_serde::to_vec(&request).unwrap();
+        let deserialized: RpcRequest = rmp_serde::from_slice(&serialized).unwrap();
 
         assert_eq!(request.id(), deserialized.id());
         assert_eq!(request.method(), deserialized.method());

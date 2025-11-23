@@ -24,9 +24,10 @@
 ### Core Features
 - **🔒 TLS Security**: Built-in TLS 1.3 encryption and authentication
 - **⚡ Async/Await**: Full async support with optimized Tokio runtime
-- **📦 Binary Serialization**: Efficient data serialization with bincode
+- **📦 Binary Serialization**: Efficient data serialization with bincode (Rust) and MessagePack (Python)
 - **🛡️ Type Safety**: Strongly typed RPC calls with compile-time guarantees
 - **🔧 Code Generation**: Generate type-safe client and server code from service definitions
+- **🐍 Python Bindings**: Full Python support with async/await and MessagePack serialization
 - **⏱️ Timeout Handling**: Configurable request timeouts with automatic cleanup
 - **🔍 Error Handling**: Comprehensive error types for robust applications
 - **📊 Production Ready**: Battle-tested with extensive test coverage

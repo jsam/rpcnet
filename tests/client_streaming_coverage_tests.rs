@@ -58,7 +58,7 @@ async fn test_call_client_streaming_coverage() {
 
                 // Process all incoming numbers and yield final result
                 while let Some(data) = request_stream.next().await {
-                    if let Ok(number) = bincode::deserialize::<i32>(&data) {
+                    if let Ok(number) = rmp_serde::from_slice::<i32>(&data) {
                         sum += number;
                         count += 1;
                         println!("Server received number: {}, running sum: {}", number, sum);
@@ -68,7 +68,7 @@ async fn test_call_client_streaming_coverage() {
                 println!("Server processed {} numbers, final sum: {}", count, sum);
 
                 // Yield the final sum as a streaming response
-                yield bincode::serialize(&sum).map_err(RpcError::SerializationError);
+                yield rmp_serde::to_vec(&sum).map_err(|e| RpcError::SerializationError(e.to_string()));
             })
         })
         .await;
@@ -96,7 +96,7 @@ async fn test_call_client_streaming_coverage() {
 
                 let serialized_numbers: Vec<Vec<u8>> = numbers
                     .iter()
-                    .map(|&n| bincode::serialize(&n).unwrap())
+                    .map(|&n| rmp_serde::to_vec(&n).unwrap())
                     .collect();
 
                 let request_stream = futures::stream::iter(serialized_numbers);
@@ -114,7 +114,7 @@ async fn test_call_client_streaming_coverage() {
                         println!("✅ Client streaming call successful!");
 
                         // Deserialize the response
-                        if let Ok(sum) = bincode::deserialize::<i32>(&response_data) {
+                        if let Ok(sum) = rmp_serde::from_slice::<i32>(&response_data) {
                             let expected_sum: i32 = numbers.iter().sum();
                             println!(
                                 "📊 Server computed sum: {}, expected: {}",
@@ -181,7 +181,7 @@ async fn test_call_client_streaming_empty_stream() {
                 }
 
                 println!("Server counted {} messages", count);
-                yield bincode::serialize(&count).map_err(RpcError::SerializationError);
+                yield rmp_serde::to_vec(&count).map_err(|e| RpcError::SerializationError(e.to_string()));
             })
         })
         .await;
@@ -210,7 +210,7 @@ async fn test_call_client_streaming_empty_stream() {
 
             match response_result {
                 Ok(Ok(response_data)) => {
-                    if let Ok(count) = bincode::deserialize::<i32>(&response_data) {
+                    if let Ok(count) = rmp_serde::from_slice::<i32>(&response_data) {
                         println!("✅ Empty stream test: server counted {} messages", count);
                         if count == 0 {
                             println!("✅ Empty stream handled correctly");
@@ -256,7 +256,7 @@ async fn test_call_client_streaming_large_stream() {
             println!("Final: {} messages, {} total bytes", message_count, total_bytes);
 
             let result = (message_count, total_bytes);
-            yield bincode::serialize(&result).map_err(RpcError::SerializationError);
+            yield rmp_serde::to_vec(&result).map_err(|e| RpcError::SerializationError(e.to_string()));
         })
     }).await;
 
@@ -292,7 +292,7 @@ async fn test_call_client_streaming_large_stream() {
             match response_result {
                 Ok(Ok(response_data)) => {
                     if let Ok((count, bytes)) =
-                        bincode::deserialize::<(usize, usize)>(&response_data)
+                        rmp_serde::from_slice::<(usize, usize)>(&response_data)
                     {
                         println!("✅ Large stream test: {} messages, {} bytes", count, bytes);
                         println!(

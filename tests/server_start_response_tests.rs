@@ -42,7 +42,7 @@ async fn start_test_server(
 #[tokio::test]
 async fn test_server_start_response_sending() {
     // This test specifically targets the response sending logic in server start method
-    // Lines 1425-1426: if let Ok(response_data) = bincode::serialize(&response) {
+    // Lines 1425-1426: if let Ok(response_data) = rmp_serde::to_vec(&response) {
     //                      let _ = stream.send(response_data.into()).await;
     // Line 1467: Ok(())
 
@@ -208,7 +208,7 @@ async fn test_server_start_method_return_value() {
 #[tokio::test]
 async fn test_serialization_and_response_sending() {
     // This test specifically targets the serialization and sending logic around line 1425-1426:
-    // if let Ok(response_data) = bincode::serialize(&response) {
+    // if let Ok(response_data) = rmp_serde::to_vec(&response) {
     //     let _ = stream.send(response_data.into()).await;
     // }
 
