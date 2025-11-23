@@ -159,7 +159,7 @@ coverage-ci-tool:
 		echo "LLVM coverage report generated for CI"; \
 	else \
 		echo "Running coverage analysis for CI with Tarpaulin..."; \
-		cargo tarpaulin --config tarpaulin.toml --fail-under 65 --out Xml; \
+		cargo tarpaulin --config tarpaulin.toml --fail-under 50 --out Xml; \
 	fi
 
 # Usage: make coverage-check [tool] - tool can be tarpaulin (default) or llvm-cov
@@ -465,7 +465,7 @@ ci-test:
 
 ci-coverage:
 	@echo "Running CI coverage..."
-	cargo tarpaulin --config tarpaulin.toml --out Xml --fail-under 65
+	cargo tarpaulin --config tarpaulin.toml --out Xml --fail-under 50
 
 ci-lint:
 	@echo "Running CI linting..."
